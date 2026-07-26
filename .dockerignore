@@ -1,0 +1,16 @@
+node_modules
+dist
+coverage
+uploads
+.pgdata
+.pgdata-test
+.git
+.github
+.env
+.env.*
+!.env.example
+*.log
+.vscode
+.idea
+README.md
+tests

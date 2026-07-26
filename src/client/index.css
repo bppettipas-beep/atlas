@@ -1,0 +1,329 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ===========================================================================
+   ATLAS — the schematic sheet
+
+   Atlas is drafted, not decorated. The interface is a working engineering
+   drawing of a company: paper ground, ink rules, condensed uppercase edge
+   lettering for anything that describes rather than says, and one annotation
+   blue used only where a draughtsman would actually make a mark.
+
+   Three rules govern every screen:
+     1. Separation comes from a hairline rule or a value step, not a shadow.
+     2. Anything that describes goes in the edge register (.edge), never body.
+     3. Any number a person compares or reads aloud is set in the mono.
+   =========================================================================== */
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-paper text-ink antialiased;
+    font-family: theme('fontFamily.sans');
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Tabular figures everywhere by default: columns of numbers must line up. */
+  .tabular,
+  table,
+  time {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* One focus treatment: a square mark, never a rounded glow. */
+  :focus-visible {
+    @apply outline-none;
+    box-shadow:
+      0 0 0 1.5px theme('colors.sheet.DEFAULT'),
+      0 0 0 3px theme('colors.mark.DEFAULT');
+  }
+
+  ::selection {
+    @apply bg-mark/15;
+  }
+
+  ::-webkit-scrollbar {
+    width: 11px;
+    height: 11px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply border-[3.5px] border-solid border-transparent bg-edge bg-clip-content;
+    border-radius: 99px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-edgeStrong bg-clip-content;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+@layer components {
+  /* ---------------------------------------------------------------- type -- */
+
+  /**
+   * The edge register. Condensed, uppercase, tracked — film edge printing.
+   * Every label, column head, field name and metadata string in the product.
+   */
+  .edge {
+    font-stretch: 78%;
+    font-weight: 600;
+    text-transform: uppercase;
+    @apply text-edge-lg text-ink-3;
+  }
+
+  .edge-sm {
+    font-stretch: 78%;
+    font-weight: 600;
+    text-transform: uppercase;
+    @apply text-edge text-ink-3;
+  }
+
+  /** Titles: normal width, tightened. */
+  .title {
+    font-stretch: 100%;
+    @apply font-semibold tracking-[-0.015em] text-ink;
+  }
+
+  /** Display: the width axis carries the weight so nothing has to shout. */
+  .display {
+    font-stretch: 88%;
+    font-weight: 700;
+    @apply tracking-[-0.035em] text-ink;
+  }
+
+  /* ------------------------------------------------------------- surface -- */
+
+  /**
+   * A sheet: white panel on the paper ground, bounded by a hairline. No
+   * shadow — it is lying on the table, not hovering above it.
+   */
+  .sheet {
+    @apply border border-rule bg-sheet;
+  }
+
+  /**
+   * Registration ticks. Four corner L-marks, like the crop marks on a plate.
+   * Applied to the panels that anchor a screen, never to every card.
+   */
+  .ticked {
+    position: relative;
+  }
+  .ticked::before,
+  .ticked::after {
+    content: '';
+    position: absolute;
+    width: 7px;
+    height: 7px;
+    pointer-events: none;
+    border-color: theme('colors.edgeStrong');
+  }
+  .ticked::before {
+    top: -1px;
+    left: -1px;
+    border-top: 1.5px solid;
+    border-left: 1.5px solid;
+  }
+  .ticked::after {
+    bottom: -1px;
+    right: -1px;
+    border-bottom: 1.5px solid;
+    border-right: 1.5px solid;
+  }
+
+  /**
+   * A ruled section head: the label sits *on* the rule, the way a title block
+   * sits on a drawing border.
+   */
+  .ruled-head {
+    @apply flex items-center gap-3;
+  }
+  .ruled-head::after {
+    content: '';
+    @apply h-px flex-1 bg-rule;
+  }
+
+  /* -------------------------------------------------------------- fields -- */
+
+  .field {
+    @apply w-full border border-edge bg-sheet px-2.5 py-[7px] text-[13px] text-ink
+      placeholder:text-ink-4
+      focus:border-mark focus:outline-none focus:ring-0
+      disabled:cursor-not-allowed disabled:bg-paper disabled:text-ink-4;
+    border-radius: 2px;
+    transition: border-color 0.14s theme('transitionTimingFunction.draft');
+  }
+  .field:focus {
+    box-shadow: inset 0 0 0 1px theme('colors.mark.DEFAULT');
+  }
+  .field[aria-invalid='true'] {
+    @apply border-alert;
+  }
+
+  /* --------------------------------------------------------------- state -- */
+
+  .skeleton {
+    @apply relative overflow-hidden bg-paper-deep;
+  }
+  .skeleton::after {
+    @apply absolute inset-0 -translate-x-full animate-shimmer bg-gradient-to-r
+      from-transparent via-white/80 to-transparent content-[''];
+  }
+
+  /* Hatched fill — used for empty regions on the sheet, like an unassigned
+     area on a plan. Communicates "nothing here" without an illustration. */
+  .hatched {
+    background-image: repeating-linear-gradient(
+      45deg,
+      theme('colors.rule') 0 1px,
+      transparent 1px 7px
+    );
+  }
+
+  /* The drafting grid behind the organization map. */
+  .drafting-grid {
+    background-color: theme('colors.paper.DEFAULT');
+    background-image:
+      linear-gradient(to right, rgba(18, 18, 17, 0.045) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(18, 18, 17, 0.045) 1px, transparent 1px),
+      linear-gradient(to right, rgba(18, 18, 17, 0.022) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(18, 18, 17, 0.022) 1px, transparent 1px);
+    background-size:
+      120px 120px,
+      120px 120px,
+      24px 24px,
+      24px 24px;
+  }
+}
+
+/* ----------------------------------------------------- React Flow overrides */
+
+.react-flow__attribution {
+  display: none;
+}
+.react-flow__pane {
+  cursor: crosshair;
+}
+.react-flow__pane.dragging {
+  cursor: grabbing;
+}
+.react-flow__handle {
+  opacity: 0;
+  pointer-events: none;
+  border: 0;
+}
+.react-flow__edge-path {
+  stroke-linecap: square;
+}
+.react-flow__node {
+  font-family: theme('fontFamily.sans');
+}
+.react-flow__controls {
+  box-shadow: none;
+}
+.react-flow__controls-button {
+  @apply border-0 border-b border-rule bg-sheet text-ink-2 hover:bg-paper;
+  width: 28px;
+  height: 28px;
+}
+.react-flow__controls-button:last-child {
+  border-bottom: 0;
+}
+.react-flow__controls-button svg {
+  fill: currentColor;
+  max-width: 11px;
+  max-height: 11px;
+}
+
+/* -------------------------------------------------- knowledge base prose -- */
+
+.prose-sheet {
+  @apply max-w-[68ch] text-[14px] leading-[1.65] text-ink-2;
+}
+.prose-sheet > * + * {
+  margin-top: 1em;
+}
+.prose-sheet h1,
+.prose-sheet h2,
+.prose-sheet h3,
+.prose-sheet h4 {
+  font-stretch: 100%;
+  @apply font-semibold tracking-[-0.015em] text-ink;
+}
+.prose-sheet h1 {
+  @apply mt-0 text-2xl;
+}
+.prose-sheet h2 {
+  @apply border-t border-rule pt-6 text-base;
+  margin-top: 2.25em;
+}
+.prose-sheet h3 {
+  @apply text-[14px];
+  margin-top: 1.75em;
+}
+.prose-sheet p {
+  @apply text-ink-2;
+}
+.prose-sheet strong {
+  @apply font-semibold text-ink;
+}
+.prose-sheet a {
+  @apply text-mark underline decoration-mark/30 underline-offset-2 hover:decoration-mark;
+}
+.prose-sheet ul,
+.prose-sheet ol {
+  @apply space-y-1.5 pl-0;
+  list-style: none;
+  counter-reset: step;
+}
+.prose-sheet li {
+  @apply relative pl-6 text-ink-2;
+}
+.prose-sheet ul > li::before {
+  content: '';
+  @apply absolute left-1 top-[0.6em] h-[5px] w-[5px] bg-edgeStrong;
+}
+.prose-sheet ol > li {
+  counter-increment: step;
+}
+.prose-sheet ol > li::before {
+  content: counter(step);
+  font-family: theme('fontFamily.mono');
+  @apply absolute left-0 top-0 text-[11px] leading-[1.7] text-ink-4;
+}
+.prose-sheet blockquote {
+  @apply border-l-2 border-mark/40 py-0.5 pl-4 text-ink-2;
+}
+.prose-sheet code {
+  font-family: theme('fontFamily.mono');
+  @apply bg-paper-deep px-1 py-px text-[12.5px] text-ink;
+}
+.prose-sheet pre {
+  font-family: theme('fontFamily.mono');
+  @apply overflow-x-auto border border-rule bg-paper p-3 text-[12.5px] leading-relaxed;
+}
+.prose-sheet pre code {
+  @apply bg-transparent p-0;
+}
+.prose-sheet hr {
+  @apply my-8 border-rule;
+}
