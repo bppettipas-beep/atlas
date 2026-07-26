@@ -54,18 +54,28 @@ export function createApp(): Express {
 
   app.use(compression());
 
-  // In production the API and the app share one origin, so CORS is a no-op.
-  // In development the Vite dev server lives on :5173 and needs credentials.
+  // In production the API and the React app share one origin, so CORS is a
+  // no-op. In development the Vite dev server lives on :5173 and needs
+  // credentials, which is what APP_ORIGIN and CORS_ORIGINS are for.
+  //
+  // Two things here are deliberate and easy to get wrong:
+  //
+  //  1. The server's *own* origin is always allowed. The browser sends an
+  //     `Origin` header on `<script type="module" crossorigin>` requests, so
+  //     without this the app's own JavaScript and CSS are treated as foreign.
+  //  2. An unrecognised origin gets no CORS headers — it is never an error.
+  //     Throwing here would turn a request the browser was going to block
+  //     anyway into a 500 for everyone, including for same-origin assets.
   app.use(
-    cors({
-      origin: (origin, callback) => {
-        if (!origin || env.allowedOrigins.includes(origin)) {
-          callback(null, true);
-          return;
-        }
-        callback(new Error(`Origin ${origin} is not allowed by CORS.`));
-      },
-      credentials: true,
+    cors((req, callback) => {
+      const origin = req.headers.origin;
+      const selfOrigin = `${req.protocol}://${req.get('host')}`;
+      const allowed = !origin || origin === selfOrigin || env.allowedOrigins.includes(origin);
+
+      callback(null, {
+        origin: allowed ? (origin ?? true) : false,
+        credentials: true,
+      });
     }),
   );
 

@@ -529,4 +529,22 @@ describe('health', () => {
     expect(response.status).toBe(404);
     expect(response.body.error).toMatchObject({ code: 'NOT_FOUND' });
   });
+
+  // Regression: an unrecognised Origin used to throw inside the CORS handler,
+  // which the error handler turned into a 500. The browser sends an Origin on
+  // `crossorigin` module scripts, so that broke every asset the app loads.
+  it('does not fail a request just because the Origin is unrecognised', async () => {
+    const response = await request(app)
+      .get('/api/health')
+      .set('Origin', 'http://somewhere-else.example');
+
+    expect(response.status).toBe(200);
+    // It simply gets no CORS headers — the browser is the one that blocks it.
+    expect(response.headers['access-control-allow-origin']).toBeUndefined();
+  });
+
+  it('allows the server’s own origin so the app can load its own assets', async () => {
+    const response = await request(app).get('/api/health').set('Origin', 'http://localhost:4000');
+    expect(response.status).toBe(200);
+  });
 });

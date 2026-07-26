@@ -2,6 +2,7 @@ import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import type { ReactNode } from 'react';
 import { ArrowLeft } from '@/components/icons';
+import { Logo } from '@/components/Logo';
 import { DRAFT_EASE } from '@/components/ui';
 
 /**
@@ -41,12 +42,7 @@ export function AuthLayout({
             <ArrowLeft className="text-[12px]" />
             Back
           </Link>
-          <div className="flex items-center gap-2">
-            <span className="flex h-5 w-5 items-center justify-center bg-ink text-[10px] font-bold leading-none text-white">
-              A
-            </span>
-            <span className="title text-[13px] leading-none">Atlas</span>
-          </div>
+          <Logo markClassName="h-5 w-5" wordClassName="text-[13px]" />
         </header>
 
         <motion.main

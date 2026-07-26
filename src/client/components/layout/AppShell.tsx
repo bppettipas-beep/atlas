@@ -2,6 +2,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useState, type ReactNode } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { NotificationCenter } from './NotificationCenter';
+import { LogoMark } from '@/components/Logo';
 import {
   Activity,
   BookOpen,
@@ -84,10 +85,8 @@ export function AppShell() {
       {/* ---------------------------- title block --------------------------- */}
       <div className="border-b border-rule px-4 py-3.5">
         <div className="flex items-center gap-2.5">
-          <span className="flex h-6 w-6 items-center justify-center bg-ink text-[11px] font-bold leading-none text-white">
-            A
-          </span>
-          <span className="title text-[14px] leading-none">Atlas</span>
+          <LogoMark className="h-[22px] w-[22px] text-ink" />
+          <span className="title text-[14px] leading-none tracking-[-0.02em]">Atlas</span>
           <span
             title={connected ? 'Live updates connected' : 'Reconnecting'}
             className={cn(

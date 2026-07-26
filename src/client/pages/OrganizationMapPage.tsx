@@ -1,7 +1,8 @@
 import { motion } from 'framer-motion';
 import { useCallback, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Funnel, Search, Sliders, TreeStructure, UserPlus, X } from '@/components/icons';
+import { Funnel, Search, Sliders, UserPlus, X } from '@/components/icons';
+import { LogoMark } from '@/components/Logo';
 import { OrganizationMap } from '@/components/org/OrganizationMap';
 import { ProfilePanel } from '@/components/people/ProfilePanel';
 import { TaskComposer } from '@/components/tasks/TaskComposer';
@@ -255,7 +256,7 @@ export function OrganizationMapPage() {
           <div className="drafting-grid flex h-full items-center justify-center p-6">
             <EmptyState
               className="max-w-lg bg-sheet"
-              icon={<TreeStructure />}
+              icon={<LogoMark className="h-5 w-5" />}
               title="One node so far — you"
               description="Invite someone and Atlas draws the reporting lines, teams, shared skills and knowledge ownership for you. Nothing to wire up."
               action={

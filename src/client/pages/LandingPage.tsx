@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion';
 import { Link, Navigate } from 'react-router-dom';
 import { ArrowRight, Building, HardHat } from '@/components/icons';
+import { Logo } from '@/components/Logo';
 import { DRAFT_EASE, LoadingState } from '@/components/ui';
 import { useAuth } from '@/providers/AuthProvider';
 
@@ -38,12 +39,7 @@ export function LandingPage() {
       <div className="relative mx-auto flex min-h-screen w-full max-w-[1080px] flex-col px-5 sm:px-10">
         {/* ---------------------------- title block --------------------------- */}
         <header className="flex items-center justify-between border-b border-edge py-4">
-          <div className="flex items-center gap-2.5">
-            <span className="flex h-6 w-6 items-center justify-center bg-ink text-[11px] font-bold leading-none text-white">
-              A
-            </span>
-            <span className="title text-[14px] leading-none">Atlas</span>
-          </div>
+          <Logo markClassName="h-[26px] w-[26px]" wordClassName="text-[15px]" />
           <div className="flex items-center gap-5">
             <span className="edge-sm hidden sm:block">Rev. 1.0</span>
             <Link
