@@ -24,6 +24,10 @@ const schema = z.object({
   REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().positive().default(30),
   COOKIE_SECURE: booleanish.default(false),
   SCHEDULER_INTERVAL_SECONDS: z.coerce.number().int().min(0).default(60),
+  // Optional. Leaving these unset simply hides the "Continue with Google"
+  // button — the app never shows a sign-in option it cannot honour.
+  GOOGLE_CLIENT_ID: z.string().default(''),
+  GOOGLE_CLIENT_SECRET: z.string().default(''),
 });
 
 const parsed = schema.safeParse(process.env);
@@ -48,6 +52,7 @@ export const env = {
   cookieSecure: raw.COOKIE_SECURE || raw.NODE_ENV === 'production',
   uploadDir: path.resolve(process.cwd(), raw.UPLOAD_DIR),
   maxUploadBytes: raw.MAX_UPLOAD_MB * 1024 * 1024,
+  googleEnabled: raw.GOOGLE_CLIENT_ID.length > 0 && raw.GOOGLE_CLIENT_SECRET.length > 0,
   allowedOrigins: Array.from(
     new Set(
       [raw.APP_ORIGIN, ...raw.CORS_ORIGINS.split(',')].map((value) => value.trim()).filter(Boolean),

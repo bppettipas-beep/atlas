@@ -370,6 +370,10 @@ export interface SessionUserDto {
     email: string;
     fullName: string;
     avatarUrl: string | null;
+    /** False for accounts that only sign in with Google and have no password yet. */
+    hasPassword: boolean;
+    /** True once a Google account is linked, whether or not a password exists. */
+    hasGoogle: boolean;
   };
   membership: {
     id: string;

@@ -1,5 +1,12 @@
 import { useState, type FormEvent } from 'react';
-import { Link, Navigate, useNavigate } from 'react-router-dom';
+import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
+import {
+  AuthDivider,
+  GoogleButton,
+  GoogleIdentityCard,
+  useGoogleEnabled,
+  useGoogleGrant,
+} from '@/components/auth/GoogleSignIn';
 import { AuthLayout } from '@/components/layout/AuthLayout';
 import { Button, Field, InlineError, Input, LoadingState, Select } from '@/components/ui';
 import { ApiError, api } from '@/lib/api';
@@ -43,6 +50,10 @@ const TIMEZONES = [
 export function OwnerSignupPage() {
   const { session, loading, setSession } = useAuth();
   const navigate = useNavigate();
+  const [params] = useSearchParams();
+  const googleEnabled = useGoogleEnabled();
+  // Arriving back from Google with `?google=1` means a profile is waiting.
+  const { grant, loading: grantLoading } = useGoogleGrant(params.get('google') === '1');
 
   const guessedTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
@@ -62,7 +73,7 @@ export function OwnerSignupPage() {
   const [submitting, setSubmitting] = useState(false);
   const [uploading, setUploading] = useState(false);
 
-  if (loading) return <LoadingState className="h-screen" label="Loading…" />;
+  if (loading || grantLoading) return <LoadingState className="h-screen" label="Loading…" />;
   if (session) return <Navigate to="/app" replace />;
 
   const update = (key: keyof typeof form) => (value: string) =>
@@ -99,7 +110,20 @@ export function OwnerSignupPage() {
     setFieldErrors({});
     setSubmitting(true);
     try {
-      const next = await api.post<SessionUserDto>('/auth/owner-signup', form);
+      // With a Google grant the server takes the name, email and photo from the
+      // signed cookie, so sending them here would be pointless at best.
+      const body = grant
+        ? {
+            useGoogle: true,
+            companyName: form.companyName,
+            industry: form.industry,
+            sizeRange: form.sizeRange,
+            location: form.location,
+            timezone: form.timezone,
+            logoUrl: form.logoUrl,
+          }
+        : form;
+      const next = await api.post<SessionUserDto>('/auth/owner-signup', body);
       setSession(next);
       navigate('/app/organization', { replace: true });
     } catch (caught) {
@@ -131,13 +155,30 @@ export function OwnerSignupPage() {
         </>
       }
     >
+      {googleEnabled && !grant && (
+        <div className="mb-6 space-y-5">
+          <GoogleButton intent="signup" label="Sign up with Google" />
+          <AuthDivider />
+        </div>
+      )}
+
       <form onSubmit={handleSubmit} className="space-y-5" noValidate>
         {error && <InlineError message={error} />}
 
-        <fieldset className="space-y-4">
-          <legend className="edge mb-4">About you</legend>
+        {grant ? (
+          <fieldset className="space-y-3">
+            <legend className="edge mb-4">About you</legend>
+            <GoogleIdentityCard grant={grant} />
+            <p className="text-[12px] leading-relaxed text-ink-4">
+              Taken from your Google account. You can change your name and photo later, and set a
+              password if you ever want to sign in without Google.
+            </p>
+          </fieldset>
+        ) : (
+          <fieldset className="space-y-4">
+            <legend className="edge mb-4">About you</legend>
 
-          <Field label="Full name" htmlFor="fullName" error={fieldErrors.fullName} required>
+            <Field label="Full name" htmlFor="fullName" error={fieldErrors.fullName} required>
             <Input
               id="fullName"
               autoComplete="name"
@@ -147,41 +188,42 @@ export function OwnerSignupPage() {
               invalid={Boolean(fieldErrors.fullName)}
               onChange={(event) => update('fullName')(event.target.value)}
               placeholder="Ada Whitfield"
-            />
-          </Field>
+              />
+            </Field>
 
-          <Field label="Email address" htmlFor="email" error={fieldErrors.email} required>
-            <Input
-              id="email"
-              type="email"
-              autoComplete="email"
-              required
-              value={form.email}
-              invalid={Boolean(fieldErrors.email)}
-              onChange={(event) => update('email')(event.target.value)}
-              placeholder="you@company.com"
-            />
-          </Field>
+            <Field label="Email address" htmlFor="email" error={fieldErrors.email} required>
+              <Input
+                id="email"
+                type="email"
+                autoComplete="email"
+                required
+                value={form.email}
+                invalid={Boolean(fieldErrors.email)}
+                onChange={(event) => update('email')(event.target.value)}
+                placeholder="you@company.com"
+              />
+            </Field>
 
-          <Field
-            label="Password"
-            htmlFor="password"
-            error={fieldErrors.password}
-            hint="At least 8 characters."
-            required
-          >
-            <Input
-              id="password"
-              type="password"
-              autoComplete="new-password"
+            <Field
+              label="Password"
+              htmlFor="password"
+              error={fieldErrors.password}
+              hint="At least 8 characters."
               required
-              minLength={8}
-              value={form.password}
-              invalid={Boolean(fieldErrors.password)}
-              onChange={(event) => update('password')(event.target.value)}
-            />
-          </Field>
-        </fieldset>
+            >
+              <Input
+                id="password"
+                type="password"
+                autoComplete="new-password"
+                required
+                minLength={8}
+                value={form.password}
+                invalid={Boolean(fieldErrors.password)}
+                onChange={(event) => update('password')(event.target.value)}
+              />
+            </Field>
+          </fieldset>
+        )}
 
         <fieldset className="space-y-4 border-t border-rule pt-6">
           <legend className="edge mb-4">About the business</legend>

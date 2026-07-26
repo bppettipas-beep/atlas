@@ -442,9 +442,73 @@ Every variable is documented in `.env.example`. The ones that matter:
 | `COOKIE_SECURE` | no | Forced on when `NODE_ENV=production` |
 | `SCHEDULER_INTERVAL_SECONDS` | no | Overdue escalation and recurring tasks. `0` disables |
 | `CORS_ORIGINS` | no | Extra allowed origins, comma separated |
+| `GOOGLE_CLIENT_ID` | no | Enables Google sign-in. See below |
+| `GOOGLE_CLIENT_SECRET` | no | Enables Google sign-in. See below |
 
 The server validates all of this at startup and exits with a readable message
 listing exactly what is missing, rather than failing on the first query.
+
+---
+
+## Google sign-in
+
+Optional. With no credentials set, the "Continue with Google" button is not
+rendered at all — the app never offers a route it cannot complete.
+
+### Setting it up
+
+1. Go to <https://console.cloud.google.com/apis/credentials>.
+2. Create a project if you do not have one.
+3. **Configure the consent screen** (once): External, fill in the app name and
+   your support email. While it stays in *Testing* only accounts you list as
+   test users can sign in, so publish it when you are ready for your staff.
+4. **Create credentials → OAuth client ID → Web application.**
+5. Under **Authorised redirect URIs**, add the callback for every origin you
+   use. It must match exactly, including the scheme and any port:
+
+   ```
+   http://localhost:5173/api/auth/google/callback
+   https://your-app.up.railway.app/api/auth/google/callback
+   ```
+
+6. Copy the client ID and client secret into `GOOGLE_CLIENT_ID` and
+   `GOOGLE_CLIENT_SECRET` — in `.env` locally, and as Railway variables in
+   production. **Never commit the secret.**
+7. Make sure `APP_ORIGIN` matches the origin you registered. The callback URL
+   is derived from it, so a mismatch produces Google's `redirect_uri_mismatch`
+   error.
+
+### What it does
+
+- **Signing in.** Matches on Google's stable subject id first, then on email.
+  An existing password account is linked to Google the first time it is used,
+  so both routes then work for the same person.
+- **Signing up.** Google confirms who someone is, but not which company they
+  belong to. A new person is handed a short-lived signed grant and sent to the
+  normal sign-up screen with their name, email and photo already filled in;
+  they only have to name their company, or enter an invitation code.
+- **Passwords.** Google never provides one. Such an account has no password
+  until the person sets one under **Account → Set a password**, which adds a
+  second way in rather than replacing Google. Trying to sign in with a password
+  on a Google-only account says so plainly instead of "wrong password".
+- **Photos.** Google's picture is used only when the person has not already set
+  an avatar in Atlas. What they chose here outranks what Google has.
+
+### What is checked
+
+- `state` is HMAC-signed, so the intent and any invitation code cannot be
+  altered during the round trip, and is bound to a nonce cookie set on the way
+  out (CSRF).
+- The ID token's audience, issuer and expiry are verified. Its signature is not
+  re-checked because it is received directly from Google's token endpoint over
+  TLS in exchange for the client secret — the case Google documents as not
+  needing it.
+- An **unverified** Google email address is rejected outright. Accepting one
+  would let somebody register an address they do not own and be handed the
+  matching Atlas account.
+- The grant cookie is signed and expires in 15 minutes. Identity fields are
+  always read from it, never from the request body, so the browser cannot claim
+  an address that Google did not confirm.
 
 ### Security
 

@@ -1,7 +1,26 @@
+import crypto from 'node:crypto';
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
-import { clearAuthCookies, REFRESH_COOKIE, setAuthCookies } from '../auth/cookies';
+import {
+  clearAuthCookies,
+  clearGoogleCookies,
+  GOOGLE_GRANT_COOKIE,
+  GOOGLE_NONCE_COOKIE,
+  REFRESH_COOKIE,
+  setAuthCookies,
+  setGoogleGrantCookie,
+  setGoogleNonceCookie,
+} from '../auth/cookies';
+import {
+  buildAuthorizationUrl,
+  decodeGrant,
+  decodeState,
+  encodeGrant,
+  exchangeCodeForProfile,
+  type GoogleIntent,
+} from '../auth/google';
+import { env } from '../env';
 import {
   createRefreshToken,
   hashPassword,
@@ -53,10 +72,21 @@ const password = z
 
 const fullName = z.string().trim().min(2, 'Please enter your full name').max(120);
 
+/**
+ * Name, email and password are optional *only* because they may instead come
+ * from a completed Google sign-in. `resolveNewAccount` enforces that one of the
+ * two is actually present, and never trusts a client-supplied email when Google
+ * is the source — otherwise anyone could claim any address.
+ */
+const credentials = {
+  fullName: fullName.optional(),
+  email: email.optional(),
+  password: password.optional(),
+  useGoogle: z.boolean().optional(),
+};
+
 const ownerSignupSchema = z.object({
-  fullName,
-  email,
-  password,
+  ...credentials,
   companyName: z.string().trim().min(2, 'Company name is required').max(120),
   industry: z.string().trim().max(80).optional().or(z.literal('')),
   sizeRange: z.string().trim().max(40).optional().or(z.literal('')),
@@ -66,9 +96,7 @@ const ownerSignupSchema = z.object({
 });
 
 const workerJoinSchema = z.object({
-  fullName,
-  email,
-  password,
+  ...credentials,
   code: z
     .string()
     .trim()
@@ -82,6 +110,53 @@ const loginSchema = z.object({
   email,
   password: z.string().min(1, 'Enter your password'),
 });
+
+/** The account fields to create, from whichever way the person proved who they are. */
+interface NewAccount {
+  email: string;
+  fullName: string;
+  avatarUrl: string | null;
+  googleId: string | null;
+  passwordHash: string | null;
+}
+
+/**
+ * Turns a sign-up body into the account to create.
+ *
+ * When Google is the source, every identity field is read from the signed grant
+ * cookie rather than the request body. The browser is free to send whatever it
+ * likes in the JSON; none of it is trusted.
+ */
+async function resolveNewAccount(
+  req: Request,
+  input: { useGoogle?: boolean; email?: string; fullName?: string; password?: string },
+): Promise<NewAccount> {
+  if (input.useGoogle) {
+    const grant = decodeGrant(req.cookies?.[GOOGLE_GRANT_COOKIE] as string | undefined);
+    return {
+      email: grant.email,
+      fullName: grant.fullName,
+      avatarUrl: grant.avatarUrl,
+      googleId: grant.googleId,
+      passwordHash: null,
+    };
+  }
+
+  if (!input.email || !input.fullName || !input.password) {
+    throw ApiError.badRequest(
+      'Enter your name, email address and a password.',
+      'MISSING_CREDENTIALS',
+    );
+  }
+
+  return {
+    email: input.email,
+    fullName: input.fullName,
+    avatarUrl: null,
+    googleId: null,
+    passwordHash: await hashPassword(input.password),
+  };
+}
 
 async function issueSession(req: Request, res: Response, userId: string, membershipId: string) {
   const membership = await prisma.membership.findUniqueOrThrow({
@@ -120,7 +195,16 @@ export async function buildSessionPayload(
   const membership = await prisma.membership.findUniqueOrThrow({
     where: { id: membershipId },
     include: {
-      user: { select: { id: true, email: true, fullName: true, avatarUrl: true } },
+      user: {
+        select: {
+          id: true,
+          email: true,
+          fullName: true,
+          avatarUrl: true,
+          passwordHash: true,
+          googleId: true,
+        },
+      },
       company: true,
       profile: true,
     },
@@ -141,6 +225,9 @@ export async function buildSessionPayload(
       email: membership.user.email,
       fullName: membership.user.fullName,
       avatarUrl: membership.user.avatarUrl,
+      // Booleans only — the hash itself must never leave the server.
+      hasPassword: membership.user.passwordHash !== null,
+      hasGoogle: membership.user.googleId !== null,
     },
     membership: {
       id: membership.id,
@@ -160,6 +247,129 @@ export async function buildSessionPayload(
   };
 }
 
+// ------------------------------ Google -------------------------------------
+
+/**
+ * Lets the sign-in screens know whether to draw the Google button at all.
+ * Without credentials configured the button would be a dead end, so it is
+ * simply not rendered.
+ */
+authRouter.get('/config', (_req, res) => {
+  res.json({ google: env.googleEnabled });
+});
+
+function requireGoogleConfigured() {
+  if (!env.googleEnabled) {
+    throw ApiError.badRequest(
+      'Google sign-in is not configured for this Atlas instance.',
+      'GOOGLE_NOT_CONFIGURED',
+    );
+  }
+}
+
+/** Sends the browser to Google's account chooser. */
+authRouter.get(
+  '/google/start',
+  authLimiter,
+  validateQuery(
+    z.object({
+      intent: z.enum(['signin', 'signup', 'join']).default('signin'),
+      code: z.string().trim().max(32).optional(),
+    }),
+  ),
+  asyncHandler(async (_req, res) => {
+    requireGoogleConfigured();
+    const { intent, code } = parsedQuery<{ intent: GoogleIntent; code?: string }>(res);
+
+    const nonce = crypto.randomBytes(16).toString('base64url');
+    setGoogleNonceCookie(res, nonce);
+
+    res.redirect(
+      buildAuthorizationUrl({
+        intent,
+        inviteCode: code ? code.toUpperCase().replace(/\s+/g, '') : undefined,
+        nonce,
+      }),
+    );
+  }),
+);
+
+/** Where the person lands after choosing an account. Always ends in a redirect. */
+authRouter.get(
+  '/google/callback',
+  asyncHandler(async (req, res) => {
+    const fail = (message: string) => res.redirect(`/signin?error=${encodeURIComponent(message)}`);
+
+    if (!env.googleEnabled) return fail('Google sign-in is not configured.');
+    if (typeof req.query.error === 'string') return fail('Google sign-in was cancelled.');
+
+    const code = req.query.code;
+    const rawState = req.query.state;
+    if (typeof code !== 'string' || typeof rawState !== 'string') {
+      return fail('Google sign-in did not complete. Please try again.');
+    }
+
+    const state = decodeState(rawState);
+    // The nonce ties this callback to the browser that started the flow.
+    if (state.nonce !== (req.cookies?.[GOOGLE_NONCE_COOKIE] as string | undefined)) {
+      return fail('That sign-in link has expired. Please try again.');
+    }
+
+    const profile = await exchangeCodeForProfile(code);
+
+    const existing =
+      (await prisma.user.findUnique({ where: { googleId: profile.googleId } })) ??
+      (await prisma.user.findUnique({ where: { email: profile.email } }));
+
+    if (existing) {
+      // Link Google to a pre-existing password account on first use, and fill
+      // in a photo only when there is not one already — a picture the user
+      // uploaded to Atlas should outrank the one on their Google account.
+      await prisma.user.update({
+        where: { id: existing.id },
+        data: {
+          googleId: profile.googleId,
+          avatarUrl: existing.avatarUrl ?? profile.avatarUrl,
+        },
+      });
+
+      const membership = await prisma.membership.findFirst({
+        where: { userId: existing.id, status: 'ACTIVE', deactivatedAt: null },
+        orderBy: { createdAt: 'asc' },
+      });
+
+      if (!membership) {
+        return fail('Your account is not active in any company. Ask an owner to invite you again.');
+      }
+
+      clearGoogleCookies(res);
+      await issueSession(req, res, existing.id, membership.id);
+      return res.redirect('/app');
+    }
+
+    // Nobody by that name yet. Google has vouched for them, but they still have
+    // to say which company they are — so hand the browser a short-lived grant
+    // and let the normal sign-up screens finish the job, prefilled.
+    setGoogleGrantCookie(res, encodeGrant(profile));
+
+    if (state.intent === 'join') {
+      const query = new URLSearchParams({ google: '1' });
+      if (state.inviteCode) query.set('code', state.inviteCode);
+      return res.redirect(`/join?${query.toString()}`);
+    }
+    return res.redirect('/signup/owner?google=1');
+  }),
+);
+
+/** The profile waiting to be turned into an account, for prefilling the form. */
+authRouter.get(
+  '/google/grant',
+  asyncHandler(async (req, res) => {
+    const grant = decodeGrant(req.cookies?.[GOOGLE_GRANT_COOKIE] as string | undefined);
+    res.json({ email: grant.email, fullName: grant.fullName, avatarUrl: grant.avatarUrl });
+  }),
+);
+
 // --------------------------- owner sign-up ---------------------------------
 
 authRouter.post(
@@ -168,8 +378,9 @@ authRouter.post(
   validateBody(ownerSignupSchema),
   asyncHandler(async (req, res) => {
     const input = req.body as z.infer<typeof ownerSignupSchema>;
+    const account = await resolveNewAccount(req, input);
 
-    const existing = await prisma.user.findUnique({ where: { email: input.email } });
+    const existing = await prisma.user.findUnique({ where: { email: account.email } });
     if (existing) {
       throw ApiError.conflict(
         'An account already uses that email address. Sign in instead.',
@@ -182,13 +393,7 @@ authRouter.post(
     );
 
     const { membershipId, companyId } = await prisma.$transaction(async (tx) => {
-      const user = await tx.user.create({
-        data: {
-          email: input.email,
-          fullName: input.fullName,
-          passwordHash: await hashPassword(input.password),
-        },
-      });
+      const user = await tx.user.create({ data: account });
 
       const company = await tx.company.create({
         data: {
@@ -243,7 +448,7 @@ authRouter.post(
     await recordActivity({
       companyId,
       type: 'MEMBER_JOINED',
-      summary: `${input.fullName} created ${input.companyName} on Atlas`,
+      summary: `${account.fullName} created ${input.companyName} on Atlas`,
       actorId: membershipId,
       targetId: membershipId,
     });
@@ -253,6 +458,7 @@ authRouter.post(
       select: { userId: true },
     });
 
+    clearGoogleCookies(res);
     await issueSession(req, res, user.userId, membershipId);
     res.status(201).json(await buildSessionPayload(user.userId, membershipId));
   }),
@@ -307,6 +513,7 @@ authRouter.post(
   validateBody(workerJoinSchema),
   asyncHandler(async (req, res) => {
     const input = req.body as z.infer<typeof workerJoinSchema>;
+    const account = await resolveNewAccount(req, input);
 
     const invite = await prisma.inviteCode.findUnique({
       where: { code: input.code },
@@ -333,7 +540,7 @@ authRouter.post(
     }
 
     const existingUser = await prisma.user.findUnique({
-      where: { email: input.email },
+      where: { email: account.email },
       include: { memberships: { where: { companyId: invite.companyId } } },
     });
 
@@ -351,13 +558,7 @@ authRouter.post(
     }
 
     const membershipId = await prisma.$transaction(async (tx) => {
-      const user = await tx.user.create({
-        data: {
-          email: input.email,
-          fullName: input.fullName,
-          passwordHash: await hashPassword(input.password),
-        },
-      });
+      const user = await tx.user.create({ data: account });
 
       // A new worker reports to the lead of the team they were invited into,
       // falling back to the company owner so nobody is orphaned on the map.
@@ -399,7 +600,7 @@ authRouter.post(
       });
 
       await tx.directInvite.updateMany({
-        where: { companyId: invite.companyId, email: input.email, acceptedAt: null },
+        where: { companyId: invite.companyId, email: account.email, acceptedAt: null },
         data: { acceptedAt: new Date() },
       });
 
@@ -411,7 +612,7 @@ authRouter.post(
     await recordActivity({
       companyId: invite.companyId,
       type: 'MEMBER_JOINED',
-      summary: `${input.fullName} joined ${invite.company.name}`,
+      summary: `${account.fullName} joined ${invite.company.name}`,
       actorId: membershipId,
       targetId: membershipId,
       metadata: { via: 'invite-code' },
@@ -419,7 +620,7 @@ authRouter.post(
     await recordActivity({
       companyId: invite.companyId,
       type: 'INVITE_USED',
-      summary: `Invitation code ${invite.code} was used by ${input.fullName}`,
+      summary: `Invitation code ${invite.code} was used by ${account.fullName}`,
       targetId: membershipId,
       visibility: 'MANAGERS',
       metadata: { inviteCodeId: invite.id },
@@ -441,7 +642,7 @@ authRouter.post(
         recipientId: leader.id,
         actorId: membershipId,
         type: 'MEMBER_JOINED',
-        title: `${input.fullName} joined the company`,
+        title: `${account.fullName} joined the company`,
         body: input.jobTitle
           ? `They joined as ${input.jobTitle}.`
           : 'Say hello and assign their first task.',
@@ -482,14 +683,22 @@ authRouter.post(
       },
     });
 
+    // An account that only ever signed in with Google has no password to check.
+    // Say so plainly — "email or password is not correct" would send someone
+    // round in circles resetting a password that does not exist.
+    if (user && !user.passwordHash) {
+      throw ApiError.badRequest(
+        'This account signs in with Google. Use the “Continue with Google” button.',
+        'USE_GOOGLE',
+      );
+    }
+
     // Always compare against *something* so the response time does not reveal
     // whether the email exists.
-    const passwordOk = user
-      ? await verifyPassword(input.password, user.passwordHash)
-      : await verifyPassword(
-          input.password,
-          '$2b$12$invalidinvalidinvalidinvalidinvalidinvalidinva',
-        );
+    const passwordOk = await verifyPassword(
+      input.password,
+      user?.passwordHash ?? '$2b$12$invalidinvalidinvalidinvalidinvalidinvalidinva',
+    );
 
     if (!user || !passwordOk) {
       throw ApiError.unauthorized('That email or password is not correct.', 'INVALID_CREDENTIALS');
@@ -562,17 +771,25 @@ authRouter.patch(
   requireAuth,
   validateBody(
     z.object({
-      currentPassword: z.string().min(1, 'Enter your current password'),
+      // Optional: a Google-only account is setting its first password, and has
+      // no current one to prove. It is already authenticated by its session.
+      currentPassword: z.string().optional(),
       newPassword: password,
     }),
   ),
   asyncHandler(async (req, res) => {
     const auth = currentAuth(req);
-    const input = req.body as { currentPassword: string; newPassword: string };
+    const input = req.body as { currentPassword?: string; newPassword: string };
 
     const user = await prisma.user.findUniqueOrThrow({ where: { id: auth.userId } });
-    if (!(await verifyPassword(input.currentPassword, user.passwordHash))) {
-      throw ApiError.badRequest('Your current password is not correct.', 'INVALID_CREDENTIALS');
+
+    if (user.passwordHash) {
+      if (!input.currentPassword) {
+        throw ApiError.badRequest('Enter your current password.', 'MISSING_CREDENTIALS');
+      }
+      if (!(await verifyPassword(input.currentPassword, user.passwordHash))) {
+        throw ApiError.badRequest('Your current password is not correct.', 'INVALID_CREDENTIALS');
+      }
     }
 
     await prisma.user.update({

@@ -548,3 +548,64 @@ describe('health', () => {
     expect(response.status).toBe(200);
   });
 });
+
+describe('Google sign-in', () => {
+  // The tests run without GOOGLE_CLIENT_ID/SECRET, which is the same state a
+  // fresh deployment is in. Everything here checks that the feature stays shut
+  // and safe until it is deliberately configured.
+
+  it('tells the client Google is unavailable so no dead button is drawn', async () => {
+    const response = await request(app).get('/api/auth/config');
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ google: false });
+  });
+
+  it('refuses to start the flow when Google is not configured', async () => {
+    const response = await request(app).get('/api/auth/google/start?intent=signin');
+    expect(response.status).toBe(400);
+    expect(response.body.error).toMatchObject({ code: 'GOOGLE_NOT_CONFIGURED' });
+  });
+
+  it('sends the callback back to sign-in rather than erroring when unconfigured', async () => {
+    const response = await request(app).get('/api/auth/google/callback?code=x&state=y');
+    expect(response.status).toBe(302);
+    expect(response.headers.location).toMatch(/^\/signin\?error=/);
+  });
+
+  it('rejects a sign-up that claims Google without a grant cookie', async () => {
+    const response = await request(app)
+      .post('/api/auth/owner-signup')
+      .send({ useGoogle: true, companyName: 'Grantless Co' });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error.code).toMatch(/GOOGLE_GRANT/);
+  });
+
+  it('rejects a forged grant cookie', async () => {
+    // A well-formed payload with a signature the server did not produce.
+    const body = Buffer.from(
+      JSON.stringify({
+        googleId: 'attacker',
+        email: 'victim@example.com',
+        fullName: 'Victim',
+        avatarUrl: null,
+        exp: Date.now() + 60_000,
+      }),
+    ).toString('base64url');
+
+    const response = await request(app)
+      .post('/api/auth/owner-signup')
+      .set('Cookie', [`atlas_google_grant=${body}.not-a-real-signature`])
+      .send({ useGoogle: true, companyName: 'Forged Co' });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error.code).toBe('GOOGLE_GRANT_INVALID');
+  });
+
+  it('reports whether an account has a password, without leaking the hash', async () => {
+    const owner = await signUpOwner(app);
+    expect(owner.session.user.hasPassword).toBe(true);
+    expect(owner.session.user.hasGoogle).toBe(false);
+    expect(JSON.stringify(owner.session)).not.toContain('$2b$');
+  });
+});

@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
-import { Link, Navigate, useNavigate } from 'react-router-dom';
+import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
+import { AuthDivider, GoogleButton, useGoogleEnabled } from '@/components/auth/GoogleSignIn';
 import { AuthLayout } from '@/components/layout/AuthLayout';
 import { Button, Field, InlineError, Input, LoadingState } from '@/components/ui';
 import { ApiError } from '@/lib/api';
@@ -8,9 +9,12 @@ import { useAuth } from '@/providers/AuthProvider';
 export function SignInPage() {
   const { session, loading, signIn } = useAuth();
   const navigate = useNavigate();
+  const [params] = useSearchParams();
+  const googleEnabled = useGoogleEnabled();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState<string | null>(null);
+  // A failed Google round trip comes back as a redirect carrying its reason.
+  const [error, setError] = useState<string | null>(params.get('error'));
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
 
@@ -54,6 +58,13 @@ export function SignInPage() {
         </>
       }
     >
+      {googleEnabled && (
+        <div className="mb-6 space-y-5">
+          <GoogleButton intent="signin" label="Sign in with Google" />
+          <AuthDivider />
+        </div>
+      )}
+
       <form onSubmit={handleSubmit} className="space-y-5" noValidate>
         {error && <InlineError message={error} />}
 

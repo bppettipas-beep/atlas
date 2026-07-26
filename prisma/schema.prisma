@@ -145,14 +145,21 @@ enum ActivityVisibility {
 // ------------------------------- identity ----------------------------------
 
 model User {
-  id           String    @id @default(cuid())
-  email        String    @unique
-  passwordHash String
-  fullName     String
-  avatarUrl    String?
-  lastLoginAt  DateTime?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  id String @id @default(cuid())
+
+  email String @unique
+  /// Null for accounts that only ever sign in with Google. Such a user can set
+  /// a password later, which adds a second way in rather than replacing Google.
+  passwordHash String?
+  /// Google's stable subject id. Preferred over email for matching, because a
+  /// Google account can change its email address but never its subject.
+  googleId String? @unique
+
+  fullName    String
+  avatarUrl   String?
+  lastLoginAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   memberships   Membership[]
   refreshTokens RefreshToken[]

@@ -1,5 +1,12 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
+import {
+  AuthDivider,
+  GoogleButton,
+  GoogleIdentityCard,
+  useGoogleEnabled,
+  useGoogleGrant,
+} from '@/components/auth/GoogleSignIn';
 import { SealCheck } from '@/components/icons';
 import { AuthLayout } from '@/components/layout/AuthLayout';
 import { Button, Field, InlineError, Input, LoadingState, Spinner } from '@/components/ui';
@@ -30,6 +37,10 @@ export function WorkerJoinPage() {
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
+
+  const googleEnabled = useGoogleEnabled();
+  // Arriving back from Google with `?google=1` means a profile is waiting.
+  const { grant, loading: grantLoading } = useGoogleGrant(params.get('google') === '1');
 
   const [preview, setPreview] = useState<InvitePreview | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
@@ -68,7 +79,7 @@ export function WorkerJoinPage() {
     };
   }, [debouncedCode]);
 
-  if (loading) return <LoadingState className="h-screen" label="Loading…" />;
+  if (loading || grantLoading) return <LoadingState className="h-screen" label="Loading…" />;
   if (session) return <Navigate to="/app" replace />;
 
   const update = (key: keyof typeof form) => (value: string) =>
@@ -80,7 +91,12 @@ export function WorkerJoinPage() {
     setFieldErrors({});
     setSubmitting(true);
     try {
-      const next = await api.post<SessionUserDto>('/auth/worker-join', form);
+      // With a Google grant the identity comes from the signed cookie; only the
+      // invitation code and job title are the person's to supply.
+      const body = grant
+        ? { useGoogle: true, code: form.code, jobTitle: form.jobTitle }
+        : form;
+      const next = await api.post<SessionUserDto>('/auth/worker-join', body);
       setSession(next);
       navigate('/app', { replace: true });
     } catch (caught) {
@@ -161,49 +177,68 @@ export function WorkerJoinPage() {
           </div>
         )}
 
-        <Field label="Full name" htmlFor="fullName" error={fieldErrors.fullName} required>
-          <Input
-            id="fullName"
-            autoComplete="name"
-            required
-            value={form.fullName}
-            invalid={Boolean(fieldErrors.fullName)}
-            onChange={(event) => update('fullName')(event.target.value)}
-            placeholder="Theo Banda"
-          />
-        </Field>
+        {grant ? (
+          <div className="space-y-3">
+            <GoogleIdentityCard grant={grant} />
+            <p className="text-[12px] leading-relaxed text-ink-4">
+              Taken from your Google account. You can set a password later if you ever want to sign
+              in without Google.
+            </p>
+          </div>
+        ) : (
+          <>
+            {googleEnabled && (
+              <div className="space-y-5">
+                <GoogleButton intent="join" code={form.code} label="Join with Google" />
+                <AuthDivider />
+              </div>
+            )}
 
-        <Field label="Email address" htmlFor="email" error={fieldErrors.email} required>
-          <Input
-            id="email"
-            type="email"
-            autoComplete="email"
-            required
-            value={form.email}
-            invalid={Boolean(fieldErrors.email)}
-            onChange={(event) => update('email')(event.target.value)}
-            placeholder="you@example.com"
-          />
-        </Field>
+            <Field label="Full name" htmlFor="fullName" error={fieldErrors.fullName} required>
+              <Input
+                id="fullName"
+                autoComplete="name"
+                required
+                value={form.fullName}
+                invalid={Boolean(fieldErrors.fullName)}
+                onChange={(event) => update('fullName')(event.target.value)}
+                placeholder="Theo Banda"
+              />
+            </Field>
 
-        <Field
-          label="Password"
-          htmlFor="password"
-          error={fieldErrors.password}
-          hint="At least 8 characters."
-          required
-        >
-          <Input
-            id="password"
-            type="password"
-            autoComplete="new-password"
-            required
-            minLength={8}
-            value={form.password}
-            invalid={Boolean(fieldErrors.password)}
-            onChange={(event) => update('password')(event.target.value)}
-          />
-        </Field>
+            <Field label="Email address" htmlFor="email" error={fieldErrors.email} required>
+              <Input
+                id="email"
+                type="email"
+                autoComplete="email"
+                required
+                value={form.email}
+                invalid={Boolean(fieldErrors.email)}
+                onChange={(event) => update('email')(event.target.value)}
+                placeholder="you@example.com"
+              />
+            </Field>
+
+            <Field
+              label="Password"
+              htmlFor="password"
+              error={fieldErrors.password}
+              hint="At least 8 characters."
+              required
+            >
+              <Input
+                id="password"
+                type="password"
+                autoComplete="new-password"
+                required
+                minLength={8}
+                value={form.password}
+                invalid={Boolean(fieldErrors.password)}
+                onChange={(event) => update('password')(event.target.value)}
+              />
+            </Field>
+          </>
+        )}
 
         <Field
           label="Job title"

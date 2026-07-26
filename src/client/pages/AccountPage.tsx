@@ -58,6 +58,7 @@ export function AccountPage() {
   const session = useSession();
   const { signOut } = useAuth();
   const toast = useToast();
+  const hasPassword = session.user.hasPassword;
 
   const prefsQuery = useQuery<Preferences>(
     (signal) => api.get('/notifications/preferences', undefined, signal),
@@ -91,7 +92,7 @@ export function AccountPage() {
     setChanging(true);
     try {
       await api.patch('/auth/password', {
-        currentPassword: passwords.currentPassword,
+        currentPassword: hasPassword ? passwords.currentPassword : undefined,
         newPassword: passwords.newPassword,
       });
       setPasswords({ currentPassword: '', newPassword: '', confirm: '' });
@@ -170,21 +171,30 @@ export function AccountPage() {
 
         {/* ------------------------------ password -------------------------- */}
         <Sheet className="p-5">
-          <RuledHead title="Change password" className="mb-4" />
+          <RuledHead title={hasPassword ? 'Change password' : 'Set a password'} className="mb-4" />
           <div className="max-w-sm space-y-4">
             {passwordError && <InlineError message={passwordError} />}
 
-            <Field label="Current password" htmlFor="current-password" required>
-              <Input
-                id="current-password"
-                type="password"
-                autoComplete="current-password"
-                value={passwords.currentPassword}
-                onChange={(event) =>
-                  setPasswords({ ...passwords, currentPassword: event.target.value })
-                }
-              />
-            </Field>
+            {/* A Google-only account has no current password to prove; its
+                session is the proof. Asking for one would be a dead end. */}
+            {hasPassword ? (
+              <Field label="Current password" htmlFor="current-password" required>
+                <Input
+                  id="current-password"
+                  type="password"
+                  autoComplete="current-password"
+                  value={passwords.currentPassword}
+                  onChange={(event) =>
+                    setPasswords({ ...passwords, currentPassword: event.target.value })
+                  }
+                />
+              </Field>
+            ) : (
+              <Notice tone="info">
+                You sign in with Google. Setting a password adds a second way in — it does not
+                remove Google.
+              </Notice>
+            )}
 
             <Field
               label="New password"
@@ -221,10 +231,10 @@ export function AccountPage() {
             <Button
               variant="primary"
               loading={changing}
-              disabled={!passwords.currentPassword || passwords.newPassword.length < 8}
+              disabled={(hasPassword && !passwords.currentPassword) || passwords.newPassword.length < 8}
               onClick={() => void changePassword()}
             >
-              Change password
+              {hasPassword ? 'Change password' : 'Set password'}
             </Button>
           </div>
         </Sheet>
