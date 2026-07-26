@@ -4,14 +4,13 @@ import {
   MarkerType,
   ReactFlow,
   ReactFlowProvider,
+  useNodesState,
   useReactFlow,
   useStore,
   type Edge,
-  type NodeChange,
-  type NodePositionChange,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { nodeTypes, type AtlasNode } from './nodes';
 import { RELATIONSHIP_META, drawingIndex } from '@/lib/utils';
 import type { OrgGraphDto, RelationshipType, TaskSummary } from '@shared/types';
@@ -23,7 +22,7 @@ interface OrganizationMapProps {
   visibleTypes: Set<RelationshipType>;
   editable: boolean;
   onSelect: (nodeId: string | null) => void;
-  onPositionsChange: (positions: { id: string; x: number; y: number }[]) => void;
+  onPositionsChange: (positions: { id: string; x: number; y: number }[]) => void | Promise<void>;
 }
 
 /** Live zoom readout, printed like a drawing scale. */
@@ -48,8 +47,9 @@ function MapCanvas({
   onPositionsChange,
 }: OrganizationMapProps) {
   const { fitView } = useReactFlow();
-  const [dragged, setDragged] = useState<Record<string, { x: number; y: number }>>({});
+  const [nodes, setNodes, onNodesChange] = useNodesState<AtlasNode>([]);
   const saveTimer = useRef<number | null>(null);
+  /** Positions the user has moved but the server has not confirmed yet. */
   const pending = useRef(new Map<string, { x: number; y: number }>());
 
   /** Per-person workload badges, derived from the task list the page already has. */
@@ -65,14 +65,34 @@ function MapCanvas({
     return map;
   }, [tasks]);
 
-  const nodes: AtlasNode[] = useMemo(
-    () =>
-      graph.nodes.map((node, index) => {
-        const position = dragged[node.id] ?? { x: node.x, y: node.y };
+  /**
+   * Rebuilds the nodes React Flow renders.
+   *
+   * This runs when the data or the presentation inputs change — never while a
+   * node is being dragged. That distinction is the whole point: React Flow is
+   * controlled, and it hides a node until it has measured it. Rebuilding the
+   * node objects on every drag frame threw those measurements away sixty times
+   * a second, so the map blinked out while you moved anything. Drags now go
+   * through `onNodesChange`, which mutates positions in place and keeps the
+   * measurements intact.
+   */
+  useEffect(() => {
+    setNodes((current) => {
+      const previous = new Map(current.map((node) => [node.id, node]));
+
+      return graph.nodes.map((node, index) => {
         const ref = drawingIndex(index + 1);
+        const existing = previous.get(node.id);
+        // Prefer a position the user just dragged but we have not saved yet,
+        // so a refetch landing mid-flight cannot snap the node backwards.
+        const position = pending.current.get(node.id) ?? { x: node.x, y: node.y };
+        // Carrying these across a rebuild avoids a re-measure flash when the
+        // graph refetches (someone else moved a node, a task changed, …).
+        const carried = { measured: existing?.measured, selected: existing?.selected };
 
         if (node.kind === 'TEAM' && node.team) {
           return {
+            ...carried,
             id: node.id,
             type: 'team' as const,
             position,
@@ -89,6 +109,7 @@ function MapCanvas({
         const person = node.person!;
         const stats = workload.get(person.id) ?? { active: 0, overdue: 0 };
         return {
+          ...carried,
           id: node.id,
           type: 'person' as const,
           position,
@@ -102,9 +123,9 @@ function MapCanvas({
             activeTasks: stats.active,
           },
         };
-      }),
-    [graph.nodes, dragged, selectedNodeId, editable, workload],
-  );
+      });
+    });
+  }, [graph.nodes, selectedNodeId, editable, workload, setNodes]);
 
   const edges: Edge[] = useMemo(
     () =>
@@ -159,41 +180,27 @@ function MapCanvas({
   const queueSave = useCallback(() => {
     if (saveTimer.current) window.clearTimeout(saveTimer.current);
     saveTimer.current = window.setTimeout(() => {
-      const payload = Array.from(pending.current.entries()).map(([id, position]) => ({
-        id,
-        ...position,
-      }));
-      pending.current.clear();
-      if (payload.length > 0) onPositionsChange(payload);
+      const entries = Array.from(pending.current.entries());
+      if (entries.length === 0) return;
+
+      const payload = entries.map(([id, position]) => ({ id, ...position }));
+      void Promise.resolve(onPositionsChange(payload)).finally(() => {
+        // Only forget the local position once the server owns it.
+        for (const [id] of entries) pending.current.delete(id);
+      });
     }, 650);
   }, [onPositionsChange]);
 
-  const handleNodesChange = useCallback(
-    (changes: NodeChange<AtlasNode>[]) => {
+  const handleNodeDragStop = useCallback(
+    (_event: unknown, _node: AtlasNode, moved: AtlasNode[]) => {
       if (!editable) return;
-      const moves = changes.filter(
-        (change): change is NodePositionChange =>
-          change.type === 'position' && change.position !== undefined,
-      );
-      if (moves.length === 0) return;
-
-      setDragged((current) => {
-        const next = { ...current };
-        for (const move of moves) {
-          if (!move.position) continue;
-          next[move.id] = { x: move.position.x, y: move.position.y };
-          if (move.dragging === false) pending.current.set(move.id, next[move.id]);
-        }
-        return next;
-      });
-
-      if (moves.some((move) => move.dragging === false)) queueSave();
+      for (const node of moved) {
+        pending.current.set(node.id, { x: node.position.x, y: node.position.y });
+      }
+      queueSave();
     },
     [editable, queueSave],
   );
-
-  // Drop local drag state whenever the server sends a different set of nodes.
-  useEffect(() => setDragged({}), [graph.nodes.length]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -215,7 +222,8 @@ function MapCanvas({
       nodes={nodes}
       edges={edges}
       nodeTypes={nodeTypes}
-      onNodesChange={handleNodesChange}
+      onNodesChange={onNodesChange}
+      onNodeDragStop={handleNodeDragStop}
       onNodeClick={(_event, node) => onSelect(node.id)}
       onPaneClick={() => onSelect(null)}
       connectionMode={ConnectionMode.Loose}

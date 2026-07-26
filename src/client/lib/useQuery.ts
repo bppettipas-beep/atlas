@@ -45,7 +45,10 @@ export function useQuery<T>(
       })
       .catch((error: unknown) => {
         if (cancelled || (error instanceof DOMException && error.name === 'AbortError')) return;
-        setState({ data: null, loading: false, error: errorMessage(error) });
+        // Keep whatever we already had. A refetch that fails is a stale screen,
+        // not an empty one — throwing the data away here made the organization
+        // map vanish whenever a background refresh hiccuped.
+        setState((current) => ({ ...current, loading: false, error: errorMessage(error) }));
       });
 
     return () => {

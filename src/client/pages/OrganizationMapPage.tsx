@@ -246,9 +246,23 @@ export function OrganizationMapPage() {
       <div className="relative min-h-0 flex-1">
         {graphQuery.loading && !graphQuery.data && <LoadingState label="Drawing your map" />}
 
-        {graphQuery.error && (
+        {/* A failed *first* load has nothing to show. A failed refresh keeps the
+            map on screen and says so quietly in the corner. */}
+        {graphQuery.error && !graphQuery.data && (
           <div className="p-6">
             <ErrorState message={graphQuery.error} onRetry={graphQuery.refetch} />
+          </div>
+        )}
+
+        {graphQuery.error && graphQuery.data && (
+          <div className="absolute bottom-3 left-1/2 z-20 -translate-x-1/2">
+            <button
+              type="button"
+              onClick={graphQuery.refetch}
+              className="edge-sm border border-alert bg-sheet px-2.5 py-1.5 text-alert transition-colors hover:bg-alert hover:text-paper"
+            >
+              Could not refresh — retry
+            </button>
           </div>
         )}
 
@@ -304,7 +318,7 @@ export function OrganizationMapPage() {
               visibleTypes={visibleTypes}
               editable={isLeadership}
               onSelect={selectNode}
-              onPositionsChange={(positions) => void savePositions(positions)}
+              onPositionsChange={savePositions}
             />
 
             {/* Legend, printed like a drawing key. */}
