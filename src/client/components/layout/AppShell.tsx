@@ -85,8 +85,9 @@ export function AppShell() {
       {/* ---------------------------- title block --------------------------- */}
       <div className="border-b border-rule px-4 py-3.5">
         <div className="flex items-center gap-2.5">
-          <LogoMark className="h-[22px] w-[22px] text-ink" />
-          <span className="title text-[14px] leading-none tracking-[-0.02em]">Atlas</span>
+          {/* Mark only — the company name below is the label that matters here,
+              and the product name does not need repeating on every screen. */}
+          <LogoMark className="h-6 w-6 text-ink" title="Atlas" />
           <span
             title={connected ? 'Live updates connected' : 'Reconnecting'}
             className={cn(
