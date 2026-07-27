@@ -170,7 +170,7 @@ export function SchedulePage() {
         color: null,
       };
     });
-  }, [from, resourceIds, resources, view]);
+  }, [compact, from, resourceIds, resources, view]);
 
   const blocks = scheduleQuery.data?.blocks ?? [];
   const canSchedule = Boolean(permissionsQuery.data?.canScheduleOthers);
@@ -243,6 +243,7 @@ export function SchedulePage() {
               ? 'Your scheduled work and availability for the coming week.'
               : 'Scheduled work is the same work tracked in Atlas — move it here and the task updates everywhere.'
           }
+          className="hidden"
           actions={
             <Button
               variant="primary"
@@ -319,8 +320,49 @@ export function SchedulePage() {
           <span className="ml-auto hidden text-edge text-ink-3 md:block">
             Drag work to move · drag open time to add
           </span>
+          {isLeadership && (
+            <Select
+              id="schedule-resource"
+              aria-label="Schedule resources"
+              className="h-8 min-w-[150px] text-[12px]"
+              value={resourceIds[0] ?? ''}
+              onChange={(event) => setResourceIds(event.target.value ? [event.target.value] : [])}
+            >
+              <option value="">Show the crew</option>
+              {resources.map((resource) => (
+                <option key={resource.id} value={resource.id}>
+                  {resource.kind === 'TEAM' ? 'Team Â· ' : ''}
+                  {resource.name}
+                </option>
+              ))}
+            </Select>
+          )}
+          <Button
+            size="sm"
+            variant="primary"
+            icon={<Plus className="h-3.5 w-3.5" />}
+            disabled={!canSchedule}
+            onClick={() =>
+              setDraft({
+                column: columns[0] ?? {
+                  key: 'mine',
+                  title: 'My schedule',
+                  subtitle: null,
+                  date: from,
+                  resourceId: session?.membership.id ?? null,
+                  kind: 'PERSON',
+                  color: null,
+                  avatarUrl: null,
+                },
+                start: new Date(),
+                end: new Date(Date.now() + 3_600_000),
+              })
+            }
+          >
+            New task
+          </Button>
         </div>
-        {isLeadership && (
+        {(false as boolean) && isLeadership && (
           <div className="mb-3 flex flex-wrap items-center gap-2">
             <label
               className="text-edge font-medium uppercase tracking-wider text-ink-3"
