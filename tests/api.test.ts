@@ -549,6 +549,180 @@ describe('health', () => {
   });
 });
 
+describe('company roles', () => {
+  const createRole = (client: Client, body: Record<string, unknown>) =>
+    client.agent.post('/api/roles').send(body);
+
+  it('creates a role and reports it with a member count', async () => {
+    const owner = await signUpOwner(app);
+    const response = await createRole(owner, { name: 'Dispatcher', color: '#1f6feb' });
+
+    expect(response.status).toBe(201);
+    expect(response.body).toMatchObject({
+      name: 'Dispatcher',
+      color: '#1f6feb',
+      parentId: null,
+      isDefault: false,
+      memberCount: 0,
+    });
+  });
+
+  it('rejects a duplicate name and a colour that is not hex', async () => {
+    const owner = await signUpOwner(app);
+    await createRole(owner, { name: 'Dispatcher' });
+
+    const duplicate = await createRole(owner, { name: 'Dispatcher' });
+    expect(duplicate.status).toBe(409);
+    expect(duplicate.body.error).toMatchObject({ code: 'ROLE_NAME_TAKEN' });
+
+    // Schema failures are 422 here; 400 is reserved for rules the schema
+    // cannot express, like the cycle check.
+    const badColor = await createRole(owner, { name: 'Driver', color: 'royal blue' });
+    expect(badColor.status).toBe(422);
+    expect(badColor.body.error.details?.color).toContain('hex');
+  });
+
+  it('nests roles and refuses to create a loop', async () => {
+    const owner = await signUpOwner(app);
+    const parent = await createRole(owner, { name: 'Operations Manager' });
+    const child = await createRole(owner, {
+      name: 'Technician',
+      parentId: parent.body.id as string,
+    });
+    expect(child.body.parentId).toBe(parent.body.id);
+
+    // Itself.
+    const self = await owner.agent
+      .patch(`/api/roles/${parent.body.id}`)
+      .send({ parentId: parent.body.id });
+    expect(self.status).toBe(400);
+    expect(self.body.error).toMatchObject({ code: 'ROLE_CYCLE' });
+
+    // Underneath its own descendant.
+    const loop = await owner.agent
+      .patch(`/api/roles/${parent.body.id}`)
+      .send({ parentId: child.body.id });
+    expect(loop.status).toBe(400);
+    expect(loop.body.error).toMatchObject({ code: 'ROLE_CYCLE' });
+  });
+
+  it('keeps at most one default role', async () => {
+    const owner = await signUpOwner(app);
+    const first = await createRole(owner, { name: 'Cleaner', isDefault: true });
+    const second = await createRole(owner, { name: 'Driver', isDefault: true });
+
+    const list = await owner.agent.get('/api/roles');
+    const defaults = (list.body.items as { id: string; isDefault: boolean }[]).filter(
+      (role) => role.isDefault,
+    );
+    expect(defaults).toHaveLength(1);
+    expect(defaults[0].id).toBe(second.body.id);
+    expect(defaults[0].id).not.toBe(first.body.id);
+  });
+
+  it('gives the default role to somebody joining with a code', async () => {
+    const owner = await signUpOwner(app);
+    const role = await createRole(owner, { name: 'Cleaning Technician', isDefault: true });
+    const code = await createInviteCode(owner);
+
+    const worker = await joinWithCode(app, code);
+    expect(worker.response.status).toBe(201);
+
+    const joined = worker.response.body as { membership: { id: string } };
+    const membership = await prisma.membership.findUnique({
+      where: { id: joined.membership.id },
+      select: { roleId: true },
+    });
+    expect(membership?.roleId).toBe(role.body.id);
+  });
+
+  it('assigns a role to a person and shows it on their profile', async () => {
+    const owner = await signUpOwner(app);
+    const role = await createRole(owner, { name: 'Lead Technician', color: '#a4560f' });
+    const code = await createInviteCode(owner);
+    const worker = await joinWithCode(app, code);
+    const workerId = (worker.response.body as { membership: { id: string } }).membership.id;
+
+    const assigned = await owner.agent
+      .patch(`/api/people/${workerId}/assigned-role`)
+      .send({ roleId: role.body.id });
+
+    expect(assigned.status).toBe(200);
+    expect(assigned.body.assignedRole).toMatchObject({
+      id: role.body.id,
+      name: 'Lead Technician',
+      color: '#a4560f',
+    });
+
+    const cleared = await owner.agent
+      .patch(`/api/people/${workerId}/assigned-role`)
+      .send({ roleId: null });
+    expect(cleared.body.assignedRole).toBeNull();
+  });
+
+  it('lets workers read roles but never write them', async () => {
+    const owner = await signUpOwner(app);
+    await createRole(owner, { name: 'Dispatcher' });
+    const code = await createInviteCode(owner);
+    const worker = await joinWithCode(app, code);
+
+    // Reading is fine — a worker should know what people are called.
+    const read = await worker.agent.get('/api/roles');
+    expect(read.status).toBe(200);
+    expect(read.body.items).toHaveLength(1);
+
+    expect((await worker.agent.post('/api/roles').send({ name: 'Boss' })).status).toBe(403);
+  });
+
+  it('never exposes another company’s roles', async () => {
+    const first = await signUpOwner(app);
+    const second = await signUpOwner(app);
+    const role = await createRole(first, { name: 'Private Role' });
+
+    const list = await second.agent.get('/api/roles');
+    expect(list.body.items).toHaveLength(0);
+
+    const edit = await second.agent.patch(`/api/roles/${role.body.id}`).send({ name: 'Stolen' });
+    expect(edit.status).toBe(404);
+
+    const remove = await second.agent.delete(`/api/roles/${role.body.id}`);
+    expect(remove.status).toBe(404);
+  });
+
+  it('deletes a role without taking its people or its children with it', async () => {
+    const owner = await signUpOwner(app);
+    const parent = await createRole(owner, { name: 'Operations Manager' });
+    const middle = await createRole(owner, {
+      name: 'Lead Technician',
+      parentId: parent.body.id as string,
+    });
+    const child = await createRole(owner, {
+      name: 'Technician',
+      parentId: middle.body.id as string,
+    });
+
+    const code = await createInviteCode(owner);
+    const worker = await joinWithCode(app, code);
+    const workerId = (worker.response.body as { membership: { id: string } }).membership.id;
+    await owner.agent
+      .patch(`/api/people/${workerId}/assigned-role`)
+      .send({ roleId: middle.body.id });
+
+    expect((await owner.agent.delete(`/api/roles/${middle.body.id}`)).status).toBe(200);
+
+    // The grandchild moves up rather than being orphaned.
+    const list = await owner.agent.get('/api/roles');
+    const remaining = list.body.items as { id: string; parentId: string | null }[];
+    expect(remaining.map((role) => role.id)).not.toContain(middle.body.id);
+    expect(remaining.find((role) => role.id === child.body.id)?.parentId).toBe(parent.body.id);
+
+    // The person is still here, just without a role.
+    const person = await owner.agent.get(`/api/people/${workerId}`);
+    expect(person.status).toBe(200);
+    expect(person.body.assignedRole).toBeNull();
+  });
+});
+
 describe('deleting an account', () => {
   it('refuses without the correct password', async () => {
     const owner = await signUpOwner(app);

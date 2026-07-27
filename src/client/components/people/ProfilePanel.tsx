@@ -50,6 +50,7 @@ import {
   type AvailabilityStatus,
   type PersonDetail,
   type PersonSummary,
+  type RoleDto,
   type TaskSummary,
 } from '@shared/types';
 
@@ -147,6 +148,18 @@ export function ProfilePanel({
                     {data.jobTitle ?? 'No job title yet'}
                   </p>
                   <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                    {/* The company's own role first — it is what people call
+                        each other. The access tier is administrative. */}
+                    {data.assignedRole && (
+                      <span className="edge-sm inline-flex items-center gap-1.5 border border-edge px-1.5 py-0.5 text-ink-2">
+                        <span
+                          aria-hidden
+                          className="h-2 w-2 rounded-[1px]"
+                          style={{ backgroundColor: data.assignedRole.color }}
+                        />
+                        {data.assignedRole.name}
+                      </span>
+                    )}
                     <Chip className={ROLE_META[data.role].chip}>{ROLE_META[data.role].label}</Chip>
                     <Chip dot={AVAILABILITY_META[data.availability].dot}>
                       {AVAILABILITY_META[data.availability].label}
@@ -256,6 +269,13 @@ function OverviewTab({
   const [newSkill, setNewSkill] = useState('');
   const [busy, setBusy] = useState(false);
 
+  // Only leadership can assign a role, so only leadership needs the list.
+  const rolesQuery = useQuery<{ items: RoleDto[] }>(
+    (signal) => (isLeadership ? api.get('/roles', undefined, signal) : Promise.resolve({ items: [] })),
+    [isLeadership],
+  );
+  const roles = rolesQuery.data?.items ?? [];
+
   const addSkill = async () => {
     if (!newSkill.trim()) return;
     setBusy(true);
@@ -292,7 +312,18 @@ function OverviewTab({
   const changeRole = async (role: string) => {
     try {
       await api.patch(`/people/${person.id}/role`, { role });
-      toast.success('Role updated.');
+      toast.success('Access level updated.');
+      onChanged();
+    } catch (error) {
+      toast.error(errorMessage(error));
+    }
+  };
+
+  /** The company's own named role — position, not access. */
+  const changeAssignedRole = async (roleId: string) => {
+    try {
+      await api.patch(`/people/${person.id}/assigned-role`, { roleId: roleId || null });
+      toast.success(roleId ? 'Role assigned.' : 'Role removed.');
       onChanged();
     } catch (error) {
       toast.error(errorMessage(error));
@@ -400,9 +431,36 @@ function OverviewTab({
           </div>
         )}
 
+        {isLeadership && (
+          <div className="mt-3">
+            <Field
+              label="Role"
+              htmlFor="assigned-role-select"
+              hint="What they are called here. Does not change what they can access."
+            >
+              <Select
+                id="assigned-role-select"
+                value={person.assignedRole?.id ?? ''}
+                onChange={(event) => void changeAssignedRole(event.target.value)}
+              >
+                <option value="">— No role —</option>
+                {roles.map((role) => (
+                  <option key={role.id} value={role.id}>
+                    {role.name}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          </div>
+        )}
+
         {isOwner && (
           <div className="mt-3">
-            <Field label="Company role" htmlFor="role-select">
+            <Field
+              label="Access level"
+              htmlFor="role-select"
+              hint="What they are allowed to do."
+            >
               <Select
                 id="role-select"
                 value={person.role}

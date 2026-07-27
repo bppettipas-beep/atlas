@@ -18,6 +18,7 @@ import { knowledgeRouter } from './routes/knowledge.routes';
 import { notificationsRouter } from './routes/notifications.routes';
 import { organizationRouter } from './routes/organization.routes';
 import { peopleRouter } from './routes/people.routes';
+import { rolesRouter } from './routes/roles.routes';
 import { tasksRouter } from './routes/tasks.routes';
 import { uploadsRouter } from './routes/uploads.routes';
 
@@ -126,6 +127,7 @@ export function createApp(): Express {
   app.use('/api/companies', companiesRouter);
   app.use('/api/invites', invitesRouter);
   app.use('/api/people', peopleRouter);
+  app.use('/api/roles', rolesRouter);
   app.use('/api/organization', organizationRouter);
   app.use('/api/tasks', tasksRouter);
   app.use('/api/knowledge', knowledgeRouter);

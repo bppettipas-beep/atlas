@@ -197,6 +197,7 @@ model Company {
   updatedAt DateTime @updatedAt
 
   memberships    Membership[]
+  roles          Role[]
   teams          Team[]
   inviteCodes    InviteCode[]
   directInvites  DirectInvite[]
@@ -215,9 +216,14 @@ model Membership {
   id            String           @id @default(cuid())
   userId        String
   companyId     String
+  /// Permission tier. Deliberately separate from `roleId` below: this decides
+  /// what somebody may *do*, and is enforced on every request.
   role          CompanyRole      @default(WORKER)
   status        MembershipStatus @default(ACTIVE)
   jobTitle      String?
+  /// The company's own named role — what somebody *is* on the org chart.
+  /// Carries no permissions.
+  roleId        String?
   managerId     String?
   joinedAt      DateTime         @default(now())
   deactivatedAt DateTime?
@@ -229,6 +235,8 @@ model Membership {
 
   manager       Membership?  @relation("ManagerReports", fields: [managerId], references: [id], onDelete: SetNull)
   directReports Membership[] @relation("ManagerReports")
+
+  assignedRole Role? @relation(fields: [roleId], references: [id], onDelete: SetNull)
 
   profile               EmployeeProfile?
   orgNode               OrganizationNode?
@@ -266,6 +274,41 @@ model Membership {
   @@index([companyId, role])
   @@index([companyId, status])
   @@index([managerId])
+  @@index([roleId])
+}
+
+/// A company's own named role — "Lead Cleaning Technician", "Dispatcher".
+///
+/// These describe position, not permission. The three permission tiers
+/// (OWNER / MANAGER / WORKER) stay where they are, because letting people
+/// invent roles that grant access would turn every role edit into a security
+/// decision. A role here is a label with a colour and a place in a hierarchy.
+model Role {
+  id          String  @id @default(cuid())
+  companyId   String
+  name        String
+  /// Hex colour used for the chip on the map, the people list and profiles.
+  color       String  @default("#121211")
+  description String?
+
+  /// The role this one reports into. Null means it sits at the top.
+  parentId String?
+  /// Order among siblings. Lower sorts first.
+  sortOrder Int @default(0)
+  /// Given to anybody who joins with an invitation code. At most one per company.
+  isDefault Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company     Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  parent      Role?        @relation("RoleHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children    Role[]       @relation("RoleHierarchy")
+  memberships Membership[]
+
+  @@unique([companyId, name])
+  @@index([companyId, parentId])
+  @@index([companyId, sortOrder])
 }
 
 model EmployeeProfile {

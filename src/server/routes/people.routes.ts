@@ -417,6 +417,42 @@ const SELF_EDITABLE = new Set([
   'avatarUrl',
 ]);
 
+/**
+ * Assigns (or clears) somebody's company role.
+ *
+ * Separate from the profile endpoint because this is not self-service: your
+ * role is not yours to award. `canManagePerson` already encodes who may.
+ */
+peopleRouter.patch(
+  '/:id/assigned-role',
+  requireRole('OWNER', 'MANAGER'),
+  validateBody(z.object({ roleId: z.string().min(1).nullable() })),
+  asyncHandler(async (req, res) => {
+    const auth = currentAuth(req);
+    const membership = await loadPersonInCompany(req.params.id, auth.companyId);
+    const { roleId } = req.body as { roleId: string | null };
+
+    if (!(await canManagePerson(auth, membership.id))) {
+      throw ApiError.forbidden('You cannot change that person’s role.');
+    }
+
+    if (roleId) {
+      const role = await prisma.role.findFirst({
+        where: { id: roleId, companyId: auth.companyId },
+      });
+      if (!role) throw ApiError.notFound('That role does not exist.', 'ROLE_NOT_FOUND');
+    }
+
+    await prisma.membership.update({ where: { id: membership.id }, data: { roleId } });
+
+    emitToCompany(auth.companyId, 'people:updated', { membershipId: membership.id });
+    emitToCompany(auth.companyId, 'roles:updated', {});
+    broadcastOrganizationChange(auth.companyId);
+
+    res.json(serializePerson(await loadPersonInCompany(membership.id, auth.companyId)));
+  }),
+);
+
 peopleRouter.patch(
   '/:id',
   validateBody(profileUpdateSchema),

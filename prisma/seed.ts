@@ -42,7 +42,72 @@ interface PersonSpec {
   managerKey?: string;
   teamKeys: string[];
   startedDaysAgo: number;
+  /** Which seeded company role this person holds. */
+  roleKey?: string;
 }
+
+/**
+ * The company's own roles, as a small hierarchy. These are positions, not
+ * permissions — the CompanyRole on each person still decides access.
+ */
+const ROLES: {
+  key: string;
+  name: string;
+  color: string;
+  description: string;
+  parentKey?: string;
+  isDefault?: boolean;
+}[] = [
+  {
+    key: 'founder',
+    name: 'Founder',
+    color: '#121211',
+    description: 'Owns the direction of the business and its client relationships.',
+  },
+  {
+    key: 'ops-manager',
+    name: 'Operations Manager',
+    color: '#1f6feb',
+    description: 'Runs the daily schedule and the cleaning crew.',
+    parentKey: 'founder',
+  },
+  {
+    key: 'maint-manager',
+    name: 'Maintenance Manager',
+    color: '#0f7b6c',
+    description: 'Owns preventative maintenance and the on-call rota.',
+    parentKey: 'founder',
+  },
+  {
+    key: 'scheduler',
+    name: 'Scheduling Coordinator',
+    color: '#5b3fa8',
+    description: 'Keeps the shift board and customer bookings straight.',
+    parentKey: 'ops-manager',
+  },
+  {
+    key: 'lead-tech',
+    name: 'Lead Technician',
+    color: '#a4560f',
+    description: 'Runs a route and signs off the work on it.',
+    parentKey: 'ops-manager',
+  },
+  {
+    key: 'cleaner',
+    name: 'Cleaning Technician',
+    color: '#6b6a63',
+    description: 'Works a route of client sites.',
+    parentKey: 'lead-tech',
+    isDefault: true,
+  },
+  {
+    key: 'maint-tech',
+    name: 'Maintenance Technician',
+    color: '#0e6b8a',
+    description: 'Handles repairs, plumbing and HVAC call-outs.',
+    parentKey: 'maint-manager',
+  },
+];
 
 const PEOPLE: PersonSpec[] = [
   {
@@ -63,6 +128,7 @@ const PEOPLE: PersonSpec[] = [
     ],
     teamKeys: ['leadership'],
     startedDaysAgo: 2900,
+    roleKey: 'founder',
   },
   {
     key: 'marcus',
@@ -84,6 +150,7 @@ const PEOPLE: PersonSpec[] = [
     managerKey: 'ada',
     teamKeys: ['leadership', 'operations'],
     startedDaysAgo: 1800,
+    roleKey: 'ops-manager',
   },
   {
     key: 'priya',
@@ -105,6 +172,7 @@ const PEOPLE: PersonSpec[] = [
     managerKey: 'ada',
     teamKeys: ['leadership', 'maintenance'],
     startedDaysAgo: 1200,
+    roleKey: 'maint-manager',
   },
   {
     key: 'jonah',
@@ -125,6 +193,7 @@ const PEOPLE: PersonSpec[] = [
     managerKey: 'marcus',
     teamKeys: ['operations'],
     startedDaysAgo: 1600,
+    roleKey: 'lead-tech',
   },
   {
     key: 'lena',
@@ -145,6 +214,7 @@ const PEOPLE: PersonSpec[] = [
     managerKey: 'marcus',
     teamKeys: ['operations'],
     startedDaysAgo: 700,
+    roleKey: 'cleaner',
   },
   {
     key: 'theo',
@@ -164,6 +234,7 @@ const PEOPLE: PersonSpec[] = [
     managerKey: 'marcus',
     teamKeys: ['operations'],
     startedDaysAgo: 210,
+    roleKey: 'cleaner',
   },
   {
     key: 'sofia',
@@ -184,6 +255,7 @@ const PEOPLE: PersonSpec[] = [
     managerKey: 'priya',
     teamKeys: ['maintenance'],
     startedDaysAgo: 480,
+    roleKey: 'maint-tech',
   },
   {
     key: 'dmitri',
@@ -204,6 +276,7 @@ const PEOPLE: PersonSpec[] = [
     managerKey: 'priya',
     teamKeys: ['maintenance'],
     startedDaysAgo: 950,
+    roleKey: 'maint-tech',
   },
   {
     key: 'rosa',
@@ -223,6 +296,7 @@ const PEOPLE: PersonSpec[] = [
     managerKey: 'marcus',
     teamKeys: ['operations'],
     startedDaysAgo: 380,
+    roleKey: 'scheduler',
   },
 ];
 
@@ -275,6 +349,23 @@ async function main() {
     },
   });
 
+  // ------------------------------- roles -----------------------------------
+  const roleByKey = new Map<string, string>();
+  for (const spec of ROLES) {
+    const created = await prisma.role.create({
+      data: {
+        companyId: company.id,
+        name: spec.name,
+        color: spec.color,
+        description: spec.description,
+        parentId: spec.parentKey ? (roleByKey.get(spec.parentKey) ?? null) : null,
+        sortOrder: ROLES.indexOf(spec),
+        isDefault: spec.isDefault ?? false,
+      },
+    });
+    roleByKey.set(spec.key, created.id);
+  }
+
   // ------------------------------- people ----------------------------------
   const membershipByKey = new Map<string, string>();
 
@@ -288,6 +379,7 @@ async function main() {
         userId: user.id,
         companyId: company.id,
         role: person.role,
+        roleId: person.roleKey ? (roleByKey.get(person.roleKey) ?? null) : null,
         jobTitle: person.jobTitle,
         joinedAt: ago(days(person.startedDaysAgo)),
         profile: {

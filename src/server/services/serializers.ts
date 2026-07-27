@@ -50,6 +50,13 @@ export function serializePerson(membership: any): PersonSummary {
     managerId: membership.managerId ?? null,
     availability: membership.profile?.availability ?? 'AVAILABLE',
     headline: membership.profile?.headline ?? null,
+    assignedRole: membership.assignedRole
+      ? {
+          id: membership.assignedRole.id,
+          name: membership.assignedRole.name,
+          color: membership.assignedRole.color,
+        }
+      : null,
     teams: (membership.teamMemberships ?? []).map((tm: any) => ({
       id: tm.team.id,
       name: tm.team.name,
@@ -259,6 +266,7 @@ export function serializeOrgEdge(relationship: any, derived = false): OrgEdgeDto
 export const personInclude = {
   user: { select: { id: true, fullName: true, email: true, avatarUrl: true } },
   profile: true,
+  assignedRole: { select: { id: true, name: true, color: true } },
   teamMemberships: { include: { team: true } },
 } as const;
 

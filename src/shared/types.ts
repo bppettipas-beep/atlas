@@ -105,6 +105,29 @@ export interface CompanyDto {
   createdAt: string;
 }
 
+/**
+ * A company's own named role. Position, not permission — see `CompanyRole`
+ * for the three tiers that actually decide what somebody may do.
+ */
+export interface RoleDto {
+  id: string;
+  name: string;
+  color: string;
+  description: string | null;
+  parentId: string | null;
+  sortOrder: number;
+  /** Given to anybody joining with an invitation code. At most one per company. */
+  isDefault: boolean;
+  memberCount: number;
+}
+
+/** The role as it appears on a person, without the tree bookkeeping. */
+export interface RoleBadge {
+  id: string;
+  name: string;
+  color: string;
+}
+
 export interface PersonSummary {
   id: string; // membership id
   userId: string;
@@ -117,6 +140,7 @@ export interface PersonSummary {
   managerId: string | null;
   availability: AvailabilityStatus;
   headline: string | null;
+  assignedRole: RoleBadge | null;
   teams: { id: string; name: string; color: string | null }[];
 }
 

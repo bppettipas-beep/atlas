@@ -242,6 +242,16 @@ export function PeoplePage() {
                     </div>
 
                     <div className="mt-3 flex flex-wrap items-center gap-1.5 border-t border-rule pt-3">
+                      {person.assignedRole && (
+                        <span className="edge-sm inline-flex items-center gap-1.5 border border-edge px-1.5 py-0.5 text-ink-2">
+                          <span
+                            aria-hidden
+                            className="h-2 w-2 rounded-[1px]"
+                            style={{ backgroundColor: person.assignedRole.color }}
+                          />
+                          {person.assignedRole.name}
+                        </span>
+                      )}
                       <Chip className={ROLE_META[person.role].chip}>
                         {ROLE_META[person.role].label}
                       </Chip>

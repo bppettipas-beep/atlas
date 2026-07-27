@@ -575,11 +575,19 @@ authRouter.post(
         managerId = owner?.id ?? null;
       }
 
+      // Whatever the company nominated as its default role. Null is fine —
+      // most companies will not have set one up on day one.
+      const defaultRole = await tx.role.findFirst({
+        where: { companyId: invite.companyId, isDefault: true },
+        select: { id: true },
+      });
+
       const membership = await tx.membership.create({
         data: {
           userId: user.id,
           companyId: invite.companyId,
           role: invite.role,
+          roleId: defaultRole?.id ?? null,
           jobTitle: input.jobTitle || null,
           managerId,
           profile: { create: { availability: 'AVAILABLE' } },
