@@ -23,17 +23,34 @@ const OPENERS = [
   'Add a Dispatcher role and give it to Rosa',
 ];
 
-/** Atlasy's dedicated mark; the Atlas product mark remains reserved for Atlas itself. */
-function AtlasyMark({ className }: { className?: string }) {
-  return (
-    <img
-      src="/brand/atlasy-mark.png"
-      alt=""
-      aria-hidden="true"
-      className={cn('shrink-0 object-contain', className)}
-    />
-  );
+/**
+ * Shortcuts, not a command language.
+ *
+ * Every one of these is a sentence you could have typed yourself — the slash
+ * only saves the typing. Most drop a half-written line into the box for you to
+ * finish, because the interesting part is the bit only you know.
+ */
+interface SlashCommand {
+  name: string;
+  hint: string;
+  /** Dropped into the box for the user to complete. */
+  insert?: string;
+  /** Sent immediately — nothing more is needed. */
+  send?: string;
+  /** Handled here rather than by the model. */
+  local?: 'clear';
 }
+
+const COMMANDS: SlashCommand[] = [
+  { name: 'task', hint: 'Create a task', insert: 'Create a task to ' },
+  { name: 'assign', hint: 'Assign work to someone', insert: 'Assign  to ' },
+  { name: 'role', hint: 'Create a role', insert: 'Create a role called ' },
+  { name: 'fire', hint: 'Remove someone from the company', insert: 'Remove  from the company' },
+  { name: 'overdue', hint: 'What is late', send: 'What is overdue right now?' },
+  { name: 'who', hint: 'Who works here', send: 'Who works here, and what do they do?' },
+  { name: 'help', hint: 'What Atlasy can do', send: 'What can you do?' },
+  { name: 'clear', hint: 'Forget this conversation', local: 'clear' },
+];
 
 /** Whether this instance has an assistant configured. Null while unknown. */
 export function useAssistantEnabled(): boolean | null {
@@ -62,8 +79,32 @@ export function AtlasyPanel({ open, onClose }: { open: boolean; onClose: () => v
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [commandIndex, setCommandIndex] = useState(0);
   const endRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  // The menu is open while the box holds a single unfinished /word. Once a
+  // space is typed the person is writing a sentence, not picking a command.
+  const slashQuery = /^\/\S*$/.test(input) ? input.slice(1).toLowerCase() : null;
+  const matches =
+    slashQuery === null ? [] : COMMANDS.filter((command) => command.name.startsWith(slashQuery));
+  const menuOpen = matches.length > 0;
+
+  const runCommand = (command: SlashCommand) => {
+    if (command.local === 'clear') {
+      setTurns([]);
+      setInput('');
+      setError(null);
+      return;
+    }
+    if (command.send) {
+      setInput('');
+      void send(command.send);
+      return;
+    }
+    setInput(command.insert ?? '');
+    inputRef.current?.focus();
+  };
 
   useEffect(() => {
     if (open) inputRef.current?.focus();
@@ -72,6 +113,10 @@ export function AtlasyPanel({ open, onClose }: { open: boolean; onClose: () => v
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
   }, [turns, busy]);
+
+  useEffect(() => {
+    setCommandIndex(0);
+  }, [slashQuery]);
 
   const send = async (text: string) => {
     const question = text.trim();
@@ -110,8 +155,7 @@ export function AtlasyPanel({ open, onClose }: { open: boolean; onClose: () => v
         >
           {/* ---------------------------- title block --------------------------- */}
           <header className="flex shrink-0 items-center justify-between border-b border-rule px-4 py-3">
-            <span className="inline-flex items-center gap-2.5">
-              <AtlasyMark className="h-7 w-7" />
+            <span className="inline-flex items-center">
               <span className="title text-[14px] leading-none">Atlasy</span>
               <span className="edge-sm border border-edge px-1 py-px text-ink-4">Beta</span>
             </span>
@@ -206,8 +250,40 @@ export function AtlasyPanel({ open, onClose }: { open: boolean; onClose: () => v
               event.preventDefault();
               void send(input);
             }}
-            className="shrink-0 border-t border-rule p-3"
+            className="relative shrink-0 border-t border-rule p-3"
           >
+            {menuOpen && (
+              <ul
+                role="listbox"
+                aria-label="Commands"
+                className="absolute bottom-full left-3 right-3 z-10 mb-2 max-h-64 overflow-y-auto border border-edge bg-sheet py-1 shadow-lift"
+              >
+                {matches.map((command, index) => (
+                  <li key={command.name}>
+                    <button
+                      type="button"
+                      role="option"
+                      aria-selected={index === commandIndex}
+                      onMouseEnter={() => setCommandIndex(index)}
+                      // Mousedown, not click: the textarea blurring first would
+                      // close the menu before the click ever landed.
+                      onMouseDown={(event) => {
+                        event.preventDefault();
+                        runCommand(command);
+                      }}
+                      className={cn(
+                        'flex w-full items-baseline gap-2.5 px-3 py-1.5 text-left transition-colors',
+                        index === commandIndex ? 'bg-paper' : 'hover:bg-paper',
+                      )}
+                    >
+                      <span className="font-mono text-[12.5px] text-ink">/{command.name}</span>
+                      <span className="truncate text-[12px] text-ink-3">{command.hint}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+
             <Textarea
               ref={inputRef}
               rows={2}
@@ -215,6 +291,31 @@ export function AtlasyPanel({ open, onClose }: { open: boolean; onClose: () => v
               disabled={busy}
               onChange={(event) => setInput(event.target.value)}
               onKeyDown={(event) => {
+                // While the command menu is up it owns the keys that move
+                // through it, so Enter picks a command rather than sending "/t".
+                if (menuOpen) {
+                  if (event.key === 'ArrowDown') {
+                    event.preventDefault();
+                    setCommandIndex((index) => (index + 1) % matches.length);
+                    return;
+                  }
+                  if (event.key === 'ArrowUp') {
+                    event.preventDefault();
+                    setCommandIndex((index) => (index - 1 + matches.length) % matches.length);
+                    return;
+                  }
+                  if (event.key === 'Tab' || (event.key === 'Enter' && !event.shiftKey)) {
+                    event.preventDefault();
+                    runCommand(matches[commandIndex]);
+                    return;
+                  }
+                  if (event.key === 'Escape') {
+                    event.preventDefault();
+                    setInput('');
+                    return;
+                  }
+                }
+
                 // Enter sends; Shift+Enter writes a new line. This is a chat box,
                 // not a document.
                 if (event.key === 'Enter' && !event.shiftKey) {
@@ -222,12 +323,14 @@ export function AtlasyPanel({ open, onClose }: { open: boolean; onClose: () => v
                   void send(input);
                 }
               }}
-              placeholder="Ask Atlasy to do something…"
+              placeholder="Ask Atlasy to do something, or type /"
               aria-label="Message Atlasy"
               className="resize-none text-[13.5px]"
             />
             <div className="mt-2 flex items-center justify-between">
-              <span className="edge-sm text-ink-4">Enter to send</span>
+              <span className="edge-sm text-ink-4">
+                {menuOpen ? 'Tab to pick' : 'Enter to send · / for commands'}
+              </span>
               <Button
                 type="submit"
                 variant="primary"
@@ -261,7 +364,6 @@ export function AtlasyButton({ onClick, open }: { onClick: () => void; open: boo
           : 'border-edge bg-sheet text-ink hover:border-edgeStrong hover:bg-paper',
       )}
     >
-      <AtlasyMark className="h-6 w-6" />
       Atlasy
     </button>
   );

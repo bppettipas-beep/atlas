@@ -781,7 +781,7 @@ peopleRouter.delete(
     const membership = await loadPersonInCompany(req.params.id, auth.companyId);
 
     if (membership.id === auth.membershipId) {
-      throw ApiError.badRequest('You cannot deactivate your own account.');
+      throw ApiError.badRequest('You cannot remove yourself from the company.');
     }
     if (membership.role === 'OWNER') {
       const owners = await prisma.membership.count({
@@ -790,6 +790,36 @@ peopleRouter.delete(
       if (owners <= 1) throw ApiError.badRequest('A company needs at least one owner.');
     }
 
+    // A placeholder has no account, no history of its own and no session, so
+    // leaving a deactivated husk behind would just be clutter. Delete it
+    // outright; the work it was assigned survives, unassigned.
+    if (membership.isPlaceholder) {
+      await prisma.$transaction(async (tx) => {
+        await tx.membership.updateMany({
+          where: { managerId: membership.id },
+          data: { managerId: membership.managerId },
+        });
+        await tx.user.delete({ where: { id: membership.userId } });
+      });
+
+      await recordActivity({
+        companyId: auth.companyId,
+        type: 'MEMBER_DEACTIVATED',
+        summary: `${auth.fullName} removed ${membership.user.fullName} from the company`,
+        actorId: auth.membershipId,
+        visibility: 'MANAGERS',
+      });
+
+      await ensureOrganizationNodes(auth.companyId);
+      broadcastOrganizationChange(auth.companyId);
+      emitToCompany(auth.companyId, 'people:updated', {});
+      res.json({ ok: true, deleted: true });
+      return;
+    }
+
+    // A real person is deactivated rather than deleted: their account is
+    // theirs, and the company's records should keep naming whoever did the
+    // work. They lose access immediately either way.
     await prisma.$transaction(async (tx) => {
       await tx.membership.update({
         where: { id: membership.id },
@@ -809,7 +839,7 @@ peopleRouter.delete(
     await recordActivity({
       companyId: auth.companyId,
       type: 'MEMBER_DEACTIVATED',
-      summary: `${auth.fullName} deactivated ${membership.user.fullName}`,
+      summary: `${auth.fullName} removed ${membership.user.fullName} from the company`,
       actorId: auth.membershipId,
       targetId: membership.id,
       visibility: 'MANAGERS',

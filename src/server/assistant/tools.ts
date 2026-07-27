@@ -127,6 +127,18 @@ export const TOOLS: ToolDefinition[] = [
     },
   },
   {
+    name: 'remove_person',
+    description:
+      'Remove somebody from the company. Owners only. This is destructive and cannot be undone from here — always state the person’s full name and ask the user to confirm before calling it, and never call it in the same reply as the confirmation question.',
+    method: 'DELETE',
+    path: '/api/people/:id',
+    parameters: {
+      type: 'object',
+      required: ['id'],
+      properties: { id: str('Membership id of the person, from search_people.') },
+    },
+  },
+  {
     name: 'company_overview',
     description:
       'Counts of people, teams, active tasks, overdue tasks and unassigned tasks. Good for "how are we doing" questions.',

@@ -28,6 +28,7 @@ import {
   Menu,
   Modal,
   Meter,
+  Notice,
   Select,
   Tabs,
   Textarea,
@@ -276,6 +277,25 @@ function OverviewTab({
   );
   const roles = rolesQuery.data?.items ?? [];
 
+  const { session } = useAuth();
+  const isMe = person.id === session?.membership.id;
+  const [confirmRemove, setConfirmRemove] = useState(false);
+  const [removing, setRemoving] = useState(false);
+
+  const removePerson = async () => {
+    setRemoving(true);
+    try {
+      await api.delete(`/people/${person.id}`);
+      toast.success(`${person.fullName} was removed from the company.`);
+      setConfirmRemove(false);
+      onChanged();
+    } catch (error) {
+      toast.error(errorMessage(error));
+    } finally {
+      setRemoving(false);
+    }
+  };
+
   const addSkill = async () => {
     if (!newSkill.trim()) return;
     setBusy(true);
@@ -473,6 +493,43 @@ function OverviewTab({
             </Field>
           </div>
         )}
+
+        {isOwner && !isMe && (
+          <div className="mt-4 border-t border-rule pt-4">
+            <Button
+              size="sm"
+              variant="ghost"
+              icon={<Trash className="h-3.5 w-3.5" />}
+              className="text-alert hover:bg-alert-wash"
+              onClick={() => setConfirmRemove(true)}
+            >
+              Remove from company
+            </Button>
+          </div>
+        )}
+
+        <Modal
+          open={confirmRemove}
+          onClose={() => setConfirmRemove(false)}
+          size="sm"
+          title={`Remove ${person.fullName}?`}
+          footer={
+            <div className="flex justify-end gap-2">
+              <Button onClick={() => setConfirmRemove(false)} disabled={removing}>
+                Keep them
+              </Button>
+              <Button variant="danger" loading={removing} onClick={() => void removePerson()}>
+                Remove from company
+              </Button>
+            </div>
+          }
+        >
+          <Notice tone="alert">
+            {person.isPlaceholder
+              ? 'They were added by hand and have no account, so this deletes them outright. Work assigned to them stays, unassigned.'
+              : 'They lose access immediately and are signed out everywhere. Their name stays on the work and comments they created, and anyone reporting to them moves up to their manager.'}
+          </Notice>
+        </Modal>
       </section>
 
       {/* skills */}
