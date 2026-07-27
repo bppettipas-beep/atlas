@@ -4,10 +4,20 @@ import { Link, Navigate } from 'react-router-dom';
 import {
   Activity,
   ArrowRight,
+  Bell,
   BookOpen,
+  Building,
+  Calendar,
+  Certificate,
+  Check,
   CheckSquare,
+  HardHat,
+  Paperclip,
+  Pulse,
+  SealCheck,
   ShieldCheck,
   TreeStructure,
+  UserPlus,
   Warning,
 } from '@/components/icons';
 import { Logo, LogoMark } from '@/components/Logo';
@@ -63,6 +73,88 @@ const CAPABILITIES: {
   },
 ];
 
+const AUDIENCES: {
+  label: string;
+  icon: (props: { className?: string }) => ReactNode;
+  title: string;
+  points: string[];
+}[] = [
+  {
+    label: 'Owners and managers',
+    icon: Building,
+    title: 'The whole business on one sheet',
+    points: [
+      'The organisation map, with live counts of what is active, late and unassigned',
+      'Every person’s workload before you hand them another job',
+      'Private notes on a profile that only managers can read',
+      'Blocked work escalated to you the moment somebody flags it',
+    ],
+  },
+  {
+    label: 'Workers',
+    icon: HardHat,
+    title: 'My Day, and nothing else',
+    points: [
+      'The jobs that are actually yours today, in order',
+      'Tick off subtasks as you go; the progress bar is the status report',
+      'Flag a blocker with a reason and your manager knows immediately',
+      'The process document for the job, attached to the job',
+    ],
+  },
+];
+
+const EXTRAS: {
+  icon: (props: { className?: string }) => ReactNode;
+  title: string;
+  body: string;
+}[] = [
+  {
+    icon: Pulse,
+    title: 'Live for everyone',
+    body: 'Assign a task and it appears on their screen. No refreshing, no wondering if they saw it.',
+  },
+  {
+    icon: Bell,
+    title: '@mention anybody',
+    body: 'Pull a specific person into a comment thread and they get notified about that, not everything.',
+  },
+  {
+    icon: Calendar,
+    title: 'Recurring work',
+    body: 'Weekly, monthly or on your own schedule. Atlas creates the job so nobody has to remember to.',
+  },
+  {
+    icon: SealCheck,
+    title: 'Work that needs sign-off',
+    body: 'Mark a task as needing review and it waits for a manager instead of quietly marking itself done.',
+  },
+  {
+    icon: ShieldCheck,
+    title: 'Roles that actually hold',
+    body: 'Owner, manager, worker. Enforced on the server, not just hidden in the interface.',
+  },
+  {
+    icon: UserPlus,
+    title: 'Invitation codes',
+    body: 'Set an expiry and a use limit, copy it in one click, and turn it off the moment it leaks.',
+  },
+  {
+    icon: Certificate,
+    title: 'Sign in with Google',
+    body: 'One click, and their name and photo come with them. Or a plain password — their choice.',
+  },
+  {
+    icon: Paperclip,
+    title: 'Attachments on the job',
+    body: 'The photo of the broken part belongs on the task, not in somebody’s camera roll.',
+  },
+  {
+    icon: Building,
+    title: 'More than one business',
+    body: 'Run several companies from one login and switch between them without signing out.',
+  },
+];
+
 const STEPS = [
   {
     index: '01',
@@ -72,7 +164,7 @@ const STEPS = [
   {
     index: '02',
     title: 'Invite your people',
-    body: 'Generate an invitation code and send it. They join with the code — no licences to assign, no seats to buy.',
+    body: 'Generate an invitation code and send it. They join with the code and appear on the map, reporting to the right person.',
   },
   {
     index: '03',
@@ -157,7 +249,7 @@ export function LandingPage() {
             </div>
 
             <p className="edge-sm mt-6 text-ink-4">
-              No credit card · Your data stays in your own database
+              Owners get the map · Workers get their day · One source underneath
             </p>
           </motion.div>
         </section>
@@ -217,8 +309,69 @@ export function LandingPage() {
           </div>
         </Section>
 
+
+        {/* ---------------------------- two audiences ------------------------ */}
+        <Section index="03" label="Two views, one company">
+          <div className="grid gap-10 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.25fr)]">
+            <h2 className="display max-w-[13ch] text-[2rem] leading-[1.03] sm:text-[2.6rem]">
+              The boss and the crew need different screens.
+            </h2>
+
+            <div className="grid border-t border-edge sm:grid-cols-2">
+              {AUDIENCES.map((audience, index) => (
+                <div
+                  key={audience.title}
+                  className={[
+                    'border-b border-edge py-7 sm:py-8',
+                    index === 0 ? 'sm:border-r sm:border-edge sm:pr-7' : 'sm:pl-7',
+                  ].join(' ')}
+                >
+                  <div className="mb-5 flex items-center justify-between">
+                    <span className="edge-sm">{audience.label}</span>
+                    <audience.icon className="text-[19px] text-ink-3" />
+                  </div>
+                  <h3 className="title text-[16px] leading-snug">{audience.title}</h3>
+                  <ul className="mt-4 space-y-2.5">
+                    {audience.points.map((point) => (
+                      <li
+                        key={point}
+                        className="flex items-start gap-2.5 text-[13.5px] leading-snug text-ink-3"
+                      >
+                        <Check className="mt-[3px] shrink-0 text-[12px] text-ink" />
+                        {point}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          </div>
+        </Section>
+
+        {/* ------------------------------ the rest --------------------------- */}
+        <Section index="04" label="Everything else">
+          <div className="flex flex-wrap items-end justify-between gap-6">
+            <h2 className="display max-w-[16ch] text-[2rem] leading-[1.03] sm:text-[2.6rem]">
+              The details that decide whether it gets used.
+            </h2>
+            <p className="max-w-[38ch] text-[13.5px] leading-relaxed text-ink-3">
+              Software gets abandoned in the gaps. These are the gaps.
+            </p>
+          </div>
+
+          <div className="mt-12 grid border-l border-t border-edge sm:grid-cols-2 lg:grid-cols-3">
+            {EXTRAS.map((extra) => (
+              <div key={extra.title} className="border-b border-r border-edge p-6">
+                <extra.icon className="text-[19px] text-ink-3" />
+                <h3 className="title mt-4 text-[14.5px] leading-snug">{extra.title}</h3>
+                <p className="mt-2 text-[13px] leading-relaxed text-ink-3">{extra.body}</p>
+              </div>
+            ))}
+          </div>
+        </Section>
+
         {/* ------------------------------ how it works ----------------------- */}
-        <Section index="03" label="Getting started">
+        <Section index="05" label="Getting started">
           <div className="grid gap-10 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.2fr)]">
             <h2 className="display max-w-[12ch] text-[2rem] leading-[1.03] sm:text-[2.6rem]">
               Running in an afternoon.
@@ -239,37 +392,6 @@ export function LandingPage() {
                 </li>
               ))}
             </ol>
-          </div>
-        </Section>
-
-        {/* ------------------------------ ownership -------------------------- */}
-        <Section index="04" label="Ownership">
-          <div className="ticked border border-edge bg-sheet">
-            <div className="flex items-center justify-between border-b border-rule px-5 py-2.5 sm:px-7">
-              <span className="edge-sm inline-flex items-center gap-2">
-                <ShieldCheck className="text-[14px] text-ink-3" />
-                Your data
-              </span>
-              <span className="font-mono text-[11px] text-ink-4">N-01</span>
-            </div>
-            <div className="grid gap-8 px-5 py-8 sm:grid-cols-2 sm:px-7">
-              <div>
-                <h3 className="title text-[16px] leading-snug">It lives in your own database.</h3>
-                <p className="mt-3 max-w-[44ch] text-[13.5px] leading-relaxed text-ink-3">
-                  Atlas runs as one service against one PostgreSQL database that you own. Not a
-                  third-party platform holding your company's records hostage behind a per-seat
-                  price.
-                </p>
-              </div>
-              <div>
-                <h3 className="title text-[16px] leading-snug">Passwords are never stored.</h3>
-                <p className="mt-3 max-w-[44ch] text-[13.5px] leading-relaxed text-ink-3">
-                  Only a bcrypt hash of them. Sessions are HTTP-only cookies, permissions are
-                  enforced on the server rather than merely hidden in the interface, and invitation
-                  codes are visible only to owners and managers.
-                </p>
-              </div>
-            </div>
           </div>
         </Section>
 
