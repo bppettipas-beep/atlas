@@ -17,6 +17,8 @@ import { TOOLS, runTool, toolSchemas } from './tools';
 const MAX_ROUNDS = 5;
 /** Do not leave a browser request open forever when a model provider stalls. */
 const COMPLETION_TIMEOUT_MS = 30_000;
+/** Ceiling on one reply. See the note where it is sent. */
+const MAX_OUTPUT_TOKENS = 1_500;
 
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant' | 'tool';
@@ -108,6 +110,11 @@ async function complete(messages: ChatMessage[]): Promise<ChatMessage> {
         tools: toolSchemas(),
         tool_choice: 'auto',
         temperature: 0.2,
+        // Anthropic's API requires an output cap, unlike most OpenAI-compatible
+        // providers, so it is sent to all of them. Generous enough for a long
+        // list of people, tight enough that a looping model cannot run up a
+        // bill on output tokens, which cost several times what input does.
+        max_tokens: MAX_OUTPUT_TOKENS,
       }),
     });
   } catch {

@@ -32,12 +32,15 @@ const schema = z.object({
   GOOGLE_CLIENT_ID: z.string().default(''),
   GOOGLE_CLIENT_SECRET: z.string().default(''),
   // Atlasy, the in-app assistant. The key is the only thing that has to be
-  // set; the defaults below point at Groq, which is free and fast and handles
-  // the tool list well. Any OpenAI-compatible endpoint works if you override
-  // them — Google AI Studio, OpenRouter, Cerebras.
+  // set; the defaults below point at Anthropic's OpenAI-compatible endpoint,
+  // which takes the same request shape the rest of this file assumes. Haiku is
+  // the cheapest Claude model that follows a tool list reliably — anything
+  // below it saves a fraction of a cent per message and spends it on wrong
+  // answers. Any OpenAI-compatible endpoint works if you override these:
+  // Groq, Google AI Studio, OpenRouter, Cerebras.
   ASSISTANT_API_KEY: z.string().default(''),
-  ASSISTANT_BASE_URL: z.string().default('https://api.groq.com/openai/v1'),
-  ASSISTANT_MODEL: z.string().default('llama-3.3-70b-versatile'),
+  ASSISTANT_BASE_URL: z.string().default('https://api.anthropic.com/v1'),
+  ASSISTANT_MODEL: z.string().default('claude-haiku-4-5-20251001'),
 });
 
 const parsed = schema.safeParse(process.env);
