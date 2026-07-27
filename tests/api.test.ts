@@ -724,6 +724,117 @@ describe('company roles', () => {
   });
 });
 
+describe('people added by hand', () => {
+  const addPerson = (client: Client, body: Record<string, unknown>) =>
+    client.agent.post('/api/people').send(body);
+
+  it('creates somebody who behaves like anyone else', async () => {
+    const owner = await signUpOwner(app);
+    const role = await owner.agent.post('/api/roles').send({ name: 'Technician' });
+
+    const created = await addPerson(owner, {
+      fullName: 'Theo Placeholder',
+      jobTitle: 'Cleaning Technician',
+      roleId: role.body.id,
+      managerId: owner.session.membership.id,
+    });
+
+    expect(created.status).toBe(201);
+    expect(created.body).toMatchObject({
+      fullName: 'Theo Placeholder',
+      jobTitle: 'Cleaning Technician',
+      isPlaceholder: true,
+      managerId: owner.session.membership.id,
+    });
+    expect(created.body.assignedRole).toMatchObject({ name: 'Technician' });
+
+    // They show up in the list and on the map like anybody else.
+    const list = await owner.agent.get('/api/people');
+    expect((list.body.items as { id: string }[]).map((p) => p.id)).toContain(created.body.id);
+
+    const graph = await owner.agent.get('/api/organization/graph');
+    const nodes = graph.body.nodes as { person?: { id: string } }[];
+    expect(nodes.some((node) => node.person?.id === created.body.id)).toBe(true);
+  });
+
+  it('takes assigned work and profile edits exactly like a real person', async () => {
+    const owner = await signUpOwner(app);
+    const person = await addPerson(owner, { fullName: 'Stand In' });
+
+    const task = await owner.agent
+      .post('/api/tasks')
+      .send({ title: 'Sweep the yard', assigneeId: person.body.id });
+    expect(task.status).toBe(201);
+    expect(task.body.assignee.id).toBe(person.body.id);
+
+    const edited = await owner.agent
+      .patch(`/api/people/${person.body.id}`)
+      .send({ jobTitle: 'Groundskeeper', headline: 'Owns the yard' });
+    expect(edited.status).toBe(200);
+    expect(edited.body.jobTitle).toBe('Groundskeeper');
+    expect(edited.body.headline).toBe('Owns the yard');
+  });
+
+  it('cannot be signed into, and says so without hinting at Google', async () => {
+    const owner = await signUpOwner(app);
+    const email = uniqueEmail('standin');
+    await addPerson(owner, { fullName: 'No Login', email });
+
+    const attempt = await request(app)
+      .post('/api/auth/login')
+      .send({ email, password: STRONG_PASSWORD });
+
+    expect(attempt.status).toBe(401);
+    expect(attempt.body.error.code).toBe('INVALID_CREDENTIALS');
+    expect(attempt.body.error.message).not.toMatch(/google/i);
+  });
+
+  it('refuses an email that a real account already uses', async () => {
+    const owner = await signUpOwner(app);
+    const clash = await addPerson(owner, {
+      fullName: 'Clash',
+      email: owner.session.user.email,
+    });
+    expect(clash.status).toBe(409);
+    expect(clash.body.error).toMatchObject({ code: 'EMAIL_TAKEN' });
+  });
+
+  it('is workers-may-not territory', async () => {
+    const owner = await signUpOwner(app);
+    const code = await createInviteCode(owner);
+    const worker = await joinWithCode(app, code);
+
+    const attempt = await worker.agent.post('/api/people').send({ fullName: 'Sneaky' });
+    expect(attempt.status).toBe(403);
+  });
+
+  it('deletes cleanly, and refuses to delete a real account this way', async () => {
+    const owner = await signUpOwner(app);
+    const person = await addPerson(owner, { fullName: 'Temporary' });
+
+    const task = await owner.agent
+      .post('/api/tasks')
+      .send({ title: 'Job that outlives them', assigneeId: person.body.id });
+
+    // A real account must not be removable through this door.
+    const realAttempt = await owner.agent.delete(
+      `/api/people/${owner.session.membership.id}/placeholder`,
+    );
+    expect(realAttempt.status).toBe(400);
+    expect(realAttempt.body.error).toMatchObject({ code: 'NOT_A_PLACEHOLDER' });
+
+    const removed = await owner.agent.delete(`/api/people/${person.body.id}/placeholder`);
+    expect(removed.status).toBe(200);
+
+    expect((await owner.agent.get(`/api/people/${person.body.id}`)).status).toBe(404);
+
+    // The work they were given survives, simply unassigned.
+    const survivor = await prisma.task.findUnique({ where: { id: task.body.id as string } });
+    expect(survivor).not.toBeNull();
+    expect(survivor?.assigneeId).toBeNull();
+  });
+});
+
 describe('deleting an account', () => {
   it('refuses without the correct password', async () => {
     const owner = await signUpOwner(app);

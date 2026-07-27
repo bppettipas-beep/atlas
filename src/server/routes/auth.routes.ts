@@ -695,6 +695,15 @@ authRouter.post(
     // Say so plainly — "email or password is not correct" would send someone
     // round in circles resetting a password that does not exist.
     if (user && !user.passwordHash) {
+      // No password and no Google link means this was added by hand as a
+      // placeholder. Telling them to press the Google button would send them
+      // round a loop that cannot succeed.
+      if (!user.googleId) {
+        throw ApiError.unauthorized(
+          'That email or password is not correct.',
+          'INVALID_CREDENTIALS',
+        );
+      }
       throw ApiError.badRequest(
         'This account signs in with Google. Use the “Continue with Google” button.',
         'USE_GOOGLE',

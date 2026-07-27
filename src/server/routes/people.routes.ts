@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import { Router } from 'express';
 import { z } from 'zod';
 import { ApiError, asyncHandler } from '../http/errors';
@@ -416,6 +417,159 @@ const SELF_EDITABLE = new Set([
   'availabilityNote',
   'avatarUrl',
 ]);
+
+/**
+ * Adds a person by hand, with no invitation and no login.
+ *
+ * For a role you are still hiring for, or somebody who simply does not use a
+ * computer. The membership created here is an ordinary one — it appears on the
+ * map, holds a role, joins teams and is assigned work through exactly the same
+ * endpoints as anybody else, with no special-casing anywhere.
+ *
+ * The user row behind it has no password and no Google id, so it cannot be
+ * signed into. If that person later needs real access, they join with an
+ * invitation code and get their own account.
+ */
+peopleRouter.post(
+  '/',
+  requireRole('OWNER', 'MANAGER'),
+  validateBody(
+    z.object({
+      fullName: z.string().trim().min(2, 'Enter their name').max(120),
+      jobTitle: z.string().trim().max(120).nullable().optional(),
+      email: z.string().trim().email('Enter a valid email').nullable().optional().or(z.literal('')),
+      roleId: z.string().min(1).nullable().optional(),
+      managerId: z.string().min(1).nullable().optional(),
+      teamId: z.string().min(1).nullable().optional(),
+      headline: z.string().trim().max(200).nullable().optional(),
+    }),
+  ),
+  asyncHandler(async (req, res) => {
+    const auth = currentAuth(req);
+    const input = req.body as {
+      fullName: string;
+      jobTitle?: string | null;
+      email?: string | null;
+      roleId?: string | null;
+      managerId?: string | null;
+      teamId?: string | null;
+      headline?: string | null;
+    };
+
+    const email = input.email?.trim().toLowerCase() || null;
+    if (email) {
+      const taken = await prisma.user.findUnique({ where: { email } });
+      if (taken) {
+        throw ApiError.conflict(
+          'Somebody already uses that email address. Leave it blank, or invite them properly with a code.',
+          'EMAIL_TAKEN',
+        );
+      }
+    }
+
+    if (input.roleId) {
+      const role = await prisma.role.findFirst({
+        where: { id: input.roleId, companyId: auth.companyId },
+      });
+      if (!role) throw ApiError.notFound('That role does not exist.', 'ROLE_NOT_FOUND');
+    }
+    if (input.managerId) {
+      const manager = await prisma.membership.findFirst({
+        where: { id: input.managerId, companyId: auth.companyId, deactivatedAt: null },
+      });
+      if (!manager) throw ApiError.notFound('That manager is not in your company.');
+    }
+    if (input.teamId) {
+      const team = await prisma.team.findFirst({
+        where: { id: input.teamId, companyId: auth.companyId },
+      });
+      if (!team) throw ApiError.notFound('That team does not exist.');
+    }
+
+    const membershipId = await prisma.$transaction(async (tx) => {
+      const user = await tx.user.create({
+        data: {
+          // A placeholder address in a domain nobody can receive mail at, so it
+          // can never collide with a real one or be mistaken for reachable.
+          email: email ?? `placeholder.${crypto.randomUUID()}@placeholder.atlas.invalid`,
+          fullName: input.fullName,
+          passwordHash: null,
+          googleId: null,
+        },
+      });
+
+      const membership = await tx.membership.create({
+        data: {
+          userId: user.id,
+          companyId: auth.companyId,
+          role: 'WORKER',
+          isPlaceholder: true,
+          roleId: input.roleId ?? null,
+          managerId: input.managerId ?? null,
+          jobTitle: input.jobTitle || null,
+          profile: {
+            create: { availability: 'AVAILABLE', headline: input.headline || null },
+          },
+        },
+      });
+
+      await tx.notificationPreference.create({ data: { membershipId: membership.id } });
+      if (input.teamId) {
+        await tx.teamMembership.create({
+          data: { teamId: input.teamId, membershipId: membership.id },
+        });
+      }
+      return membership.id;
+    });
+
+    await ensureOrganizationNodes(auth.companyId);
+    await recordActivity({
+      companyId: auth.companyId,
+      type: 'MEMBER_JOINED',
+      summary: `${auth.fullName} added ${input.fullName} to the company`,
+      actorId: auth.membershipId,
+      targetId: membershipId,
+      metadata: { placeholder: true },
+    });
+
+    emitToCompany(auth.companyId, 'people:updated', { membershipId });
+    broadcastOrganizationChange(auth.companyId);
+
+    res.status(201).json(serializePerson(await loadPersonInCompany(membershipId, auth.companyId)));
+  }),
+);
+
+/**
+ * Removes a placeholder outright.
+ *
+ * Only ever a placeholder: a real person is deactivated instead, because their
+ * account, their history and their sessions are theirs. A placeholder has none
+ * of those, so keeping a deactivated husk of one would just be clutter.
+ */
+peopleRouter.delete(
+  '/:id/placeholder',
+  requireRole('OWNER', 'MANAGER'),
+  asyncHandler(async (req, res) => {
+    const auth = currentAuth(req);
+    const membership = await loadPersonInCompany(req.params.id, auth.companyId);
+
+    if (!membership.isPlaceholder) {
+      throw ApiError.badRequest(
+        'That is a real account. Deactivate it instead of deleting it.',
+        'NOT_A_PLACEHOLDER',
+      );
+    }
+
+    // Deleting the user cascades the membership; tasks and comments they were
+    // attached to are SetNull, so the company keeps its work.
+    await prisma.user.delete({ where: { id: membership.userId } });
+
+    await ensureOrganizationNodes(auth.companyId);
+    emitToCompany(auth.companyId, 'people:updated', {});
+    broadcastOrganizationChange(auth.companyId);
+    res.json({ ok: true });
+  }),
+);
 
 /**
  * Assigns (or clears) somebody's company role.

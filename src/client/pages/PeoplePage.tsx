@@ -2,6 +2,7 @@ import { Plus, Search, Squares, UserPlus, Users, X } from '@/components/icons';
 import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { PageBody, PageTransition } from '@/components/layout/AppShell';
+import { AddPersonModal } from '@/components/people/AddPersonModal';
 import { ProfilePanel } from '@/components/people/ProfilePanel';
 import { TaskComposer } from '@/components/tasks/TaskComposer';
 import {
@@ -36,6 +37,7 @@ export function PeoplePage() {
   const [params, setParams] = useSearchParams();
 
   const [tab, setTab] = useState<'people' | 'teams'>('people');
+  const [addPersonOpen, setAddPersonOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [role, setRole] = useState('');
   const [teamId, setTeamId] = useState('');
@@ -89,6 +91,12 @@ export function PeoplePage() {
                   onClick={() => setTeamModalOpen(true)}
                 >
                   New team
+                </Button>
+                <Button
+                  icon={<Plus className="h-4 w-4" />}
+                  onClick={() => setAddPersonOpen(true)}
+                >
+                  Add person
                 </Button>
                 <Button
                   variant="primary"
@@ -255,6 +263,14 @@ export function PeoplePage() {
                       <Chip className={ROLE_META[person.role].chip}>
                         {ROLE_META[person.role].label}
                       </Chip>
+                      {person.isPlaceholder && (
+                        <span
+                          className="edge-sm border border-dashed border-edgeStrong px-1.5 py-0.5 text-ink-4"
+                          title="Added by hand — this person has no login"
+                        >
+                          No login
+                        </span>
+                      )}
                       {person.teams.slice(0, 2).map((team) => (
                         <Chip key={team.id}>{team.name}</Chip>
                       ))}
@@ -290,6 +306,13 @@ export function PeoplePage() {
         onClose={() => selectPerson(null)}
         onChanged={() => peopleQuery.refetch()}
         onAssignTask={(person) => setComposerFor(person.id)}
+      />
+
+      <AddPersonModal
+        open={addPersonOpen}
+        onClose={() => setAddPersonOpen(false)}
+        onCreated={() => peopleQuery.refetch()}
+        people={people}
       />
 
       <TaskComposer

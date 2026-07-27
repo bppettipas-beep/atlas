@@ -50,6 +50,7 @@ export function serializePerson(membership: any): PersonSummary {
     managerId: membership.managerId ?? null,
     availability: membership.profile?.availability ?? 'AVAILABLE',
     headline: membership.profile?.headline ?? null,
+    isPlaceholder: membership.isPlaceholder ?? false,
     assignedRole: membership.assignedRole
       ? {
           id: membership.assignedRole.id,

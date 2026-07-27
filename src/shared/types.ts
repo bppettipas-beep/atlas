@@ -140,6 +140,8 @@ export interface PersonSummary {
   managerId: string | null;
   availability: AvailabilityStatus;
   headline: string | null;
+  /** Added by hand and has never signed in. Editable and assignable like anyone else. */
+  isPlaceholder: boolean;
   assignedRole: RoleBadge | null;
   teams: { id: string; name: string; color: string | null }[];
 }

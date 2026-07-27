@@ -224,6 +224,11 @@ model Membership {
   /// The company's own named role — what somebody *is* on the org chart.
   /// Carries no permissions.
   roleId        String?
+  /// A person added by hand who has never signed in — a stand-in for a real
+  /// hire, or somebody who does not use a computer. Identical to any other
+  /// membership everywhere else: assignable, mappable, editable. Their user
+  /// row has no password and no Google link, so it can never be signed into.
+  isPlaceholder Boolean          @default(false)
   managerId     String?
   joinedAt      DateTime         @default(now())
   deactivatedAt DateTime?
