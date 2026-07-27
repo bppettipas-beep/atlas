@@ -234,7 +234,7 @@ export function SchedulePage() {
 
   return (
     <PageTransition>
-      <div className="flex h-full min-h-0 flex-col px-4 py-4 sm:px-6 sm:py-5">
+      <div className="flex h-full min-h-0 flex-col pl-14 pr-4 pt-4 sm:px-6 sm:py-5">
         <PageHeader
           eyebrow="Schedule"
           title={view === 'mine' ? 'My schedule' : 'The day, at a glance'}

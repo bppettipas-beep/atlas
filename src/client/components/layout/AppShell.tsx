@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { useState, type ReactNode } from 'react';
-import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { NotificationCenter } from './NotificationCenter';
 import { AtlasyButton, AtlasyPanel } from '@/components/assistant/AtlasyPanel';
 import { LogoMark } from '@/components/Logo';
@@ -72,6 +72,7 @@ export function AppShell() {
   const { session, signOut, isLeadership, switchCompany } = useAuth();
   const { connected } = useRealtime();
   const navigate = useNavigate();
+  const location = useLocation();
   const toast = useToast();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [atlasyOpen, setAtlasyOpen] = useState(false);
@@ -79,6 +80,9 @@ export function AppShell() {
   if (!session) return null;
 
   const items = isLeadership ? OWNER_NAV : WORKER_NAV;
+  // Schedule is a working board, not another document in the app. It earns the
+  // whole canvas; navigation remains one click away as an overlay.
+  const scheduleMode = location.pathname === '/app/schedule';
 
   const handleSignOut = async () => {
     await signOut();
@@ -252,11 +256,29 @@ export function AppShell() {
 
   return (
     <div className="flex h-full min-w-0 overflow-x-hidden bg-paper">
-      <aside className="hidden w-sidebar shrink-0 border-r border-edge lg:block">{sidebar}</aside>
+      <aside
+        className={cn(
+          'hidden w-sidebar shrink-0 border-r border-edge lg:block',
+          scheduleMode && 'lg:hidden',
+        )}
+      >
+        {sidebar}
+      </aside>
+
+      {scheduleMode && (
+        <button
+          type="button"
+          onClick={() => setMobileOpen(true)}
+          aria-label="Open navigation"
+          className="fixed left-3 top-3 z-30 flex h-9 w-9 items-center justify-center rounded-sm border border-edge bg-sheet text-ink shadow-lift transition-colors hover:bg-paper"
+        >
+          <List className="text-[16px]" />
+        </button>
+      )}
 
       <AnimatePresence>
         {mobileOpen && (
-          <div className="fixed inset-0 z-50 lg:hidden">
+          <div className={cn('fixed inset-0 z-50', !scheduleMode && 'lg:hidden')}>
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -278,22 +300,26 @@ export function AppShell() {
       </AnimatePresence>
 
       <div className="flex min-w-0 flex-1 flex-col overflow-x-hidden">
-        <header className="flex h-12 shrink-0 items-center gap-1 border-b border-edge bg-sheet px-2 sm:px-4">
-          <button
-            type="button"
-            onClick={() => setMobileOpen(true)}
-            aria-label="Open navigation"
-            className="flex h-8 w-8 items-center justify-center rounded-sm text-ink-2 hover:bg-paper lg:hidden"
-          >
-            {mobileOpen ? <X className="text-[16px]" /> : <List className="text-[16px]" />}
-          </button>
+        {!scheduleMode && (
+          <header className="flex h-12 shrink-0 items-center gap-1 border-b border-edge bg-sheet px-2 sm:px-4">
+            <button
+              type="button"
+              onClick={() => setMobileOpen(true)}
+              aria-label="Open navigation"
+              className="flex h-8 w-8 items-center justify-center rounded-sm text-ink-2 hover:bg-paper lg:hidden"
+            >
+              {mobileOpen ? <X className="text-[16px]" /> : <List className="text-[16px]" />}
+            </button>
 
-          <p className="edge-sm ml-2 hidden truncate sm:block lg:hidden">{session.company.name}</p>
+            <p className="edge-sm ml-2 hidden truncate sm:block lg:hidden">
+              {session.company.name}
+            </p>
 
-          <div className="flex-1" />
-          <AtlasyButton open={atlasyOpen} onClick={() => setAtlasyOpen((value) => !value)} />
-          <NotificationCenter />
-        </header>
+            <div className="flex-1" />
+            <AtlasyButton open={atlasyOpen} onClick={() => setAtlasyOpen((value) => !value)} />
+            <NotificationCenter />
+          </header>
+        )}
 
         <main className="min-h-0 flex-1 overflow-hidden">
           <Outlet />
