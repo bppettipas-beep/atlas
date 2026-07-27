@@ -770,6 +770,8 @@ function EditTaskModal({
     description: task.description ?? '',
     priority: task.priority,
     dueAt: toDateTimeLocal(task.dueAt),
+    startAt: toDateTimeLocal(task.startAt),
+    endAt: toDateTimeLocal(task.endAt),
     assigneeId: task.assignee?.id ?? '',
     location: task.location ?? '',
   });
@@ -787,6 +789,17 @@ function EditTaskModal({
         assigneeId: form.assigneeId || null,
         location: form.location || null,
       });
+      // Scheduling is routed through its own endpoint so it records who made
+      // the booking, emits schedule updates, and reports conflicts.
+      if (
+        form.startAt !== toDateTimeLocal(task.startAt) ||
+        form.endAt !== toDateTimeLocal(task.endAt)
+      ) {
+        await api.patch(`/schedule/tasks/${task.id}`, {
+          startAt: toIsoOrNull(form.startAt),
+          endAt: toIsoOrNull(form.endAt),
+        });
+      }
       if (status !== task.status) {
         await api.patch(`/tasks/${task.id}/status`, {
           status,
@@ -881,6 +894,25 @@ function EditTaskModal({
                 </option>
               ))}
             </Select>
+          </Field>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Scheduled start" htmlFor="edit-task-start">
+            <Input
+              id="edit-task-start"
+              type="datetime-local"
+              value={form.startAt}
+              onChange={(event) => setForm({ ...form, startAt: event.target.value })}
+            />
+          </Field>
+          <Field label="Scheduled end" htmlFor="edit-task-end">
+            <Input
+              id="edit-task-end"
+              type="datetime-local"
+              value={form.endAt}
+              onChange={(event) => setForm({ ...form, endAt: event.target.value })}
+            />
           </Field>
         </div>
 

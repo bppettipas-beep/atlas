@@ -32,6 +32,7 @@ const detailInclude = {
   ...taskSummaryInclude,
   createdBy: { include: { user: { select: { fullName: true } } } },
   approvedBy: { include: { user: { select: { fullName: true } } } },
+  scheduledBy: { include: { user: { select: { fullName: true } } } },
   document: { select: { id: true, title: true, category: true } },
   subtasks: { orderBy: { position: 'asc' } },
   comments: {
@@ -84,6 +85,10 @@ async function toDetail(
     description: task.description,
     location: task.location,
     startAt: task.startAt?.toISOString() ?? null,
+    endAt: task.endAt?.toISOString() ?? null,
+    scheduledBy: task.scheduledBy
+      ? { id: task.scheduledBy.id, fullName: task.scheduledBy.user.fullName }
+      : null,
     requiresApproval: task.requiresApproval,
     requiresProofPhoto: task.requiresProofPhoto,
     blockedReason: task.blockedReason,
@@ -210,7 +215,9 @@ const createSchema = z.object({
   priority: z.enum(PRIORITIES).default('MEDIUM'),
   status: z.enum(STATUSES).default('NOT_STARTED'),
   dueAt: z.coerce.date().nullable().optional(),
+  // startAt/endAt are the booking. A task with a startAt is on the Schedule.
   startAt: z.coerce.date().nullable().optional(),
+  endAt: z.coerce.date().nullable().optional(),
   assigneeId: z.string().min(1).nullable().optional(),
   teamId: z.string().min(1).nullable().optional(),
   documentId: z.string().min(1).nullable().optional(),
@@ -265,6 +272,8 @@ tasksRouter.post(
         status: input.status,
         dueAt: input.dueAt ?? null,
         startAt: input.startAt ?? null,
+        endAt: input.startAt ? (input.endAt ?? null) : null,
+        scheduledById: input.startAt ? auth.membershipId : null,
         assigneeId: input.assigneeId ?? null,
         teamId: input.teamId ?? null,
         documentId: input.documentId ?? null,

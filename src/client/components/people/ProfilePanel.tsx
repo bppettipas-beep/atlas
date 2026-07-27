@@ -1,5 +1,6 @@
 import {
   BookOpen,
+  Calendar,
   Certificate,
   Chat,
   Check,
@@ -184,6 +185,14 @@ export function ProfilePanel({
             )}
 
             <div className="mt-4 flex flex-wrap gap-2">
+              <Link
+                to={`/app/schedule?view=day&resources=${data.id}`}
+                className="inline-flex h-8 items-center gap-1.5 rounded-sm border border-edgeStrong bg-sheet px-2.5 text-[12px] font-medium text-ink-2 transition-colors hover:bg-paper"
+                onClick={onClose}
+              >
+                <Calendar className="h-3.5 w-3.5" />
+                View schedule
+              </Link>
               {isLeadership && onAssignTask && (
                 <Button
                   size="sm"
@@ -272,7 +281,8 @@ function OverviewTab({
 
   // Only leadership can assign a role, so only leadership needs the list.
   const rolesQuery = useQuery<{ items: RoleDto[] }>(
-    (signal) => (isLeadership ? api.get('/roles', undefined, signal) : Promise.resolve({ items: [] })),
+    (signal) =>
+      isLeadership ? api.get('/roles', undefined, signal) : Promise.resolve({ items: [] }),
     [isLeadership],
   );
   const roles = rolesQuery.data?.items ?? [];
@@ -476,11 +486,7 @@ function OverviewTab({
 
         {isOwner && (
           <div className="mt-3">
-            <Field
-              label="Access level"
-              htmlFor="role-select"
-              hint="What they are allowed to do."
-            >
+            <Field label="Access level" htmlFor="role-select" hint="What they are allowed to do.">
               <Select
                 id="role-select"
                 value={person.role}

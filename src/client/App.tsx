@@ -15,6 +15,7 @@ import { OrganizationMapPage } from '@/pages/OrganizationMapPage';
 import { OwnerSignupPage } from '@/pages/OwnerSignupPage';
 import { PeoplePage } from '@/pages/PeoplePage';
 import { ProfilePage } from '@/pages/ProfilePage';
+import { SchedulePage } from '@/pages/SchedulePage';
 import { SignInPage } from '@/pages/SignInPage';
 import { StartPage } from '@/pages/StartPage';
 import { WorkPage } from '@/pages/WorkPage';
@@ -75,6 +76,7 @@ export function App() {
               <Route path="organization" element={<OrganizationMapPage />} />
               <Route path="people" element={<PeoplePage />} />
               <Route path="work" element={<WorkPage />} />
+              <Route path="schedule" element={<SchedulePage />} />
               <Route path="knowledge" element={<KnowledgePage />} />
               <Route path="knowledge/:id" element={<KnowledgeDocPage />} />
               <Route path="activity" element={<ActivityPage />} />

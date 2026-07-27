@@ -56,8 +56,13 @@ export type NotificationType =
   | 'TASK_OVERDUE'
   | 'TASK_BLOCKED'
   | 'TASK_APPROVED'
+  | 'TASK_CREATED'
+  | 'TASK_COMPLETED'
+  | 'TASK_COMMENTED'
   | 'TEAM_ADDED'
   | 'MEMBER_JOINED'
+  | 'MEMBER_LEFT'
+  | 'ROLE_ASSIGNED'
   | 'DOCUMENT_PUBLISHED'
   | 'DOCUMENT_ACK_REQUESTED'
   | 'ANNOUNCEMENT';
@@ -217,6 +222,8 @@ export interface TaskDetail extends TaskSummary {
   description: string | null;
   location: string | null;
   startAt: string | null;
+  endAt: string | null;
+  scheduledBy: { id: string; fullName: string } | null;
   requiresApproval: boolean;
   requiresProofPhoto: boolean;
   blockedReason: string | null;
@@ -483,3 +490,101 @@ export type RealtimeEvent =
   | { type: 'announcement:new' }
   | { type: 'notification:new'; notification: NotificationDto }
   | { type: 'notification:read' };
+
+/* -------------------------------- schedule -------------------------------- */
+
+/** A column on the Schedule: one person, or one team. */
+export interface ScheduleResource {
+  id: string;
+  kind: 'PERSON' | 'TEAM';
+  name: string;
+  /** Job title for a person, member count summary for a team. */
+  subtitle: string | null;
+  avatarUrl: string | null;
+  color: string | null;
+}
+
+/**
+ * One booked piece of work.
+ *
+ * This is a projection of a Task, not a record of its own — everything here
+ * comes from the task, and editing it edits the task. `resourceIds` is the set
+ * of columns the block belongs in, which is why it is plural: a task with both
+ * an assignee and a team shows in both without being duplicated in the data.
+ */
+export interface ScheduleBlock {
+  taskId: string;
+  title: string;
+  status: TaskStatus;
+  priority: TaskPriority;
+  startAt: string;
+  endAt: string;
+  location: string | null;
+  isOverdue: boolean;
+  completionPercent: number;
+  assignee: { id: string; fullName: string; avatarUrl: string | null } | null;
+  team: { id: string; name: string; color: string | null } | null;
+  resourceIds: string[];
+  /** Task ids this one overlaps for the same person. Empty when it is clear. */
+  conflictsWith: string[];
+  /** True when the block falls outside the assignee's working hours or time off. */
+  outsideAvailability: boolean;
+}
+
+/** A person's normal week. Minutes are from midnight; 540 is 09:00. */
+export interface WorkingHoursDto {
+  weekday: number;
+  startMinute: number;
+  endMinute: number;
+}
+
+export interface TimeOffDto {
+  id: string;
+  membershipId: string;
+  startAt: string;
+  endAt: string;
+  note: string | null;
+  createdBy: { id: string; fullName: string } | null;
+}
+
+/** Availability for one person over the requested window. */
+export interface ScheduleAvailability {
+  membershipId: string;
+  workingHours: WorkingHoursDto[];
+  timeOff: TimeOffDto[];
+}
+
+/**
+ * How full somebody's window is.
+ *
+ * Deliberately not a score. These are counts a manager can act on — "six hours
+ * booked against four hours available" is a staffing decision; a productivity
+ * rating is not.
+ */
+export interface ScheduleWorkload {
+  membershipId: string;
+  scheduledMinutes: number;
+  availableMinutes: number;
+  blockCount: number;
+  conflictCount: number;
+  outsideAvailabilityCount: number;
+}
+
+export interface ScheduleResponse {
+  from: string;
+  to: string;
+  resources: ScheduleResource[];
+  blocks: ScheduleBlock[];
+  availability: ScheduleAvailability[];
+  workload: ScheduleWorkload[];
+  /** Scheduled work the caller may not open, counted so the view can say so. */
+  hiddenCount: number;
+}
+
+/** What the caller is allowed to do, decided by the server and mirrored in the UI. */
+export interface SchedulePermissions {
+  canScheduleOthers: boolean;
+  canManageAvailability: boolean;
+  /** Membership ids whose schedule the caller may see. Empty means everyone. */
+  visibleMembershipIds: string[];
+}
