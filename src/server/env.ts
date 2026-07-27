@@ -31,6 +31,13 @@ const schema = z.object({
   // button — the app never shows a sign-in option it cannot honour.
   GOOGLE_CLIENT_ID: z.string().default(''),
   GOOGLE_CLIENT_SECRET: z.string().default(''),
+  // Atlasy, the in-app assistant. Any OpenAI-compatible endpoint works —
+  // Google AI Studio, Groq, OpenRouter, Cerebras. Unset hides the button.
+  ASSISTANT_API_KEY: z.string().default(''),
+  ASSISTANT_BASE_URL: z
+    .string()
+    .default('https://generativelanguage.googleapis.com/v1beta/openai'),
+  ASSISTANT_MODEL: z.string().default('gemini-2.0-flash'),
 });
 
 const parsed = schema.safeParse(process.env);
@@ -56,6 +63,7 @@ export const env = {
   uploadDir: path.resolve(process.cwd(), raw.UPLOAD_DIR),
   maxUploadBytes: raw.MAX_UPLOAD_MB * 1024 * 1024,
   googleEnabled: raw.GOOGLE_CLIENT_ID.length > 0 && raw.GOOGLE_CLIENT_SECRET.length > 0,
+  assistantEnabled: raw.ASSISTANT_API_KEY.length > 0,
   allowedOrigins: Array.from(
     new Set(
       [raw.APP_ORIGIN, ...raw.CORS_ORIGINS.split(',')].map((value) => value.trim()).filter(Boolean),

@@ -13,6 +13,7 @@ import { prisma } from './prisma';
 import { activityRouter } from './routes/activity.routes';
 import { authRouter } from './routes/auth.routes';
 import { companiesRouter } from './routes/companies.routes';
+import { assistantRouter } from './routes/assistant.routes';
 import { invitesRouter } from './routes/invites.routes';
 import { knowledgeRouter } from './routes/knowledge.routes';
 import { notificationsRouter } from './routes/notifications.routes';
@@ -128,6 +129,7 @@ export function createApp(): Express {
   app.use('/api/invites', invitesRouter);
   app.use('/api/people', peopleRouter);
   app.use('/api/roles', rolesRouter);
+  app.use('/api/assistant', assistantRouter);
   app.use('/api/organization', organizationRouter);
   app.use('/api/tasks', tasksRouter);
   app.use('/api/knowledge', knowledgeRouter);

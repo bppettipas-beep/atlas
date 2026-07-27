@@ -134,9 +134,12 @@ export function RolesTab({ canEdit }: { canEdit: boolean }) {
 
   const roles = useMemo(() => rolesQuery.data?.items ?? [], [rolesQuery.data]);
   const rows = useMemo(() => flatten(roles), [roles]);
+  // Read out of the draft first: an optional chain in a dependency array
+  // defeats the compiler's memoisation.
+  const draftId = draft?.id ?? null;
   const blocked = useMemo(
-    () => (draft?.id ? descendantsOf(draft.id, roles) : new Set<string>()),
-    [draft?.id, roles],
+    () => (draftId ? descendantsOf(draftId, roles) : new Set<string>()),
+    [draftId, roles],
   );
 
   const save = async (event: FormEvent) => {

@@ -445,6 +445,9 @@ Every variable is documented in `.env.example`. The ones that matter:
 | `AUTH_RATE_LIMIT` | no | Credential attempts per IP per 15 min, default 40 |
 | `GOOGLE_CLIENT_ID` | no | Enables Google sign-in. See below |
 | `GOOGLE_CLIENT_SECRET` | no | Enables Google sign-in. See below |
+| `ASSISTANT_API_KEY` | no | Enables Atlasy, the in-app assistant. See below |
+| `ASSISTANT_BASE_URL` | no | OpenAI-compatible endpoint. Defaults to Google AI Studio |
+| `ASSISTANT_MODEL` | no | Model name, default `gemini-2.0-flash` |
 
 The server validates all of this at startup and exits with a readable message
 listing exactly what is missing, rather than failing on the first query.

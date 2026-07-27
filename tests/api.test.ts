@@ -724,6 +724,47 @@ describe('company roles', () => {
   });
 });
 
+describe('Atlasy', () => {
+  // The suite runs with no ASSISTANT_API_KEY, which is the state a fresh
+  // deployment is in. Everything here checks it stays shut and safe.
+
+  it('tells the client the assistant is unavailable so no dead button is drawn', async () => {
+    const response = await request(app).get('/api/assistant/config');
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ enabled: false });
+  });
+
+  it('cannot be talked to without signing in', async () => {
+    const response = await request(app)
+      .post('/api/assistant/chat')
+      .send({ messages: [{ role: 'user', content: 'hello' }] });
+    expect(response.status).toBe(401);
+  });
+
+  it('refuses to run when no provider is configured', async () => {
+    const owner = await signUpOwner(app);
+    const response = await owner.agent
+      .post('/api/assistant/chat')
+      .send({ messages: [{ role: 'user', content: 'create a task' }] });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toMatchObject({ code: 'ASSISTANT_DISABLED' });
+  });
+
+  it('only offers tools that map to real, permission-checked endpoints', async () => {
+    const { TOOLS } = await import('../src/server/assistant/tools');
+
+    // The model picks a tool name, never a URL. If that list ever grew a path
+    // outside /api, the assistant would have a door the routes do not guard.
+    for (const tool of TOOLS) {
+      expect(tool.path.startsWith('/api/')).toBe(true);
+      expect(['GET', 'POST', 'PATCH', 'DELETE']).toContain(tool.method);
+      expect(tool.description.length).toBeGreaterThan(10);
+    }
+    expect(TOOLS.map((tool) => tool.name)).toContain('create_task');
+  });
+});
+
 describe('people added by hand', () => {
   const addPerson = (client: Client, body: Record<string, unknown>) =>
     client.agent.post('/api/people').send(body);
