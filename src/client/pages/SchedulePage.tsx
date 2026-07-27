@@ -4,16 +4,17 @@ import { ScheduleGrid, type ScheduleColumn } from '@/components/schedule/Schedul
 import { TaskComposer } from '@/components/tasks/TaskComposer';
 import { TaskDetailPanel } from '@/components/tasks/TaskDetailPanel';
 import {
+  Avatar,
   Button,
   EmptyState,
   ErrorState,
   PageHeader,
   Select,
   SkeletonRows,
-  Tabs,
   useToast,
 } from '@/components/ui';
 import { api, errorMessage } from '@/lib/api';
+import { cn } from '@/lib/utils';
 import { useQuery } from '@/lib/useQuery';
 import { useAuth } from '@/providers/AuthProvider';
 import { useRealtimeEvent } from '@/providers/RealtimeProvider';
@@ -65,7 +66,7 @@ export function SchedulePage() {
   const { session, isLeadership } = useAuth();
   const toast = useToast();
   const [params, setParams] = useSearchParams();
-  const initialView = (params.get('view') as View | null) ?? (isLeadership ? 'week' : 'mine');
+  const initialView = (params.get('view') as View | null) ?? (isLeadership ? 'day' : 'mine');
   const [view, setView] = useState<View>(initialView);
   const [anchor, setAnchor] = useState(() => {
     const requested = params.get('date');
@@ -82,6 +83,14 @@ export function SchedulePage() {
   });
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(params.get('task'));
   const [draft, setDraft] = useState<Draft | null>(null);
+  const [compact, setCompact] = useState(() => window.matchMedia('(max-width: 639px)').matches);
+
+  useEffect(() => {
+    const query = window.matchMedia('(max-width: 639px)');
+    const update = () => setCompact(query.matches);
+    query.addEventListener('change', update);
+    return () => query.removeEventListener('change', update);
+  }, []);
 
   const from = view === 'day' ? startOfDay(anchor) : startOfWeek(anchor);
   const to = view === 'day' ? addDays(from, 1) : addDays(from, 7);
@@ -138,7 +147,7 @@ export function SchedulePage() {
       const fallback = selected.length
         ? selected
         : resources.filter((item) => item.kind === 'PERSON').slice(0, 4);
-      return fallback.map((resource) => ({
+      return (compact ? fallback.slice(0, 1) : fallback).map((resource) => ({
         key: resource.id,
         title: resource.name,
         subtitle: resource.subtitle,
@@ -146,6 +155,7 @@ export function SchedulePage() {
         resourceId: resource.id,
         kind: resource.kind,
         color: resource.color,
+        avatarUrl: resource.avatarUrl,
       }));
     }
     return Array.from({ length: 7 }, (_, index) => {
@@ -224,10 +234,10 @@ export function SchedulePage() {
 
   return (
     <PageTransition>
-      <div className="flex h-full min-h-0 flex-col px-5 py-6 sm:px-8 sm:py-8">
+      <div className="flex h-full min-h-0 flex-col px-4 py-4 sm:px-6 sm:py-5">
         <PageHeader
           eyebrow="Schedule"
-          title={view === 'mine' ? 'My schedule' : 'Who is doing what, and when?'}
+          title={view === 'mine' ? 'My schedule' : 'The day, at a glance'}
           description={
             view === 'mine'
               ? 'Your scheduled work and availability for the coming week.'
@@ -248,6 +258,7 @@ export function SchedulePage() {
                     resourceId: session?.membership.id ?? null,
                     kind: 'PERSON',
                     color: null,
+                    avatarUrl: null,
                   },
                   start: new Date(),
                   end: new Date(Date.now() + 3_600_000),
@@ -258,21 +269,32 @@ export function SchedulePage() {
             </Button>
           }
         />
-        <div className="mb-4 flex flex-wrap items-center gap-2">
-          <Tabs
-            tabs={[
-              { value: 'day', label: 'Day' },
-              { value: 'week', label: 'Week' },
-              { value: 'mine', label: 'My schedule' },
-            ]}
-            value={view}
-            onChange={(value) => {
-              const next = value as View;
-              setView(next);
-              if (next === 'mine' && session) setResourceIds([session.membership.id]);
-            }}
-          />
-          <div className="ml-auto flex items-center gap-1">
+        <div className="mb-3 flex flex-wrap items-center gap-2 border-y border-rule py-2">
+          <div className="flex rounded-sm border border-edge bg-paper p-0.5">
+            {[
+              { value: 'day' as const, label: 'Day' },
+              { value: 'week' as const, label: 'Week' },
+              { value: 'mine' as const, label: 'Mine' },
+            ].map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => {
+                  setView(option.value);
+                  if (option.value === 'mine' && session) setResourceIds([session.membership.id]);
+                }}
+                className={cn(
+                  'rounded-sm px-3 py-1.5 text-[12px] font-medium transition-colors',
+                  view === option.value
+                    ? 'bg-ink text-white shadow-sm'
+                    : 'text-ink-3 hover:text-ink',
+                )}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-1 sm:ml-2">
             <Button
               size="sm"
               variant="ghost"
@@ -294,9 +316,12 @@ export function SchedulePage() {
               {labelRange(from, to, view === 'mine' ? 'week' : view)}
             </span>
           </div>
+          <span className="ml-auto hidden text-edge text-ink-3 md:block">
+            Drag work to move · drag open time to add
+          </span>
         </div>
         {isLeadership && (
-          <div className="mb-4 flex items-center gap-2">
+          <div className="mb-3 flex flex-wrap items-center gap-2">
             <label
               className="text-edge font-medium uppercase tracking-wider text-ink-3"
               htmlFor="schedule-resource"
@@ -305,11 +330,11 @@ export function SchedulePage() {
             </label>
             <Select
               id="schedule-resource"
-              className="h-9 min-w-[220px]"
+              className="h-9 min-w-0 flex-1 sm:min-w-[220px] sm:flex-none"
               value={resourceIds[0] ?? ''}
               onChange={(event) => setResourceIds(event.target.value ? [event.target.value] : [])}
             >
-              <option value="">Company overview</option>
+              <option value="">Show the crew</option>
               {resources.map((resource) => (
                 <option key={resource.id} value={resource.id}>
                   {resource.kind === 'TEAM' ? 'Team · ' : ''}
@@ -329,7 +354,7 @@ export function SchedulePage() {
           />
         )}
         {scheduleQuery.data && columns.length > 0 && (
-          <div className="flex min-h-0 flex-1 flex-col gap-3">
+          <div className="grid min-h-0 flex-1 gap-3 xl:grid-cols-[minmax(0,1fr)_230px]">
             <ScheduleGrid
               columns={columns}
               blocks={blocks}
@@ -352,14 +377,22 @@ export function SchedulePage() {
               onCreate={(column, start, end) => setDraft({ column, start, end })}
               onMove={move}
             />
-            {scheduleQuery.data.hiddenCount > 0 && (
-              <p className="flex items-center gap-1.5 text-xs text-ink-3">
-                <Warning className="h-3.5 w-3.5" />
-                {scheduleQuery.data.hiddenCount} item(s) are hidden because you do not have access.
-              </p>
-            )}
+            <ScheduleRail
+              resources={resources}
+              workload={scheduleQuery.data.workload}
+              blocks={blocks}
+              selectedResourceId={resourceIds[0] ?? null}
+              onSelect={(id) => setResourceIds(id ? [id] : [])}
+              onOpenTask={setSelectedTaskId}
+            />
           </div>
         )}
+        {scheduleQuery.data?.hiddenCount ? (
+          <p className="mt-2 flex items-center gap-1.5 text-xs text-ink-3">
+            <Warning className="h-3.5 w-3.5" />
+            {scheduleQuery.data.hiddenCount} item(s) are hidden because you do not have access.
+          </p>
+        ) : null}
       </div>
       <TaskComposer
         open={Boolean(draft)}
@@ -389,5 +422,116 @@ export function SchedulePage() {
         onChanged={refetch}
       />
     </PageTransition>
+  );
+}
+
+function ScheduleRail({
+  resources,
+  workload,
+  blocks,
+  selectedResourceId,
+  onSelect,
+  onOpenTask,
+}: {
+  resources: ScheduleResponse['resources'];
+  workload: ScheduleResponse['workload'];
+  blocks: ScheduleBlock[];
+  selectedResourceId: string | null;
+  onSelect: (id: string | null) => void;
+  onOpenTask: (id: string) => void;
+}) {
+  const workloadById = new Map(workload.map((entry) => [entry.membershipId, entry]));
+  const attention = blocks
+    .filter(
+      (block) =>
+        block.conflictsWith.length || block.outsideAvailability || block.status === 'BLOCKED',
+    )
+    .slice(0, 4);
+
+  return (
+    <aside className="hidden min-h-0 overflow-y-auto rounded-sm border border-rule bg-sheet xl:block">
+      <div className="border-b border-rule bg-paper px-3 py-3">
+        <p className="edge-sm">Crew board</p>
+        <p className="mt-1 text-[12px] leading-relaxed text-ink-3">
+          Focus the board on one person.
+        </p>
+      </div>
+      <div className="divide-y divide-rule">
+        <button
+          type="button"
+          onClick={() => onSelect(null)}
+          className={cn(
+            'flex w-full items-center gap-2 px-3 py-2.5 text-left transition-colors hover:bg-paper',
+            !selectedResourceId && 'bg-paper',
+          )}
+        >
+          <span className="flex h-7 w-7 items-center justify-center border border-edge bg-sheet font-mono text-[10px] text-ink-3">
+            ALL
+          </span>
+          <span>
+            <span className="block text-[12px] font-medium text-ink">Everyone</span>
+            <span className="block text-edge text-ink-3">Company view</span>
+          </span>
+        </button>
+        {resources
+          .filter((resource) => resource.kind === 'PERSON')
+          .map((resource) => {
+            const load = workloadById.get(resource.id);
+            const overfull = load && load.scheduledMinutes > load.availableMinutes;
+            return (
+              <button
+                key={resource.id}
+                type="button"
+                onClick={() => onSelect(resource.id)}
+                className={cn(
+                  'flex w-full items-center gap-2 px-3 py-2.5 text-left transition-colors hover:bg-paper',
+                  selectedResourceId === resource.id && 'bg-paper',
+                )}
+              >
+                <Avatar name={resource.name} src={resource.avatarUrl} size="xs" />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[12px] font-medium text-ink">
+                    {resource.name}
+                  </span>
+                  <span className={cn('block text-edge', overfull ? 'text-alert' : 'text-ink-3')}>
+                    {load
+                      ? `${Math.round((load.scheduledMinutes / 60) * 10) / 10}h booked`
+                      : 'No work booked'}
+                  </span>
+                </span>
+                {load?.conflictCount || load?.outsideAvailabilityCount ? (
+                  <span className="h-1.5 w-1.5 rounded-full bg-alert" title="Needs attention" />
+                ) : null}
+              </button>
+            );
+          })}
+      </div>
+      {attention.length > 0 && (
+        <div className="border-t border-rule p-3">
+          <p className="edge-sm mb-2">Needs attention</p>
+          <div className="space-y-1.5">
+            {attention.map((block) => (
+              <button
+                key={block.taskId}
+                type="button"
+                onClick={() => onOpenTask(block.taskId)}
+                className="block w-full border-l-2 border-alert bg-alert-wash px-2 py-1.5 text-left"
+              >
+                <span className="block truncate text-[11px] font-medium text-ink">
+                  {block.title}
+                </span>
+                <span className="text-edge text-alert">
+                  {block.status === 'BLOCKED'
+                    ? 'Blocked'
+                    : block.outsideAvailability
+                      ? 'Outside availability'
+                      : 'Overlaps work'}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </aside>
   );
 }

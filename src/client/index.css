@@ -21,6 +21,8 @@
   body,
   #root {
     height: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
   }
 
   body {
@@ -30,6 +32,7 @@
     line-height: 1.5;
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
+    overscroll-behavior-x: none;
   }
 
   /* Tabular figures everywhere by default: columns of numbers must line up. */
@@ -165,10 +168,7 @@
   /* -------------------------------------------------------------- fields -- */
 
   .field {
-    @apply w-full border border-edge bg-sheet px-2.5 py-[7px] text-[13px] text-ink
-      placeholder:text-ink-4
-      focus:border-mark focus:outline-none focus:ring-0
-      disabled:cursor-not-allowed disabled:bg-paper disabled:text-ink-4;
+    @apply w-full border border-edge bg-sheet px-2.5 py-[7px] text-[13px] text-ink placeholder:text-ink-4 focus:border-mark focus:outline-none focus:ring-0 disabled:cursor-not-allowed disabled:bg-paper disabled:text-ink-4;
     border-radius: 2px;
     transition: border-color 0.14s theme('transitionTimingFunction.draft');
   }
@@ -185,8 +185,7 @@
     @apply relative overflow-hidden bg-paper-deep;
   }
   .skeleton::after {
-    @apply absolute inset-0 -translate-x-full animate-shimmer bg-gradient-to-r
-      from-transparent via-white/80 to-transparent content-[''];
+    @apply absolute inset-0 -translate-x-full animate-shimmer bg-gradient-to-r from-transparent via-white/80 to-transparent content-[''];
   }
 
   /* Hatched fill — used for empty regions on the sheet, like an unassigned

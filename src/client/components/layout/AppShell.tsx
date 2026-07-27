@@ -113,7 +113,10 @@ export function AppShell() {
           >
             <LogoMark className="h-6 w-6" />
           </Link>
-          <p className="edge-sm mt-2.5 max-w-full truncate text-center" title={session.company.name}>
+          <p
+            className="edge-sm mt-2.5 max-w-full truncate text-center"
+            title={session.company.name}
+          >
             {session.company.name}
           </p>
         </div>
@@ -248,7 +251,7 @@ export function AppShell() {
   );
 
   return (
-    <div className="flex h-full bg-paper">
+    <div className="flex h-full min-w-0 overflow-x-hidden bg-paper">
       <aside className="hidden w-sidebar shrink-0 border-r border-edge lg:block">{sidebar}</aside>
 
       <AnimatePresence>
@@ -274,7 +277,7 @@ export function AppShell() {
         )}
       </AnimatePresence>
 
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-w-0 flex-1 flex-col overflow-x-hidden">
         <header className="flex h-12 shrink-0 items-center gap-1 border-b border-edge bg-sheet px-2 sm:px-4">
           <button
             type="button"

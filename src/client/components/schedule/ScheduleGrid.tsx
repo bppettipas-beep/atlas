@@ -10,11 +10,12 @@
  * grid is correct at any zoom and after any resize.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Avatar } from '@/components/ui';
 import { cn } from '@/lib/utils';
 import type { ScheduleAvailability, ScheduleBlock } from '@shared/types';
 
 /** Pixels per hour. Tall enough to read a title in a one-hour block. */
-const HOUR_HEIGHT = 56;
+const HOUR_HEIGHT = 64;
 /** Everything snaps to this, so two blocks booked "at 9" line up exactly. */
 const SNAP_MINUTES = 15;
 
@@ -28,6 +29,7 @@ export interface ScheduleColumn {
   resourceId: string | null;
   kind: 'PERSON' | 'TEAM' | 'DATE';
   color: string | null;
+  avatarUrl?: string | null;
 }
 
 interface Placed {
@@ -323,16 +325,19 @@ export function ScheduleGrid({
   const topFor = (minute: number) => ((minute - dayStartMinute) / 60) * HOUR_HEIGHT;
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-sm border border-rule bg-sheet">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-sm border border-edge bg-sheet shadow-panel">
       {/* --------------------------- column heads --------------------------- */}
-      <div className="flex shrink-0 border-b border-rule bg-paper">
+      <div className="flex shrink-0 border-b border-rule bg-paper/80">
         <div className="w-14 shrink-0 border-r border-rule" />
         {columns.map((column) => (
           <div
             key={column.key}
-            className="min-w-0 flex-1 border-r border-rule px-2 py-2 last:border-r-0"
+            className="min-w-0 flex-1 border-r border-rule px-2.5 py-2.5 last:border-r-0"
           >
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-2">
+              {column.kind === 'PERSON' && (
+                <Avatar name={column.title} src={column.avatarUrl} size="xs" />
+              )}
               {column.color && (
                 <span
                   aria-hidden
@@ -483,7 +488,7 @@ export function ScheduleGrid({
                       }}
                       title={`${entry.block.title} · ${formatTime(entry.start)}–${formatTime(entry.end)}`}
                       className={cn(
-                        'group absolute z-10 overflow-hidden rounded-sm border border-l-2 border-rule bg-sheet px-1.5 py-1 text-left shadow-sm transition-shadow',
+                        'group absolute z-10 overflow-hidden rounded-sm border border-l-[3px] border-rule bg-sheet px-2 py-1.5 text-left shadow-sm transition-[box-shadow,transform] hover:z-20 hover:-translate-y-px hover:shadow-lift',
                         STATUS_TONE[entry.block.status] ?? 'border-l-ink-4',
                         entry.block.status === 'DONE' && 'opacity-55',
                         entry.block.conflictsWith.length > 0 && 'ring-danger/60 ring-1',
