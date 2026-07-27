@@ -75,6 +75,7 @@ export function AppShell() {
   const location = useLocation();
   const toast = useToast();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [sidebarTransitioning, setSidebarTransitioning] = useState(false);
   const [atlasyOpen, setAtlasyOpen] = useState(false);
 
   if (!session) return null;
@@ -132,7 +133,10 @@ export function AppShell() {
           <NavLink
             key={item.to}
             to={item.to}
-            onClick={() => setMobileOpen(false)}
+            onClick={() => {
+              if (scheduleMode) setSidebarTransitioning(true);
+              setMobileOpen(false);
+            }}
             className={({ isActive }) =>
               cn(
                 'group relative flex items-center gap-2.5 py-[7px] pl-4 pr-3 text-[13px]',
@@ -259,7 +263,7 @@ export function AppShell() {
       <aside
         className={cn(
           'hidden w-sidebar shrink-0 border-r border-edge lg:block',
-          scheduleMode && 'lg:hidden',
+          (scheduleMode || sidebarTransitioning) && 'lg:hidden',
         )}
       >
         {sidebar}
@@ -276,9 +280,14 @@ export function AppShell() {
         </button>
       )}
 
-      <AnimatePresence>
+      <AnimatePresence onExitComplete={() => setSidebarTransitioning(false)}>
         {mobileOpen && (
-          <div className={cn('fixed inset-0 z-50', !scheduleMode && 'lg:hidden')}>
+          <div
+            className={cn(
+              'fixed inset-0 z-50',
+              !scheduleMode && !sidebarTransitioning && 'lg:hidden',
+            )}
+          >
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
