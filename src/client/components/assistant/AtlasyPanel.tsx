@@ -155,9 +155,11 @@ export function AtlasyPanel({ open, onClose }: { open: boolean; onClose: () => v
         >
           {/* ---------------------------- title block --------------------------- */}
           <header className="flex shrink-0 items-center justify-between border-b border-rule px-4 py-3">
-            <span className="inline-flex items-center">
+            <span className="inline-flex items-center gap-2">
               <span className="title text-[14px] leading-none">Atlasy</span>
-              <span className="edge-sm border border-edge px-1 py-px text-ink-4">Beta</span>
+              <span className="edge-sm whitespace-nowrap border border-edge px-1 py-px text-ink-4">
+                Beta
+              </span>
             </span>
             <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close Atlasy">
               <X className="text-[14px]" />
