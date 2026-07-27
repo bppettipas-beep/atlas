@@ -28,6 +28,14 @@ function isConfirmation(text: string) {
   return /^(?:yes|yep|yeah|confirm|confirmed|delete it|do it|remove it)[.!\s]*$/i.test(text.trim());
 }
 
+function deletionTitleFromHistory(history: ChatMessage[]) {
+  const previous = [...history]
+    .reverse()
+    .find((message) => message.role === 'assistant' && message.content)?.content;
+  const match = previous?.match(/^Delete [“"](.+?)[”"]\? Reply yes to confirm\.$/);
+  return match?.[1] ?? null;
+}
+
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant' | 'tool';
   content: string | null;
@@ -85,7 +93,7 @@ function systemPrompt(context: {
     '- Names are not ids. Look the person up to turn "Theo" into the id you need, before creating anything.',
     '',
     'Deleting work:',
-    '- Deleting removes active work from Atlas (it is archived for record-keeping). Treat this as destructive.',
+    '- Deleting permanently removes active work from Atlas. Treat this as destructive.',
     '- For one task, find the exact task first, then call prepare_task_deletion. Atlas will ask for confirmation and only delete after the user explicitly confirms that exact task in their next message. Never call delete_task directly.',
     '- For clearing every task, list the active tasks first and state the exact count. Ask: “This will remove all N active tasks. Do you want me to continue?” Only call clear_all_tasks when the very next user message clearly confirms all tasks. Never treat “yes” from an earlier or unrelated turn as confirmation.',
     '- If the request could mean a subset (done, unassigned, a team, or a date range), ask which set before deleting anything.',
@@ -207,6 +215,28 @@ export async function runAssistant(options: {
   if (pending && pending.expiresAt <= Date.now()) {
     pendingTaskDeletes.delete(options.context.membershipId);
     pending = undefined;
+  }
+  // Pending confirmation normally lives in this process. Recover it from the
+  // conversation if a deploy, restart or a different server instance handled
+  // the user's “yes”, so confirmation never turns into a false success.
+  if (!pending && latestUserMessage?.content && isConfirmation(latestUserMessage.content)) {
+    const title = deletionTitleFromHistory(options.history);
+    if (title) {
+      const lookup = await runTool('list_tasks', { search: title, limit: 5 }, options.cookie);
+      const matches =
+        lookup.ok && typeof lookup.data === 'object' && lookup.data && 'items' in lookup.data
+          ? ((lookup.data as { items?: { id: string; title: string }[] }).items ?? []).filter(
+              (task) => task.title === title,
+            )
+          : [];
+      if (matches.length === 1) {
+        pending = {
+          taskId: matches[0].id,
+          title,
+          expiresAt: Date.now() + DELETE_CONFIRMATION_TTL_MS,
+        };
+      }
+    }
   }
   if (pending && latestUserMessage?.content && isConfirmation(latestUserMessage.content)) {
     pendingTaskDeletes.delete(options.context.membershipId);

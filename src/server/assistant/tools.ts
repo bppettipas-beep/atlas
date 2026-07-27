@@ -112,9 +112,9 @@ export const TOOLS: ToolDefinition[] = [
     mutates: true,
     internal: true,
     description:
-      'Archive one task so it no longer appears in Atlas. This is destructive from the user’s point of view. Only call after the user has explicitly confirmed the exact task in the immediately preceding message.',
+      'Permanently delete one task from Atlas. This is destructive. Only call after the user has explicitly confirmed the exact task in the immediately preceding message.',
     method: 'DELETE',
-    path: '/api/tasks/:id',
+    path: '/api/tasks/:id/permanent',
     parameters: {
       type: 'object',
       required: ['id'],
@@ -137,7 +137,7 @@ export const TOOLS: ToolDefinition[] = [
     name: 'clear_all_tasks',
     mutates: true,
     description:
-      'Archive every active task in the company. Owners and managers only. This is a high-impact destructive action; only call after you have stated the number of tasks and the user explicitly confirmed clearing every task in their immediately preceding message.',
+      'Permanently delete every active task in the company. Owners and managers only. This is a high-impact destructive action; only call after you have stated the number of tasks and the user explicitly confirmed clearing every task in their immediately preceding message.',
     method: 'DELETE',
     path: '/api/tasks',
     parameters: {

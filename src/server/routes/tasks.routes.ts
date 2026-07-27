@@ -637,14 +637,32 @@ tasksRouter.delete(
       throw ApiError.forbidden('Only owners and managers can clear company work.');
     }
 
-    // Tasks are archived rather than physically erased, just like individual
-    // deletion. That preserves references already recorded in activity.
-    const result = await prisma.task.updateMany({
+    // A confirmed company-wide clear is final, matching Atlasy's individual
+    // deletion path. Task-owned records cascade with their task.
+    const result = await prisma.task.deleteMany({
       where: { companyId: auth.companyId, archivedAt: null },
-      data: { archivedAt: new Date() },
     });
     emitToCompany(auth.companyId, 'task:deleted', { all: true });
     res.json({ ok: true, archivedCount: result.count });
+  }),
+);
+
+tasksRouter.delete(
+  '/:id/permanent',
+  asyncHandler(async (req, res) => {
+    const auth = currentAuth(req);
+    const existing = await loadTask(req.params.id, auth);
+    if (!isLeadership(auth) && existing.createdById !== auth.membershipId) {
+      throw ApiError.forbidden(
+        'Only the person who created this task, a manager or the owner can delete it.',
+      );
+    }
+    // Atlasy's confirmed delete is intentionally final. Its related comments,
+    // subtasks, attachments and task-scoped activity cascade with the record,
+    // so a deleted task can never return through a stale archive query.
+    await prisma.task.delete({ where: { id: existing.id } });
+    emitToCompany(auth.companyId, 'task:deleted', { taskId: existing.id });
+    res.json({ ok: true, permanentlyDeleted: true });
   }),
 );
 
