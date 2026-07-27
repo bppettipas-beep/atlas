@@ -90,6 +90,19 @@ export function AppShell() {
     navigate('/', { replace: true });
   };
 
+  const handleNavigation = () => {
+    // Desktop hands the Schedule overlay straight to the destination sidebar.
+    // Running its exit animation first is what created the visual "pop".
+    // Phones retain the normal close-after-navigation behaviour because the
+    // navigation is modal there.
+    if (scheduleMode && window.innerWidth >= 1024) {
+      setSidebarTransitioning(true);
+      setMobileOpen(false);
+      return;
+    }
+    setMobileOpen(false);
+  };
+
   const sidebar = (
     <div className="flex h-full flex-col bg-sheet">
       {/* ---------------------------- title block --------------------------- */}
@@ -133,10 +146,7 @@ export function AppShell() {
           <NavLink
             key={item.to}
             to={item.to}
-            onClick={() => {
-              if (scheduleMode) setSidebarTransitioning(true);
-              setMobileOpen(false);
-            }}
+            onClick={handleNavigation}
             className={({ isActive }) =>
               cn(
                 'group relative flex items-center gap-2.5 py-[7px] pl-4 pr-3 text-[13px]',
@@ -291,14 +301,14 @@ export function AppShell() {
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
+              exit={sidebarTransitioning ? undefined : { opacity: 0 }}
               className="absolute inset-0 bg-ink/20"
               onClick={() => setMobileOpen(false)}
             />
             <motion.div
               initial={{ x: '-100%' }}
               animate={{ x: 0 }}
-              exit={{ x: '-100%' }}
+              exit={sidebarTransitioning ? undefined : { x: '-100%' }}
               transition={{ duration: 0.3, ease: DRAFT_EASE }}
               className="absolute inset-y-0 left-0 w-[268px] border-r border-edge shadow-panel"
             >
