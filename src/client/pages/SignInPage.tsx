@@ -50,10 +50,10 @@ export function SignInPage() {
         <>
           New here?{' '}
           <Link
-            to="/"
+            to="/start"
             className="font-medium text-ink underline decoration-edge underline-offset-4 hover:decoration-ink"
           >
-            Choose how you want to start
+            Tell us who you are
           </Link>
         </>
       }

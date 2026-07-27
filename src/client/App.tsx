@@ -16,6 +16,7 @@ import { OwnerSignupPage } from '@/pages/OwnerSignupPage';
 import { PeoplePage } from '@/pages/PeoplePage';
 import { ProfilePage } from '@/pages/ProfilePage';
 import { SignInPage } from '@/pages/SignInPage';
+import { StartPage } from '@/pages/StartPage';
 import { WorkPage } from '@/pages/WorkPage';
 import { WorkerJoinPage } from '@/pages/WorkerJoinPage';
 import { AuthProvider, useAuth } from '@/providers/AuthProvider';
@@ -55,6 +56,7 @@ export function App() {
         <RealtimeProvider>
           <Routes>
             <Route path="/" element={<LandingPage />} />
+            <Route path="/start" element={<StartPage />} />
             <Route path="/signin" element={<SignInPage />} />
             <Route path="/signup/owner" element={<OwnerSignupPage />} />
             <Route path="/join" element={<WorkerJoinPage />} />
