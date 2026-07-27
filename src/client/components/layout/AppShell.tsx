@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { useState, type ReactNode } from 'react';
-import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { NotificationCenter } from './NotificationCenter';
 import { LogoMark } from '@/components/Logo';
 import {
@@ -98,9 +98,16 @@ export function AppShell() {
         </span>
 
         {/* Mark only — the company name below is the label that matters here,
-            and the product name does not need repeating on every screen. */}
+            and the product name does not need repeating on every screen. The
+            mark goes back out to the public page, the way a masthead does. */}
         <div className="flex flex-col items-center">
-          <LogoMark className="h-6 w-6 text-ink" title="Atlas" />
+          <Link
+            to="/"
+            aria-label="Atlas home"
+            className="rounded-sm text-ink transition-colors duration-150 ease-draft hover:text-ink-3"
+          >
+            <LogoMark className="h-6 w-6" />
+          </Link>
           <p className="edge-sm mt-2.5 max-w-full truncate text-center" title={session.company.name}>
             {session.company.name}
           </p>

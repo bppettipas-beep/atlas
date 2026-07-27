@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion';
 import type { ReactNode } from 'react';
-import { Link, Navigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import {
   Activity,
   ArrowRight,
@@ -177,7 +177,11 @@ export function LandingPage() {
   const { session, loading } = useAuth();
 
   if (loading) return <LoadingState className="h-screen" label="Loading Atlas" />;
-  if (session) return <Navigate to="/app" replace />;
+
+  // Signed-in people are deliberately *not* redirected away. This is the page
+  // the mark in their sidebar links back to, and bouncing them to /app would
+  // make that link look broken. They get a way back in instead.
+  const signedIn = Boolean(session);
 
   return (
     <div className="min-h-full bg-paper">
@@ -186,19 +190,33 @@ export function LandingPage() {
         <div className="mx-auto flex w-full max-w-[1120px] items-center justify-between px-5 py-3 sm:px-10">
           <Logo markClassName="h-[25px] w-[25px]" wordClassName="text-[15px]" />
 
+          {/* Signed in, this is the way back to your company. Signed out, it is
+              the way in. Only one of the two is ever true. */}
           <nav className="flex items-center gap-2 sm:gap-4" aria-label="Account">
-            <Link
-              to="/signin"
-              className="px-2 py-1.5 text-[13px] font-medium text-ink-2 transition-colors hover:text-ink"
-            >
-              Sign in
-            </Link>
-            <Link
-              to="/start"
-              className="inline-flex h-8 items-center gap-1.5 rounded-sm bg-ink px-3.5 text-[13px] font-medium text-white transition-colors duration-150 ease-draft hover:bg-ink-2"
-            >
-              Sign up
-            </Link>
+            {signedIn ? (
+              <Link
+                to="/app"
+                className="group inline-flex h-8 items-center gap-2 rounded-sm bg-ink px-3.5 text-[13px] font-medium text-white transition-colors duration-150 ease-draft hover:bg-ink-2"
+              >
+                Open panel
+                <ArrowRight className="text-[13px] transition-transform duration-300 ease-draft group-hover:translate-x-0.5" />
+              </Link>
+            ) : (
+              <>
+                <Link
+                  to="/signin"
+                  className="px-2 py-1.5 text-[13px] font-medium text-ink-2 transition-colors hover:text-ink"
+                >
+                  Sign in
+                </Link>
+                <Link
+                  to="/start"
+                  className="inline-flex h-8 items-center gap-1.5 rounded-sm bg-ink px-3.5 text-[13px] font-medium text-white transition-colors duration-150 ease-draft hover:bg-ink-2"
+                >
+                  Sign up
+                </Link>
+              </>
+            )}
           </nav>
         </div>
       </header>
@@ -234,18 +252,20 @@ export function LandingPage() {
 
             <div className="mt-11 flex flex-wrap items-center gap-3">
               <Link
-                to="/start"
+                to={signedIn ? '/app' : '/start'}
                 className="group inline-flex h-11 items-center gap-2.5 rounded-sm bg-ink px-5 text-[14px] font-medium text-white transition-colors duration-150 ease-draft hover:bg-ink-2"
               >
-                Set up your company
+                {signedIn ? 'Open your panel' : 'Set up your company'}
                 <ArrowRight className="text-[14px] transition-transform duration-300 ease-draft group-hover:translate-x-1" />
               </Link>
-              <Link
-                to="/join"
-                className="inline-flex h-11 items-center rounded-sm border border-edge bg-sheet px-5 text-[14px] font-medium text-ink transition-colors duration-150 ease-draft hover:border-edgeStrong hover:bg-paper"
-              >
-                I have an invitation code
-              </Link>
+              {!signedIn && (
+                <Link
+                  to="/join"
+                  className="inline-flex h-11 items-center rounded-sm border border-edge bg-sheet px-5 text-[14px] font-medium text-ink transition-colors duration-150 ease-draft hover:border-edgeStrong hover:bg-paper"
+                >
+                  I have an invitation code
+                </Link>
+              )}
             </div>
 
             <p className="edge-sm mt-6 text-ink-4">
@@ -402,22 +422,26 @@ export function LandingPage() {
             Stop being the only person who knows.
           </h2>
           <p className="mx-auto mt-5 max-w-[46ch] text-[15px] leading-relaxed text-ink-2">
-            Set up your company, invite your first worker, and see the map draw itself.
+            {signedIn
+              ? 'Your company is already running. Pick up where you left off.'
+              : 'Set up your company, invite your first worker, and see the map draw itself.'}
           </p>
           <div className="mt-9 flex flex-wrap items-center justify-center gap-3">
             <Link
-              to="/start"
+              to={signedIn ? '/app' : '/start'}
               className="group inline-flex h-11 items-center gap-2.5 rounded-sm bg-ink px-5 text-[14px] font-medium text-white transition-colors duration-150 ease-draft hover:bg-ink-2"
             >
-              Get started
+              {signedIn ? 'Open your panel' : 'Get started'}
               <ArrowRight className="text-[14px] transition-transform duration-300 ease-draft group-hover:translate-x-1" />
             </Link>
-            <Link
-              to="/signin"
-              className="inline-flex h-11 items-center rounded-sm border border-edge bg-sheet px-5 text-[14px] font-medium text-ink transition-colors duration-150 ease-draft hover:border-edgeStrong hover:bg-paper"
-            >
-              Sign in
-            </Link>
+            {!signedIn && (
+              <Link
+                to="/signin"
+                className="inline-flex h-11 items-center rounded-sm border border-edge bg-sheet px-5 text-[14px] font-medium text-ink transition-colors duration-150 ease-draft hover:border-edgeStrong hover:bg-paper"
+              >
+                Sign in
+              </Link>
+            )}
           </div>
         </section>
 
