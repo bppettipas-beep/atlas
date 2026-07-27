@@ -337,7 +337,10 @@ export function AtlasyPanel({ open, onClose }: { open: boolean; onClose: () => v
               }}
               placeholder="Ask Atlasy to do something, or type /"
               aria-label="Message Atlasy"
-              className="resize-none text-[13.5px]"
+              // iOS Safari zooms the page when a focused input is smaller than
+              // 16px. Keep Atlas's compact desktop type, but meet that mobile
+              // threshold so opening Atlasy never changes the browser zoom.
+              className="resize-none text-[13.5px] max-sm:text-[16px]"
             />
             <div className="mt-2 flex items-center justify-between">
               <span className="edge-sm text-ink-4">
