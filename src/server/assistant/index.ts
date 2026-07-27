@@ -19,6 +19,14 @@ const MAX_ROUNDS = 5;
 const COMPLETION_TIMEOUT_MS = 30_000;
 /** Ceiling on one reply. See the note where it is sent. */
 const MAX_OUTPUT_TOKENS = 1_500;
+const DELETE_CONFIRMATION_TTL_MS = 10 * 60 * 1000;
+
+/** A deliberate pause between identifying work and deleting it. */
+const pendingTaskDeletes = new Map<string, { taskId: string; title: string; expiresAt: number }>();
+
+function isConfirmation(text: string) {
+  return /^(?:yes|yep|yeah|confirm|confirmed|delete it|do it|remove it)[.!\s]*$/i.test(text.trim());
+}
 
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant' | 'tool';
@@ -78,7 +86,7 @@ function systemPrompt(context: {
     '',
     'Deleting work:',
     '- Deleting removes active work from Atlas (it is archived for record-keeping). Treat this as destructive.',
-    '- For one task, find the exact task first, state its title, and ask for confirmation. Only delete after the user explicitly confirms that exact task in their next message.',
+    '- For one task, find the exact task first, then call prepare_task_deletion. Atlas will ask for confirmation and only delete after the user explicitly confirms that exact task in their next message. Never call delete_task directly.',
     '- For clearing every task, list the active tasks first and state the exact count. Ask: “This will remove all N active tasks. Do you want me to continue?” Only call clear_all_tasks when the very next user message clearly confirms all tasks. Never treat “yes” from an earlier or unrelated turn as confirmation.',
     '- If the request could mean a subset (done, unassigned, a team, or a date range), ask which set before deleting anything.',
     '',
@@ -192,6 +200,31 @@ export async function runAssistant(options: {
     throw ApiError.badRequest('Atlasy is not configured on this instance.', 'ASSISTANT_DISABLED');
   }
 
+  const latestUserMessage = [...options.history]
+    .reverse()
+    .find((message) => message.role === 'user');
+  let pending = pendingTaskDeletes.get(options.context.membershipId);
+  if (pending && pending.expiresAt <= Date.now()) {
+    pendingTaskDeletes.delete(options.context.membershipId);
+    pending = undefined;
+  }
+  if (pending && latestUserMessage?.content && isConfirmation(latestUserMessage.content)) {
+    pendingTaskDeletes.delete(options.context.membershipId);
+    const result = await runTool('delete_task', { id: pending.taskId }, options.cookie);
+    if (result.ok) {
+      return {
+        reply: `Deleted “${pending.title}”.`,
+        actions: [{ name: 'delete_task', ok: true, summary: `Removed “${pending.title}”` }],
+      };
+    }
+    return {
+      reply: 'I could not delete that task. Please try again from the task itself.',
+      actions: [
+        { name: 'delete_task', ok: false, summary: describe('delete_task', false, result.data) },
+      ],
+    };
+  }
+
   const messages: ChatMessage[] = [
     {
       role: 'system',
@@ -230,6 +263,21 @@ export async function runAssistant(options: {
       }
 
       const result = await runTool(call.function.name, args, options.cookie);
+
+      if (call.function.name === 'prepare_task_deletion' && result.ok) {
+        const task = result.data as { id?: string; title?: string };
+        if (task.id && task.title) {
+          pendingTaskDeletes.set(options.context.membershipId, {
+            taskId: task.id,
+            title: task.title,
+            expiresAt: Date.now() + DELETE_CONFIRMATION_TTL_MS,
+          });
+          return {
+            reply: `Delete “${task.title}”? Reply yes to confirm.`,
+            actions: [],
+          };
+        }
+      }
 
       // Report what changed, plus anything that failed — a refused lookup is
       // worth seeing. A successful read is not: it is how it thinks.

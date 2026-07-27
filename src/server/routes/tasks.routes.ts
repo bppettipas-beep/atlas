@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
+import type { Prisma } from '@prisma/client';
 import { ApiError, asyncHandler } from '../http/errors';
 import { parsedQuery, validateBody, validateQuery } from '../http/validate';
 import { currentAuth, requireAuth, requireRole } from '../middleware/authenticate';
@@ -157,7 +158,7 @@ tasksRouter.get(
     const query = parsedQuery<z.infer<typeof listQuerySchema>>(res);
     const now = new Date();
 
-    const scopeFilter =
+    const scopeFilter: Prisma.TaskWhereInput =
       query.scope === 'mine'
         ? { assigneeId: auth.membershipId }
         : query.scope === 'unassigned'
@@ -168,7 +169,7 @@ tasksRouter.get(
               ? { dueAt: { gte: startOfDay(now), lte: endOfDay(now) } }
               : {};
 
-    const where = {
+    const where: Prisma.TaskWhereInput = {
       companyId: auth.companyId,
       archivedAt: null,
       ...(await visibilityFilter(auth)),

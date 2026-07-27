@@ -27,6 +27,8 @@ export interface ToolDefinition {
    * showing "Looked it up" for every read is noise the user cannot act on.
    */
   mutates?: boolean;
+  /** Available to Atlasy's server flow but never offered to the language model. */
+  internal?: boolean;
 }
 
 const str = (description: string) => ({ type: 'string', description });
@@ -108,6 +110,7 @@ export const TOOLS: ToolDefinition[] = [
   {
     name: 'delete_task',
     mutates: true,
+    internal: true,
     description:
       'Archive one task so it no longer appears in Atlas. This is destructive from the user’s point of view. Only call after the user has explicitly confirmed the exact task in the immediately preceding message.',
     method: 'DELETE',
@@ -116,6 +119,18 @@ export const TOOLS: ToolDefinition[] = [
       type: 'object',
       required: ['id'],
       properties: { id: str('Task id from list_tasks. Never invent this.') },
+    },
+  },
+  {
+    name: 'prepare_task_deletion',
+    description:
+      'Prepare deletion of one task after you have found its exact id. Call this instead of delete_task; Atlas will ask the user for confirmation and only then delete that exact task.',
+    method: 'GET',
+    path: '/api/tasks/:id',
+    parameters: {
+      type: 'object',
+      required: ['id'],
+      properties: { id: str('Exact task id from list_tasks. Never invent this.') },
     },
   },
   {
@@ -346,7 +361,7 @@ export async function runTool(
 
 /** The tool list in the shape the chat completions API expects. */
 export function toolSchemas() {
-  return TOOLS.map((tool) => ({
+  return TOOLS.filter((tool) => !tool.internal).map((tool) => ({
     type: 'function' as const,
     function: { name: tool.name, description: tool.description, parameters: tool.parameters },
   }));
