@@ -285,6 +285,26 @@ export const TOOLS: ToolDefinition[] = [
     },
   },
   {
+    name: 'post_announcement',
+    mutates: true,
+    description:
+      'Post a company-wide announcement. Owners and managers only. Use this only after the user has supplied the exact announcement title and message and asked you to publish it.',
+    method: 'POST',
+    path: '/api/companies/current/announcements',
+    parameters: {
+      type: 'object',
+      required: ['title', 'body'],
+      properties: {
+        title: str('Short announcement headline.'),
+        body: str('The complete announcement message to send to the company.'),
+        pinned: {
+          type: 'boolean',
+          description: 'Keep this announcement at the top of the company feed.',
+        },
+      },
+    },
+  },
+  {
     name: 'company_overview',
     description:
       'Counts of people, teams, active tasks, overdue tasks and unassigned tasks. Good for "how are we doing" questions.',

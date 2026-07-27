@@ -45,6 +45,7 @@ const COMMANDS: SlashCommand[] = [
   { name: 'task', hint: 'Create a task', insert: 'Create a task to ' },
   { name: 'assign', hint: 'Assign work to someone', insert: 'Assign  to ' },
   { name: 'role', hint: 'Create a role', insert: 'Create a role called ' },
+  { name: 'announce', hint: 'Post a company announcement', insert: 'Post an announcement: ' },
   { name: 'fire', hint: 'Remove someone from the company', insert: 'Remove  from the company' },
   { name: 'overdue', hint: 'What is late', send: 'What is overdue right now?' },
   { name: 'who', hint: 'Who works here', send: 'Who works here, and what do they do?' },
