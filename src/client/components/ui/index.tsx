@@ -712,11 +712,18 @@ export function Menu({
   trigger,
   children,
   align = 'left',
+  side = 'bottom',
   className,
 }: {
   trigger: (props: { open: boolean; toggle: () => void }) => ReactNode;
   children: (props: { close: () => void }) => ReactNode;
   align?: 'left' | 'right';
+  /**
+   * Which way the menu opens. A trigger sitting at the bottom of the screen —
+   * the account block in the sidebar — must open upwards, or the menu lands
+   * below the viewport and looks like nothing happened.
+   */
+  side?: 'top' | 'bottom';
   className?: string;
 }) {
   const [open, setOpen] = useState(false);
@@ -744,12 +751,13 @@ export function Menu({
       <AnimatePresence>
         {open && (
           <motion.div
-            initial={{ opacity: 0, y: -3 }}
+            initial={{ opacity: 0, y: side === 'top' ? 3 : -3 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -3 }}
+            exit={{ opacity: 0, y: side === 'top' ? 3 : -3 }}
             transition={{ duration: 0.14, ease: DRAFT_EASE }}
             className={cn(
-              'absolute z-40 mt-1 min-w-[200px] border border-edge bg-sheet py-1 shadow-lift',
+              'absolute z-40 min-w-[200px] border border-edge bg-sheet py-1 shadow-lift',
+              side === 'top' ? 'bottom-full mb-1' : 'top-full mt-1',
               align === 'right' ? 'right-0' : 'left-0',
             )}
           >

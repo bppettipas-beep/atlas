@@ -155,6 +155,7 @@ export function AppShell() {
       <div className="border-t border-rule p-2">
         <Menu
           align="left"
+          side="top"
           trigger={({ toggle, open }) => (
             <button
               type="button"
