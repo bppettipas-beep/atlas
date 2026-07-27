@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion';
-import { Bell, Checks, Tray } from '@/components/icons';
+import { Bell, Checks, Trash, Tray } from '@/components/icons';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button, EmptyState } from '@/components/ui';
@@ -29,8 +29,16 @@ export function NotificationCenter() {
   const { notifications, unread, setNotifications, markAllRead } = useRealtime();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [filter, setFilter] = useState<'all' | 'unread'>('all');
+  const [clearing, setClearing] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
+
+  // Filtered here rather than refetched with unreadOnly: the socket keeps this
+  // list current, and a round trip to hide rows already on screen would make
+  // the tab feel slower than the thing it is filtering.
+  const visible = filter === 'unread' ? notifications.filter((item) => !item.readAt) : notifications;
+  const readCount = notifications.length - notifications.filter((item) => !item.readAt).length;
 
   useEffect(() => {
     if (!open) return;
@@ -74,6 +82,21 @@ export function NotificationCenter() {
     await api.post('/notifications/read', {}).catch(() => undefined);
   };
 
+  const handleClearRead = async () => {
+    setClearing(true);
+    try {
+      await api.delete('/notifications');
+      const result = await api.get<{ items: NotificationDto[]; unread: number }>('/notifications', {
+        limit: 30,
+      });
+      setNotifications(result.items, result.unread);
+    } catch {
+      /* nothing was deleted, so the list on screen is still the truth */
+    } finally {
+      setClearing(false);
+    }
+  };
+
   return (
     <div ref={containerRef} className="relative">
       <button
@@ -107,31 +130,64 @@ export function NotificationCenter() {
             transition={{ duration: 0.15 }}
             className="absolute right-0 z-50 mt-2 flex max-h-[70vh] w-[min(22rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-sm border border-rule bg-sheet shadow-panel"
           >
-            <header className="flex items-center justify-between border-b border-rule px-3.5 py-2.5">
-              <h2 className="text-[13px] font-semibold text-ink">Notifications</h2>
-              {unread > 0 && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleMarkAll}
-                  icon={<Checks className="h-3.5 w-3.5" />}
-                >
-                  Mark all read
-                </Button>
-              )}
+            <header className="border-b border-rule px-3.5 py-2.5">
+              <div className="flex items-center justify-between">
+                <h2 className="text-[13px] font-semibold text-ink">Notifications</h2>
+                {unread > 0 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleMarkAll}
+                    icon={<Checks className="h-3.5 w-3.5" />}
+                  >
+                    Mark all read
+                  </Button>
+                )}
+              </div>
+              <div className="mt-2 flex gap-1" role="tablist" aria-label="Filter notifications">
+                {(['all', 'unread'] as const).map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    role="tab"
+                    aria-selected={filter === value}
+                    onClick={() => setFilter(value)}
+                    className={cn(
+                      'rounded-sm px-2 py-1 text-edge transition-colors',
+                      filter === value
+                        ? 'bg-ink text-sheet'
+                        : 'text-ink-3 hover:bg-paper-deep hover:text-ink',
+                    )}
+                  >
+                    {value === 'all' ? 'All' : `Unread${unread > 0 ? ` · ${unread}` : ''}`}
+                  </button>
+                ))}
+              </div>
             </header>
 
             <div className="min-h-0 flex-1 overflow-y-auto">
-              {notifications.length === 0 ? (
+              {visible.length === 0 ? (
                 <EmptyState
                   className="m-3 border-0 bg-transparent py-8"
                   icon={<Tray className="h-5 w-5" />}
-                  title={loading ? 'Loading…' : 'You are all caught up'}
-                  description={loading ? undefined : 'New assignments and mentions land here.'}
+                  title={
+                    loading
+                      ? 'Loading…'
+                      : filter === 'unread'
+                        ? 'Nothing unread'
+                        : 'You are all caught up'
+                  }
+                  description={
+                    loading
+                      ? undefined
+                      : filter === 'unread'
+                        ? 'Everything here has been read.'
+                        : 'New assignments and mentions land here.'
+                  }
                 />
               ) : (
                 <ul className="divide-y divide-rule">
-                  {notifications.map((notification) => (
+                  {visible.map((notification) => (
                     <li key={notification.id}>
                       <button
                         type="button"
@@ -166,6 +222,20 @@ export function NotificationCenter() {
                 </ul>
               )}
             </div>
+
+            {readCount > 0 && (
+              <footer className="border-t border-rule px-3.5 py-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => void handleClearRead()}
+                  disabled={clearing}
+                  icon={<Trash className="h-3.5 w-3.5" />}
+                >
+                  {clearing ? 'Clearing…' : `Clear ${readCount} read`}
+                </Button>
+              </footer>
+            )}
           </motion.div>
         )}
       </AnimatePresence>

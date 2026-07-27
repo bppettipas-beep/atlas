@@ -1050,3 +1050,166 @@ describe('Google sign-in', () => {
     expect(JSON.stringify(owner.session)).not.toContain('$2b$');
   });
 });
+
+/* ========================================================================== */
+/*  Notifications                                                             */
+/* ========================================================================== */
+
+describe('notifications', () => {
+  interface Inbox {
+    items: { id: string; type: string; title: string; readAt: string | null }[];
+    unread: number;
+  }
+
+  const inbox = async (client: Client): Promise<Inbox> => {
+    const response = await client.agent.get('/api/notifications').expect(200);
+    return response.body as Inbox;
+  };
+
+  const types = (box: Inbox) => box.items.map((item) => item.type);
+
+  /**
+   * An owner and a worker in the same company — the minimum for anything to be
+   * notified at all. The owner's inbox is emptied afterwards so each test
+   * counts only what it caused, not the join that set it up.
+   */
+  async function companyOfTwo() {
+    const owner = await signUpOwner(app);
+    const code = await createInviteCode(owner);
+    const joined = await joinWithCode(app, code);
+    const worker: Client = {
+      agent: joined.agent,
+      session: joined.response.body as Client['session'],
+    };
+    await owner.agent.post('/api/notifications/read').send({});
+    await owner.agent.delete('/api/notifications');
+    return { owner, worker };
+  }
+
+  it('notifies nobody in a company of one, because you are always the actor', async () => {
+    const owner = await signUpOwner(app);
+    await owner.agent
+      .post('/api/tasks')
+      .send({ title: 'Order more blue roll', assigneeId: owner.session.membership.id })
+      .expect(201);
+
+    // This is the whole reason the bell looks broken to a sole trader. It is
+    // the self-action rule doing its job, not an absence of wiring.
+    const box = await inbox(owner);
+    expect(box.items).toHaveLength(0);
+    expect(box.unread).toBe(0);
+  });
+
+  it('tells the owner when somebody joins the company', async () => {
+    const owner = await signUpOwner(app);
+    const code = await createInviteCode(owner);
+    await joinWithCode(app, code);
+
+    expect(types(await inbox(owner))).toContain('MEMBER_JOINED');
+  });
+
+  it('tells the owner when somebody else creates work', async () => {
+    const { owner, worker } = await companyOfTwo();
+
+    await worker.agent.post('/api/tasks').send({ title: 'Restock the van' }).expect(201);
+
+    const box = await inbox(owner);
+    expect(types(box)).toContain('TASK_CREATED');
+    expect(box.items[0].title).toBe('New task: Restock the van');
+    expect(box.unread).toBe(1);
+  });
+
+  it('tells the owner when somebody else finishes work, without telling them twice', async () => {
+    const { owner, worker } = await companyOfTwo();
+
+    const task = await worker.agent
+      .post('/api/tasks')
+      .send({ title: 'Sweep the yard', assigneeId: worker.session.membership.id })
+      .expect(201);
+    await worker.agent
+      .patch(`/api/tasks/${task.body.id}/status`)
+      .send({ status: 'DONE' })
+      .expect(200);
+
+    const box = await inbox(owner);
+    // The worker is both assignee and creator; neither role should produce a
+    // duplicate of the leadership notification.
+    expect(types(box).filter((type) => type === 'TASK_COMPLETED')).toHaveLength(1);
+  });
+
+  it('never writes a notification to a placeholder, who has no way to read it', async () => {
+    const owner = await signUpOwner(app);
+    const person = await owner.agent.post('/api/people').send({ fullName: 'Stand In' }).expect(201);
+
+    await owner.agent
+      .post('/api/tasks')
+      .send({ title: 'Assigned to nobody real', assigneeId: person.body.id })
+      .expect(201);
+
+    const rows = await prisma.notification.count({ where: { recipientId: person.body.id } });
+    expect(rows).toBe(0);
+  });
+
+  it('tells somebody when they are given a role, and does not echo it to whoever gave it', async () => {
+    const { owner, worker } = await companyOfTwo();
+    const role = await owner.agent.post('/api/roles').send({ name: 'Lead Technician' }).expect(201);
+
+    await owner.agent
+      .patch(`/api/people/${worker.session.membership.id}/assigned-role`)
+      .send({ roleId: role.body.id })
+      .expect(200);
+
+    const box = await inbox(worker);
+    expect(types(box)).toContain('ROLE_ASSIGNED');
+    expect(box.items[0].title).toBe('You are now Lead Technician');
+
+    expect(types(await inbox(owner))).not.toContain('ROLE_ASSIGNED');
+  });
+
+  it('lets an owner switch the company feed off without losing their own work', async () => {
+    const { owner, worker } = await companyOfTwo();
+
+    await owner.agent
+      .patch('/api/notifications/preferences')
+      .send({ companyActivity: false })
+      .expect(200);
+
+    // Unassigned, so the only reason the owner would hear about it is the feed.
+    await worker.agent.post('/api/tasks').send({ title: 'Nobody assigned' }).expect(201);
+
+    // A task the owner created, commented on by somebody else. That is their
+    // own work, and no feed switch should be able to silence it.
+    const task = await owner.agent
+      .post('/api/tasks')
+      .send({ title: 'For the boss', assigneeId: worker.session.membership.id })
+      .expect(201);
+    await worker.agent
+      .post(`/api/tasks/${task.body.id}/comments`)
+      .send({ body: 'Started this one.' })
+      .expect(201);
+
+    const box = await inbox(owner);
+    expect(types(box)).not.toContain('TASK_CREATED');
+    expect(types(box)).toContain('TASK_COMMENTED');
+  });
+
+  it('clears read notifications and leaves the unread ones alone', async () => {
+    const { owner, worker } = await companyOfTwo();
+    await worker.agent.post('/api/tasks').send({ title: 'First' }).expect(201);
+    await worker.agent.post('/api/tasks').send({ title: 'Second' }).expect(201);
+
+    const before = await inbox(owner);
+    expect(before.items).toHaveLength(2);
+
+    await owner.agent
+      .post('/api/notifications/read')
+      .send({ ids: [before.items[0].id] })
+      .expect(200);
+    await owner.agent.delete('/api/notifications').expect(200);
+
+    const after = await inbox(owner);
+    expect(after.items).toHaveLength(1);
+    expect(after.items[0].id).toBe(before.items[1].id);
+    expect(after.unread).toBe(1);
+  });
+});

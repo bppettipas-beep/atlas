@@ -12,6 +12,31 @@ export const notificationsRouter = Router();
 
 notificationsRouter.use(requireAuth);
 
+interface PreferenceShape {
+  taskAssigned: boolean;
+  mentions: boolean;
+  teamChanges: boolean;
+  knowledgeUpdates: boolean;
+  dueDateChanges: boolean;
+  announcements: boolean;
+  taskComments: boolean;
+  companyActivity: boolean;
+}
+
+/** The switches, and only the switches — never the row id or membership id. */
+function toPreferences(row: PreferenceShape): PreferenceShape {
+  return {
+    taskAssigned: row.taskAssigned,
+    mentions: row.mentions,
+    teamChanges: row.teamChanges,
+    knowledgeUpdates: row.knowledgeUpdates,
+    dueDateChanges: row.dueDateChanges,
+    announcements: row.announcements,
+    taskComments: row.taskComments,
+    companyActivity: row.companyActivity,
+  };
+}
+
 notificationsRouter.get(
   '/',
   validateQuery(
@@ -80,14 +105,7 @@ notificationsRouter.get(
   asyncHandler(async (req, res) => {
     const auth = currentAuth(req);
     const preference = await ensureNotificationPreference(auth.membershipId);
-    res.json({
-      taskAssigned: preference.taskAssigned,
-      mentions: preference.mentions,
-      teamChanges: preference.teamChanges,
-      knowledgeUpdates: preference.knowledgeUpdates,
-      dueDateChanges: preference.dueDateChanges,
-      announcements: preference.announcements,
-    });
+    res.json(toPreferences(preference));
   }),
 );
 
@@ -101,6 +119,8 @@ notificationsRouter.patch(
       knowledgeUpdates: z.boolean().optional(),
       dueDateChanges: z.boolean().optional(),
       announcements: z.boolean().optional(),
+      taskComments: z.boolean().optional(),
+      companyActivity: z.boolean().optional(),
     }),
   ),
   asyncHandler(async (req, res) => {
@@ -110,13 +130,6 @@ notificationsRouter.patch(
       where: { membershipId: auth.membershipId },
       data: req.body as Record<string, boolean>,
     });
-    res.json({
-      taskAssigned: preference.taskAssigned,
-      mentions: preference.mentions,
-      teamChanges: preference.teamChanges,
-      knowledgeUpdates: preference.knowledgeUpdates,
-      dueDateChanges: preference.dueDateChanges,
-      announcements: preference.announcements,
-    });
+    res.json(toPreferences(preference));
   }),
 );

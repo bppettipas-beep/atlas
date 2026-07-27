@@ -8,7 +8,7 @@ import { daysAgo, endOfDay, startOfDay } from '../lib/dates';
 import { prisma } from '../prisma';
 import { emitToCompany } from '../realtime/io';
 import { recordActivity } from '../services/activity';
-import { notify } from '../services/notifications';
+import { notify, notifyLeadership } from '../services/notifications';
 import { broadcastOrganizationChange, ensureOrganizationNodes } from '../services/organization';
 import { canManagePerson, canViewPrivateNotes, isLeadership } from '../services/permissions';
 import {
@@ -590,14 +590,42 @@ peopleRouter.patch(
       throw ApiError.forbidden('You cannot change that person’s role.');
     }
 
+    let roleName: string | null = null;
     if (roleId) {
       const role = await prisma.role.findFirst({
         where: { id: roleId, companyId: auth.companyId },
       });
       if (!role) throw ApiError.notFound('That role does not exist.', 'ROLE_NOT_FOUND');
+      roleName = role.name;
     }
 
     await prisma.membership.update({ where: { id: membership.id }, data: { roleId } });
+
+    // Being given a role without being told is how people end up with a title
+    // they discover weeks later on the org map.
+    await notify({
+      companyId: auth.companyId,
+      recipientId: membership.id,
+      actorId: auth.membershipId,
+      type: 'ROLE_ASSIGNED',
+      title: roleName ? `You are now ${roleName}` : 'Your role was cleared',
+      body: `${auth.fullName} made the change.`,
+      entityType: 'person',
+      entityId: membership.id,
+    });
+
+    await notifyLeadership({
+      companyId: auth.companyId,
+      actorId: auth.membershipId,
+      except: [membership.id],
+      type: 'ROLE_ASSIGNED',
+      title: roleName
+        ? `${membership.user.fullName} is now ${roleName}`
+        : `${membership.user.fullName} no longer has a role`,
+      body: `${auth.fullName} made the change.`,
+      entityType: 'person',
+      entityId: membership.id,
+    });
 
     emitToCompany(auth.companyId, 'people:updated', { membershipId: membership.id });
     emitToCompany(auth.companyId, 'roles:updated', {});
@@ -810,6 +838,14 @@ peopleRouter.delete(
         visibility: 'MANAGERS',
       });
 
+      await notifyLeadership({
+        companyId: auth.companyId,
+        actorId: auth.membershipId,
+        type: 'MEMBER_LEFT',
+        title: `${membership.user.fullName} was removed`,
+        body: `${auth.fullName} removed them from the company.`,
+      });
+
       await ensureOrganizationNodes(auth.companyId);
       broadcastOrganizationChange(auth.companyId);
       emitToCompany(auth.companyId, 'people:updated', {});
@@ -843,6 +879,19 @@ peopleRouter.delete(
       actorId: auth.membershipId,
       targetId: membership.id,
       visibility: 'MANAGERS',
+    });
+
+    // The removed person is deliberately not told here: they have already lost
+    // their session, so the notification would be written to an inbox they can
+    // no longer open. notify() would drop it anyway now the membership is
+    // suspended, and being told in the app is the wrong way to hear this.
+    await notifyLeadership({
+      companyId: auth.companyId,
+      actorId: auth.membershipId,
+      except: [membership.id],
+      type: 'MEMBER_LEFT',
+      title: `${membership.user.fullName} was removed`,
+      body: `${auth.fullName} removed them from the company.`,
     });
 
     broadcastOrganizationChange(auth.companyId);

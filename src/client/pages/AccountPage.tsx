@@ -25,15 +25,28 @@ interface Preferences {
   knowledgeUpdates: boolean;
   dueDateChanges: boolean;
   announcements: boolean;
+  taskComments: boolean;
+  companyActivity: boolean;
 }
 
-const PREFERENCE_COPY: { key: keyof Preferences; label: string; description: string }[] = [
+const PREFERENCE_COPY: {
+  key: keyof Preferences;
+  label: string;
+  description: string;
+  /** Hidden from workers, who are never sent this kind of notification. */
+  leadershipOnly?: boolean;
+}[] = [
   {
     key: 'taskAssigned',
     label: 'Work assigned to me',
     description: 'When somebody puts a task on your plate.',
   },
   { key: 'mentions', label: 'Mentions', description: 'When somebody @mentions you in a comment.' },
+  {
+    key: 'taskComments',
+    label: 'Comments on my work',
+    description: 'When somebody comments on a task you were given or created.',
+  },
   {
     key: 'dueDateChanges',
     label: 'Deadline changes',
@@ -53,6 +66,13 @@ const PREFERENCE_COPY: { key: keyof Preferences; label: string; description: str
     key: 'announcements',
     label: 'Announcements',
     description: 'Company-wide messages from your owner or manager.',
+  },
+  {
+    key: 'companyActivity',
+    label: 'Everything happening in the company',
+    description:
+      'Tasks created and finished, and people joining or leaving — including work you are not part of.',
+    leadershipOnly: true,
   },
 ];
 
@@ -179,7 +199,9 @@ export function AccountPage() {
           />
           {prefs ? (
             <div>
-              {PREFERENCE_COPY.map((item) => (
+              {PREFERENCE_COPY.filter(
+                (item) => !item.leadershipOnly || session.membership.role !== 'WORKER',
+              ).map((item) => (
                 <Toggle
                   key={item.key}
                   checked={prefs[item.key]}

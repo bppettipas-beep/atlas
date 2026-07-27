@@ -15,7 +15,24 @@ export interface CreateNotificationInput {
   taskId?: string | null;
 }
 
-/** Maps a notification type onto the user's preference switch. */
+interface PreferenceRow {
+  taskAssigned: boolean;
+  mentions: boolean;
+  teamChanges: boolean;
+  knowledgeUpdates: boolean;
+  dueDateChanges: boolean;
+  announcements: boolean;
+  taskComments: boolean;
+  companyActivity: boolean;
+}
+
+/**
+ * Maps a notification type onto the switch that silences it.
+ *
+ * `null` means the type cannot be turned off. Those are the ones where being
+ * uninformed causes a problem for somebody else — work that has gone overdue or
+ * blocked, or a task that came back rejected.
+ */
 const PREFERENCE_FOR_TYPE: Record<NotificationType, keyof PreferenceRow | null> = {
   TASK_ASSIGNED: 'taskAssigned',
   TASK_MENTIONED: 'mentions',
@@ -24,36 +41,41 @@ const PREFERENCE_FOR_TYPE: Record<NotificationType, keyof PreferenceRow | null> 
   TASK_OVERDUE: null,
   TASK_BLOCKED: null,
   TASK_APPROVED: null,
+  TASK_CREATED: 'companyActivity',
+  TASK_COMPLETED: 'companyActivity',
+  TASK_COMMENTED: 'taskComments',
   TEAM_ADDED: 'teamChanges',
   MEMBER_JOINED: 'teamChanges',
+  MEMBER_LEFT: 'companyActivity',
+  ROLE_ASSIGNED: 'teamChanges',
   DOCUMENT_PUBLISHED: 'knowledgeUpdates',
   DOCUMENT_ACK_REQUESTED: 'knowledgeUpdates',
   ANNOUNCEMENT: 'announcements',
 };
 
-interface PreferenceRow {
-  taskAssigned: boolean;
-  mentions: boolean;
-  teamChanges: boolean;
-  knowledgeUpdates: boolean;
-  dueDateChanges: boolean;
-  announcements: boolean;
-}
-
-async function isMuted(recipientId: string, type: NotificationType): Promise<boolean> {
-  const key = PREFERENCE_FOR_TYPE[type];
-  if (!key) return false;
-  const preference = await prisma.notificationPreference.findUnique({
-    where: { membershipId: recipientId },
-  });
-  if (!preference) return false;
-  return preference[key] === false;
-}
-
 export async function notify(input: CreateNotificationInput) {
-  // Never notify people about their own actions.
+  // Nobody needs telling about their own actions. This is also why a company
+  // with one person in it sees no notifications at all: they are the actor
+  // every time. It is correct, and it is not a sign the system is asleep.
   if (input.actorId && input.actorId === input.recipientId) return null;
-  if (await isMuted(input.recipientId, input.type)) return null;
+
+  const recipient = await prisma.membership.findUnique({
+    where: { id: input.recipientId },
+    select: {
+      isPlaceholder: true,
+      status: true,
+      deactivatedAt: true,
+      notificationPreference: true,
+    },
+  });
+
+  // A placeholder has no login, so a notification for one is a row nobody will
+  // ever read. Someone who has left should not accrue them either.
+  if (!recipient || recipient.isPlaceholder) return null;
+  if (recipient.status !== 'ACTIVE' || recipient.deactivatedAt) return null;
+
+  const key = PREFERENCE_FOR_TYPE[input.type];
+  if (key && recipient.notificationPreference?.[key] === false) return null;
 
   const notification = await prisma.notification.create({
     data: {
@@ -79,6 +101,44 @@ export async function notifyMany(inputs: CreateNotificationInput[]) {
     results.push(await notify(input));
   }
   return results;
+}
+
+export interface LeadershipNotificationInput extends Omit<CreateNotificationInput, 'recipientId'> {
+  /** Owners only. Defaults to false, which includes managers. */
+  ownersOnly?: boolean;
+  /** People already told directly, so they do not get the same thing twice. */
+  except?: (string | null | undefined)[];
+}
+
+/**
+ * Tells the people who run the company that something happened in it.
+ *
+ * This is the answer to "the owner should know when anything happens": the
+ * per-person notifications above only reach whoever the work belongs to, so
+ * without this an owner hears nothing about a company they are responsible for.
+ * The actor is always excluded, so it reads as a feed of other people's work
+ * rather than an echo of your own.
+ */
+export async function notifyLeadership(input: LeadershipNotificationInput) {
+  const leaders = await prisma.membership.findMany({
+    where: {
+      companyId: input.companyId,
+      status: 'ACTIVE',
+      deactivatedAt: null,
+      isPlaceholder: false,
+      role: input.ownersOnly ? 'OWNER' : { in: ['OWNER', 'MANAGER'] },
+    },
+    select: { id: true },
+  });
+
+  const skip = new Set(
+    [...(input.except ?? []), input.actorId].filter((id): id is string => Boolean(id)),
+  );
+
+  const { ownersOnly: _ownersOnly, except: _except, ...rest } = input;
+  return notifyMany(
+    leaders.filter((leader) => !skip.has(leader.id)).map((leader) => ({ ...rest, recipientId: leader.id })),
+  );
 }
 
 /** Ensures a preference row exists so the settings screen always has values. */

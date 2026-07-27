@@ -104,8 +104,13 @@ enum NotificationType {
   TASK_OVERDUE
   TASK_BLOCKED
   TASK_APPROVED
+  TASK_CREATED
+  TASK_COMPLETED
+  TASK_COMMENTED
   TEAM_ADDED
   MEMBER_JOINED
+  MEMBER_LEFT
+  ROLE_ASSIGNED
   DOCUMENT_PUBLISHED
   DOCUMENT_ACK_REQUESTED
   ANNOUNCEMENT
@@ -800,6 +805,11 @@ model NotificationPreference {
   knowledgeUpdates  Boolean    @default(true)
   dueDateChanges    Boolean    @default(true)
   announcements     Boolean    @default(true)
+  taskComments      Boolean    @default(true)
+  // The owner's view of everything happening in the company they did not do
+  // themselves. Only owners and managers are ever sent these, so the switch is
+  // inert for a worker rather than needing a separate shape.
+  companyActivity   Boolean    @default(true)
   updatedAt         DateTime   @updatedAt
 
   membership Membership @relation(fields: [membershipId], references: [id], onDelete: Cascade)

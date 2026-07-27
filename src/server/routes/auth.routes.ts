@@ -35,7 +35,7 @@ import { currentAuth, requireAuth } from '../middleware/authenticate';
 import { prisma } from '../prisma';
 import { uniqueSlug } from '../lib/ids';
 import { recordActivity } from '../services/activity';
-import { ensureNotificationPreference, notify } from '../services/notifications';
+import { ensureNotificationPreference, notify, notifyLeadership } from '../services/notifications';
 import { ensureOrganizationNodes, broadcastOrganizationChange } from '../services/organization';
 import { serializeCompany } from '../services/serializers';
 import { emitToCompany } from '../realtime/io';
@@ -873,6 +873,20 @@ authRouter.post(
           'or your company would be left with nobody who can administer it.',
         'LAST_OWNER',
       );
+    }
+
+    // Told before the delete, while the membership still exists to be excluded
+    // from the fan-out. Companies about to be deleted are skipped — there is
+    // nobody left in them to tell.
+    for (const membership of user.memberships) {
+      if (companiesToDelete.includes(membership.companyId)) continue;
+      await notifyLeadership({
+        companyId: membership.companyId,
+        except: [membership.id],
+        type: 'MEMBER_LEFT',
+        title: `${user.fullName} left`,
+        body: 'They deleted their Atlas account.',
+      });
     }
 
     await prisma.$transaction(async (tx) => {

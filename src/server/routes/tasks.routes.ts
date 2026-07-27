@@ -8,7 +8,7 @@ import { upload } from '../lib/uploads';
 import { prisma } from '../prisma';
 import { emitToCompany } from '../realtime/io';
 import { recordActivity } from '../services/activity';
-import { notify } from '../services/notifications';
+import { notify, notifyLeadership } from '../services/notifications';
 import { canEditTask, canViewTask, isLeadership, managedTeamIds } from '../services/permissions';
 import { computeNextRun, escalateTask } from '../services/taskAutomation';
 import {
@@ -303,6 +303,23 @@ tasksRouter.post(
       });
     }
 
+    // The people running the company see the work appear. The assignee is
+    // excluded because they were just told directly, and the creator because
+    // notifyLeadership never reports your own actions back to you.
+    await notifyLeadership({
+      companyId: auth.companyId,
+      actorId: auth.membershipId,
+      except: [task.assigneeId],
+      type: 'TASK_CREATED',
+      title: `New task: ${task.title}`,
+      body: task.assigneeId
+        ? `${auth.fullName} created this.`
+        : `${auth.fullName} created this and left it unassigned.`,
+      entityType: 'task',
+      entityId: task.id,
+      taskId: task.id,
+    });
+
     emitToCompany(auth.companyId, 'task:created', { taskId: task.id });
     res.status(201).json(await toDetail(task, auth));
   }),
@@ -513,28 +530,31 @@ tasksRouter.patch(
     }
 
     if (nextStatus === 'AWAITING_REVIEW') {
-      const reviewers = await prisma.membership.findMany({
-        where: {
-          companyId: auth.companyId,
-          role: { in: ['OWNER', 'MANAGER'] },
-          deactivatedAt: null,
-          id: { not: auth.membershipId },
-        },
-        select: { id: true },
+      await notifyLeadership({
+        companyId: auth.companyId,
+        actorId: auth.membershipId,
+        type: 'TASK_STATUS_CHANGED',
+        title: `Ready for review: ${task.title}`,
+        body: `${auth.fullName} finished this and is waiting for approval.`,
+        entityType: 'task',
+        entityId: task.id,
+        taskId: task.id,
       });
-      for (const reviewer of reviewers) {
-        await notify({
-          companyId: auth.companyId,
-          recipientId: reviewer.id,
-          actorId: auth.membershipId,
-          type: 'TASK_STATUS_CHANGED',
-          title: `Ready for review: ${task.title}`,
-          body: `${auth.fullName} finished this and is waiting for approval.`,
-          entityType: 'task',
-          entityId: task.id,
-          taskId: task.id,
-        });
-      }
+    }
+
+    if (nextStatus === 'DONE') {
+      await notifyLeadership({
+        companyId: auth.companyId,
+        actorId: auth.membershipId,
+        // Both were told by the loop above, which covers the work's own people.
+        except: [task.assigneeId, task.createdById],
+        type: 'TASK_COMPLETED',
+        title: `Done: ${task.title}`,
+        body: `${auth.fullName} marked this finished.`,
+        entityType: 'task',
+        entityId: task.id,
+        taskId: task.id,
+      });
     }
 
     emitToCompany(auth.companyId, 'task:updated', { taskId: task.id });
@@ -756,7 +776,10 @@ tasksRouter.post(
         companyId: auth.companyId,
         recipientId,
         actorId: auth.membershipId,
-        type: 'TASK_STATUS_CHANGED',
+        // Was TASK_STATUS_CHANGED, which is not what happened and made the
+        // "comments" preference impossible to honour: silencing comments would
+        // have silenced genuine status changes with it.
+        type: 'TASK_COMMENTED',
         title: `New comment on ${task.title}`,
         body: input.body.slice(0, 160),
         entityType: 'task',
