@@ -83,25 +83,28 @@ export function AppShell() {
   const sidebar = (
     <div className="flex h-full flex-col bg-sheet">
       {/* ---------------------------- title block --------------------------- */}
-      <div className="border-b border-rule px-4 py-3.5">
-        <div className="flex items-center gap-2.5">
-          {/* Mark only — the company name below is the label that matters here,
-              and the product name does not need repeating on every screen. */}
+      <div className="relative border-b border-rule px-4 py-4">
+        {/* The connection light sits in the corner rather than in the stack, so
+            it cannot pull the centred mark and company name off axis. */}
+        <span
+          title={connected ? 'Live updates connected' : 'Reconnecting'}
+          className={cn(
+            'absolute right-3 top-3 h-[6px] w-[6px] transition-colors duration-300',
+            connected ? 'bg-done' : 'bg-edgeStrong',
+          )}
+        />
+        <span className="sr-only" role="status">
+          {connected ? 'Live updates connected' : 'Live updates reconnecting'}
+        </span>
+
+        {/* Mark only — the company name below is the label that matters here,
+            and the product name does not need repeating on every screen. */}
+        <div className="flex flex-col items-center">
           <LogoMark className="h-6 w-6 text-ink" title="Atlas" />
-          <span
-            title={connected ? 'Live updates connected' : 'Reconnecting'}
-            className={cn(
-              'ml-auto h-[6px] w-[6px] transition-colors duration-300',
-              connected ? 'bg-done' : 'bg-edgeStrong',
-            )}
-          />
-          <span className="sr-only" role="status">
-            {connected ? 'Live updates connected' : 'Live updates reconnecting'}
-          </span>
+          <p className="edge-sm mt-2.5 max-w-full truncate text-center" title={session.company.name}>
+            {session.company.name}
+          </p>
         </div>
-        <p className="edge-sm mt-2.5 truncate" title={session.company.name}>
-          {session.company.name}
-        </p>
       </div>
 
       {/* ---------------------------- navigation ---------------------------- */}
