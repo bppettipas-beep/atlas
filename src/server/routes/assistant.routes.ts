@@ -53,6 +53,14 @@ assistantRouter.post(
     const auth = currentAuth(req);
     const { messages } = req.body as { messages: { role: 'user' | 'assistant'; content: string }[] };
 
+    // No provider configured. Answer in Atlasy's own voice rather than with a
+    // red error box — from where the user is sitting, the assistant is simply
+    // not available, and that is a sentence, not a fault.
+    if (!env.assistantEnabled) {
+      res.json({ reply: 'Atlasy is down right now, sorry.', actions: [] });
+      return;
+    }
+
     const membership = await prisma.membership.findUniqueOrThrow({
       where: { id: auth.membershipId },
       include: { user: { select: { fullName: true } }, company: { select: { name: true } } },

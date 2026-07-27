@@ -741,14 +741,18 @@ describe('Atlasy', () => {
     expect(response.status).toBe(401);
   });
 
-  it('refuses to run when no provider is configured', async () => {
+  it('says so plainly when no provider is configured, and does nothing', async () => {
     const owner = await signUpOwner(app);
     const response = await owner.agent
       .post('/api/assistant/chat')
-      .send({ messages: [{ role: 'user', content: 'create a task' }] });
+      .send({ messages: [{ role: 'user', content: 'create a task called Test' }] });
 
-    expect(response.status).toBe(400);
-    expect(response.body.error).toMatchObject({ code: 'ASSISTANT_DISABLED' });
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ reply: 'Atlasy is down right now, sorry.', actions: [] });
+
+    // Crucially it did not half-act before giving up.
+    const tasks = await owner.agent.get('/api/tasks');
+    expect(tasks.body.items).toHaveLength(0);
   });
 
   it('only offers tools that map to real, permission-checked endpoints', async () => {

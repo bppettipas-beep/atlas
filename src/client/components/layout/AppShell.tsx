@@ -2,11 +2,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useState, type ReactNode } from 'react';
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { NotificationCenter } from './NotificationCenter';
-import {
-  AtlasyButton,
-  AtlasyPanel,
-  useAssistantEnabled,
-} from '@/components/assistant/AtlasyPanel';
+import { AtlasyButton, AtlasyPanel } from '@/components/assistant/AtlasyPanel';
 import { LogoMark } from '@/components/Logo';
 import {
   Activity,
@@ -76,7 +72,6 @@ export function AppShell() {
   const toast = useToast();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [atlasyOpen, setAtlasyOpen] = useState(false);
-  const assistantEnabled = useAssistantEnabled();
 
   if (!session) return null;
 
@@ -290,9 +285,7 @@ export function AppShell() {
           <p className="edge-sm ml-2 hidden truncate sm:block lg:hidden">{session.company.name}</p>
 
           <div className="flex-1" />
-          {assistantEnabled && (
-            <AtlasyButton open={atlasyOpen} onClick={() => setAtlasyOpen((value) => !value)} />
-          )}
+          <AtlasyButton open={atlasyOpen} onClick={() => setAtlasyOpen((value) => !value)} />
           <NotificationCenter />
         </header>
 
