@@ -168,33 +168,37 @@ tasksRouter.get(
               ? { dueAt: { gte: startOfDay(now), lte: endOfDay(now) } }
               : {};
 
-    const tasks = await prisma.task.findMany({
-      where: {
-        companyId: auth.companyId,
-        archivedAt: null,
-        ...(await visibilityFilter(auth)),
-        ...scopeFilter,
-        ...(query.status ? { status: { in: query.status } } : {}),
-        ...(query.priority ? { priority: query.priority } : {}),
-        ...(query.assigneeId ? { assigneeId: query.assigneeId } : {}),
-        ...(query.teamId ? { teamId: query.teamId } : {}),
-        ...(query.includeDone ? {} : { status: { not: 'DONE' } }),
-        ...(query.search
-          ? {
-              OR: [
-                { title: { contains: query.search, mode: 'insensitive' as const } },
-                { description: { contains: query.search, mode: 'insensitive' as const } },
-                { location: { contains: query.search, mode: 'insensitive' as const } },
-              ],
-            }
-          : {}),
-      },
-      include: taskSummaryInclude,
-      orderBy: [{ status: 'asc' }, { dueAt: 'asc' }, { createdAt: 'desc' }],
-      take: query.limit,
-    });
+    const where = {
+      companyId: auth.companyId,
+      archivedAt: null,
+      ...(await visibilityFilter(auth)),
+      ...scopeFilter,
+      ...(query.status ? { status: { in: query.status } } : {}),
+      ...(query.priority ? { priority: query.priority } : {}),
+      ...(query.assigneeId ? { assigneeId: query.assigneeId } : {}),
+      ...(query.teamId ? { teamId: query.teamId } : {}),
+      ...(query.includeDone ? {} : { status: { not: 'DONE' } }),
+      ...(query.search
+        ? {
+            OR: [
+              { title: { contains: query.search, mode: 'insensitive' as const } },
+              { description: { contains: query.search, mode: 'insensitive' as const } },
+              { location: { contains: query.search, mode: 'insensitive' as const } },
+            ],
+          }
+        : {}),
+    };
+    const [tasks, total] = await Promise.all([
+      prisma.task.findMany({
+        where,
+        include: taskSummaryInclude,
+        orderBy: [{ status: 'asc' }, { dueAt: 'asc' }, { createdAt: 'desc' }],
+        take: query.limit,
+      }),
+      prisma.task.count({ where }),
+    ]);
 
-    res.json({ items: tasks.map(serializeTaskSummary) });
+    res.json({ items: tasks.map(serializeTaskSummary), total });
   }),
 );
 
@@ -620,6 +624,26 @@ tasksRouter.post(
 
     emitToCompany(auth.companyId, 'task:updated', { taskId: task.id });
     res.json(await toDetail(task, auth));
+  }),
+);
+
+tasksRouter.delete(
+  '/',
+  validateBody(z.object({ confirmation: z.literal('DELETE_ALL_TASKS') })),
+  asyncHandler(async (req, res) => {
+    const auth = currentAuth(req);
+    if (!isLeadership(auth)) {
+      throw ApiError.forbidden('Only owners and managers can clear company work.');
+    }
+
+    // Tasks are archived rather than physically erased, just like individual
+    // deletion. That preserves references already recorded in activity.
+    const result = await prisma.task.updateMany({
+      where: { companyId: auth.companyId, archivedAt: null },
+      data: { archivedAt: new Date() },
+    });
+    emitToCompany(auth.companyId, 'task:deleted', { all: true });
+    res.json({ ok: true, archivedCount: result.count });
   }),
 );
 

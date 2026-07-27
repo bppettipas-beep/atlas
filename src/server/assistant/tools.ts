@@ -106,6 +106,38 @@ export const TOOLS: ToolDefinition[] = [
     },
   },
   {
+    name: 'delete_task',
+    mutates: true,
+    description:
+      'Archive one task so it no longer appears in Atlas. This is destructive from the user’s point of view. Only call after the user has explicitly confirmed the exact task in the immediately preceding message.',
+    method: 'DELETE',
+    path: '/api/tasks/:id',
+    parameters: {
+      type: 'object',
+      required: ['id'],
+      properties: { id: str('Task id from list_tasks. Never invent this.') },
+    },
+  },
+  {
+    name: 'clear_all_tasks',
+    mutates: true,
+    description:
+      'Archive every active task in the company. Owners and managers only. This is a high-impact destructive action; only call after you have stated the number of tasks and the user explicitly confirmed clearing every task in their immediately preceding message.',
+    method: 'DELETE',
+    path: '/api/tasks',
+    parameters: {
+      type: 'object',
+      required: ['confirmation'],
+      properties: {
+        confirmation: {
+          type: 'string',
+          enum: ['DELETE_ALL_TASKS'],
+          description: 'Only use after explicit user confirmation.',
+        },
+      },
+    },
+  },
+  {
     name: 'get_schedule',
     description:
       'Read scheduled work, availability and workload for a time window. Use this for questions such as what is on someone’s schedule, who is free, or when a team is available. `resources` is an optional comma-separated list of person membership ids or team ids.',

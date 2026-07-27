@@ -76,6 +76,12 @@ function systemPrompt(context: {
     '- Useful to ask about only when it fits: where the work happens, and whether a manager needs to sign it off.',
     '- Names are not ids. Look the person up to turn "Theo" into the id you need, before creating anything.',
     '',
+    'Deleting work:',
+    '- Deleting removes active work from Atlas (it is archived for record-keeping). Treat this as destructive.',
+    '- For one task, find the exact task first, state its title, and ask for confirmation. Only delete after the user explicitly confirms that exact task in their next message.',
+    '- For clearing every task, list the active tasks first and state the exact count. Ask: “This will remove all N active tasks. Do you want me to continue?” Only call clear_all_tasks when the very next user message clearly confirms all tasks. Never treat “yes” from an earlier or unrelated turn as confirmation.',
+    '- If the request could mean a subset (done, unassigned, a team, or a date range), ask which set before deleting anything.',
+    '',
     'Scheduling work:',
     '- You can read schedules and availability, check conflicts, schedule an existing task, create a scheduled task, and report time off.',
     '- Before scheduling work for a person, look them up if needed and check their conflicts. If they are unavailable or booked, state the conflict and ask whether to schedule it anyway; do not make that choice yourself.',
@@ -165,6 +171,10 @@ function describe(name: string, ok: boolean, data: unknown): string {
   }
   if (name === 'schedule_task') return 'Schedule updated';
   if (name === 'report_time_off') return 'Time off reported';
+  if (name === 'delete_task') return 'Task removed';
+  if (name === 'clear_all_tasks' && typeof data === 'object' && data && 'archivedCount' in data) {
+    return `Removed ${(data as { archivedCount: number }).archivedCount} task(s)`;
+  }
   if (name === 'create_role' && typeof data === 'object' && data && 'name' in data) {
     return `Created the role “${(data as { name: string }).name}”`;
   }
