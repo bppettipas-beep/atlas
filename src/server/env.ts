@@ -31,6 +31,10 @@ const schema = z.object({
   // button — the app never shows a sign-in option it cannot honour.
   GOOGLE_CLIENT_ID: z.string().default(''),
   GOOGLE_CLIENT_SECRET: z.string().default(''),
+  // Outbound notification email. Resend is optional: without both values Atlas
+  // continues to deliver in-app notifications, but does not attempt email.
+  RESEND_API_KEY: z.string().default(''),
+  EMAIL_FROM: z.string().default(''),
   // Atlasy, the in-app assistant. The key is the only thing that has to be
   // set; the defaults below point at Anthropic's OpenAI-compatible endpoint,
   // which takes the same request shape the rest of this file assumes. Haiku is
@@ -66,6 +70,7 @@ export const env = {
   uploadDir: path.resolve(process.cwd(), raw.UPLOAD_DIR),
   maxUploadBytes: raw.MAX_UPLOAD_MB * 1024 * 1024,
   googleEnabled: raw.GOOGLE_CLIENT_ID.length > 0 && raw.GOOGLE_CLIENT_SECRET.length > 0,
+  emailEnabled: raw.RESEND_API_KEY.length > 0 && raw.EMAIL_FROM.length > 0,
   assistantEnabled: raw.ASSISTANT_API_KEY.length > 0,
   allowedOrigins: Array.from(
     new Set(

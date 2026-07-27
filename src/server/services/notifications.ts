@@ -1,6 +1,7 @@
 import type { NotificationType } from '@prisma/client';
 import { prisma } from '../prisma';
 import { emitNotification } from '../realtime/io';
+import { sendNotificationEmail } from './email';
 import { serializeNotification } from './serializers';
 
 export interface CreateNotificationInput {
@@ -66,6 +67,7 @@ export async function notify(input: CreateNotificationInput) {
       status: true,
       deactivatedAt: true,
       notificationPreference: true,
+      user: { select: { email: true, fullName: true } },
     },
   });
 
@@ -92,6 +94,12 @@ export async function notify(input: CreateNotificationInput) {
   });
 
   emitNotification(input.recipientId, serializeNotification(notification));
+  await sendNotificationEmail({
+    to: recipient.user.email,
+    recipientName: recipient.user.fullName,
+    title: notification.title,
+    body: notification.body,
+  });
   return notification;
 }
 
@@ -137,7 +145,9 @@ export async function notifyLeadership(input: LeadershipNotificationInput) {
 
   const { ownersOnly: _ownersOnly, except: _except, ...rest } = input;
   return notifyMany(
-    leaders.filter((leader) => !skip.has(leader.id)).map((leader) => ({ ...rest, recipientId: leader.id })),
+    leaders
+      .filter((leader) => !skip.has(leader.id))
+      .map((leader) => ({ ...rest, recipientId: leader.id })),
   );
 }
 

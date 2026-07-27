@@ -35,17 +35,17 @@ the React front end, with PostgreSQL as the only source of truth.
 drawn like an engineering schematic. Every person and team is a node; the lines
 between them are computed from your real data:
 
-| Line | Where it comes from |
-| --- | --- |
-| Reports to | `Membership.managerId` |
-| Team | Team membership |
-| Shared skill | Two people holding the same skill |
-| Owns area | A person who owns a knowledge document tied to a team |
-| Works with / Mentors | Drawn by hand by an owner or manager |
+| Line                 | Where it comes from                                   |
+| -------------------- | ----------------------------------------------------- |
+| Reports to           | `Membership.managerId`                                |
+| Team                 | Team membership                                       |
+| Shared skill         | Two people holding the same skill                     |
+| Owns area            | A person who owns a knowledge document tied to a team |
+| Works with / Mentors | Drawn by hand by an owner or manager                  |
 
 Reporting, team, skill and ownership lines are **derived on every read**, so
 they can never drift out of sync with the data. Only hand-drawn relationships
-are stored. Node positions *are* stored — an owner drags the map into a shape
+are stored. Node positions _are_ stored — an owner drags the map into a shape
 that makes sense and everybody sees that layout.
 
 **People** — profiles with what each person owns, skills with levels,
@@ -84,20 +84,20 @@ announcements, and the reading assigned to them.
 
 ## Tech
 
-| | |
-| --- | --- |
-| Front end | React 19, TypeScript, Vite, Tailwind CSS, Framer Motion, `@xyflow/react` |
-| Icons | Phosphor Light, inlined in `src/client/components/icons.tsx` — no icon runtime |
-| Back end | Node, Express 4, Socket.IO, Zod |
-| Database | PostgreSQL via Prisma |
-| Auth | bcrypt + JWT access token and rotating refresh token, both in HTTP-only cookies |
-| Tests | Vitest + Supertest against a real PostgreSQL |
+|           |                                                                                 |
+| --------- | ------------------------------------------------------------------------------- |
+| Front end | React 19, TypeScript, Vite, Tailwind CSS, Framer Motion, `@xyflow/react`        |
+| Icons     | Phosphor Light, inlined in `src/client/components/icons.tsx` — no icon runtime  |
+| Back end  | Node, Express 4, Socket.IO, Zod                                                 |
+| Database  | PostgreSQL via Prisma                                                           |
+| Auth      | bcrypt + JWT access token and rotating refresh token, both in HTTP-only cookies |
+| Tests     | Vitest + Supertest against a real PostgreSQL                                    |
 
 ---
 
 ## Running it locally
 
-You need **Node 20+**. You do *not* need to install PostgreSQL or Docker.
+You need **Node 20+**. You do _not_ need to install PostgreSQL or Docker.
 
 ```bash
 git clone <your-repo-url>
@@ -168,14 +168,14 @@ documents, recurring routines, announcements and a populated activity feed.
 These are throwaway credentials for local development. **They are not real
 accounts and must never be created on a deployed database.**
 
-| Role | Email | Password |
-| --- | --- | --- |
-| Owner | `owner@northstar.example.com` | `AtlasDemo123!` |
-| Manager (Operations) | `marcus@northstar.example.com` | `AtlasDemo123!` |
-| Manager (Maintenance) | `priya@northstar.example.com` | `AtlasDemo123!` |
-| Worker (lead cleaner) | `jonah@northstar.example.com` | `AtlasDemo123!` |
-| Worker (blocked task) | `sofia@northstar.example.com` | `AtlasDemo123!` |
-| Worker (night crew) | `theo@northstar.example.com` | `AtlasDemo123!` |
+| Role                  | Email                          | Password        |
+| --------------------- | ------------------------------ | --------------- |
+| Owner                 | `owner@northstar.example.com`  | `AtlasDemo123!` |
+| Manager (Operations)  | `marcus@northstar.example.com` | `AtlasDemo123!` |
+| Manager (Maintenance) | `priya@northstar.example.com`  | `AtlasDemo123!` |
+| Worker (lead cleaner) | `jonah@northstar.example.com`  | `AtlasDemo123!` |
+| Worker (blocked task) | `sofia@northstar.example.com`  | `AtlasDemo123!` |
+| Worker (night crew)   | `theo@northstar.example.com`   | `AtlasDemo123!` |
 
 Active invitation code: **`NORTHSTAR`** — try it at <http://localhost:5173/join>
 to watch a new worker appear on the map in real time.
@@ -187,23 +187,23 @@ as Sofia and watch the owner's notification bell.
 
 ## Everyday commands
 
-| Command | What it does |
-| --- | --- |
-| `npm run dev:all` | Embedded database + API in one process |
-| `npm run dev:all -- --fresh` | Same, but wipes and re-seeds first |
-| `npm run dev` | API + Vite together (needs your own `DATABASE_URL`) |
-| `npm run dev:client` | Vite dev server only, on :5173 |
-| `npm run dev:server` | API only, with reload |
-| `npm run build` | Build the React app and compile the server |
-| `npm start` | Run migrations, then start the production server |
-| `npm test` | Run the test suite |
-| `npm run typecheck` | Typecheck client and server |
-| `npm run lint` / `npm run format` | ESLint / Prettier |
-| `npm run check` | Typecheck + lint + test |
-| `npm run db:migrate` | Create and apply a migration in development |
-| `npm run db:deploy` | Apply existing migrations (what production runs) |
-| `npm run db:seed` | Seed the demo company |
-| `npm run db:studio` | Browse the database in Prisma Studio |
+| Command                           | What it does                                        |
+| --------------------------------- | --------------------------------------------------- |
+| `npm run dev:all`                 | Embedded database + API in one process              |
+| `npm run dev:all -- --fresh`      | Same, but wipes and re-seeds first                  |
+| `npm run dev`                     | API + Vite together (needs your own `DATABASE_URL`) |
+| `npm run dev:client`              | Vite dev server only, on :5173                      |
+| `npm run dev:server`              | API only, with reload                               |
+| `npm run build`                   | Build the React app and compile the server          |
+| `npm start`                       | Run migrations, then start the production server    |
+| `npm test`                        | Run the test suite                                  |
+| `npm run typecheck`               | Typecheck client and server                         |
+| `npm run lint` / `npm run format` | ESLint / Prettier                                   |
+| `npm run check`                   | Typecheck + lint + test                             |
+| `npm run db:migrate`              | Create and apply a migration in development         |
+| `npm run db:deploy`               | Apply existing migrations (what production runs)    |
+| `npm run db:seed`                 | Seed the demo company                               |
+| `npm run db:studio`               | Browse the database in Prisma Studio                |
 
 ---
 
@@ -363,13 +363,13 @@ In the same project: **+ New** → **Database** → **Add PostgreSQL**.
 
 On the **app** service → **Variables**:
 
-| Variable | Value |
-| --- | --- |
-| `DATABASE_URL` | `${{Postgres.DATABASE_URL}}` — type this reference exactly; Railway links the two services |
-| `JWT_SECRET` | a long random string **you** generate |
-| `SESSION_SECRET` | a **different** long random string you generate |
-| `NODE_ENV` | `production` |
-| `APP_ORIGIN` | your public URL, e.g. `https://atlas-production.up.railway.app` |
+| Variable         | Value                                                                                      |
+| ---------------- | ------------------------------------------------------------------------------------------ |
+| `DATABASE_URL`   | `${{Postgres.DATABASE_URL}}` — type this reference exactly; Railway links the two services |
+| `JWT_SECRET`     | a long random string **you** generate                                                      |
+| `SESSION_SECRET` | a **different** long random string you generate                                            |
+| `NODE_ENV`       | `production`                                                                               |
+| `APP_ORIGIN`     | your public URL, e.g. `https://atlas-production.up.railway.app`                            |
 
 Generate each secret with:
 
@@ -427,27 +427,29 @@ The app service and the PostgreSQL service are billed separately.
 
 Every variable is documented in `.env.example`. The ones that matter:
 
-| Variable | Required | Notes |
-| --- | --- | --- |
-| `DATABASE_URL` | **yes** | PostgreSQL connection string |
-| `JWT_SECRET` | **yes** | Signs access tokens. 16+ characters, generated by you |
-| `SESSION_SECRET` | **yes** | Hashes refresh tokens before storage. Must differ from `JWT_SECRET` |
-| `NODE_ENV` | production | Set to `production` on Railway |
-| `APP_ORIGIN` | recommended | Public URL. Used for CORS and invitation links |
-| `PORT` | no | Injected by Railway; defaults to 4000 locally |
-| `UPLOAD_DIR` | no | Where attachments are written |
-| `MAX_UPLOAD_MB` | no | Upload size limit, default 10 |
-| `ACCESS_TOKEN_TTL` | no | Access-token lifetime, default `15m` |
-| `REFRESH_TOKEN_TTL_DAYS` | no | Refresh-token lifetime, default 30 |
-| `COOKIE_SECURE` | no | Forced on when `NODE_ENV=production` |
-| `SCHEDULER_INTERVAL_SECONDS` | no | Overdue escalation and recurring tasks. `0` disables |
-| `CORS_ORIGINS` | no | Extra allowed origins, comma separated |
-| `AUTH_RATE_LIMIT` | no | Credential attempts per IP per 15 min, default 40 |
-| `GOOGLE_CLIENT_ID` | no | Enables Google sign-in. See below |
-| `GOOGLE_CLIENT_SECRET` | no | Enables Google sign-in. See below |
-| `ASSISTANT_API_KEY` | no | Enables Atlasy, the in-app assistant. See below |
-| `ASSISTANT_BASE_URL` | no | OpenAI-compatible endpoint. Defaults to Groq |
-| `ASSISTANT_MODEL` | no | Model name, default `llama-3.3-70b-versatile` |
+| Variable                     | Required    | Notes                                                               |
+| ---------------------------- | ----------- | ------------------------------------------------------------------- |
+| `DATABASE_URL`               | **yes**     | PostgreSQL connection string                                        |
+| `JWT_SECRET`                 | **yes**     | Signs access tokens. 16+ characters, generated by you               |
+| `SESSION_SECRET`             | **yes**     | Hashes refresh tokens before storage. Must differ from `JWT_SECRET` |
+| `NODE_ENV`                   | production  | Set to `production` on Railway                                      |
+| `APP_ORIGIN`                 | recommended | Public URL. Used for CORS and invitation links                      |
+| `PORT`                       | no          | Injected by Railway; defaults to 4000 locally                       |
+| `UPLOAD_DIR`                 | no          | Where attachments are written                                       |
+| `MAX_UPLOAD_MB`              | no          | Upload size limit, default 10                                       |
+| `ACCESS_TOKEN_TTL`           | no          | Access-token lifetime, default `15m`                                |
+| `REFRESH_TOKEN_TTL_DAYS`     | no          | Refresh-token lifetime, default 30                                  |
+| `COOKIE_SECURE`              | no          | Forced on when `NODE_ENV=production`                                |
+| `SCHEDULER_INTERVAL_SECONDS` | no          | Overdue escalation and recurring tasks. `0` disables                |
+| `CORS_ORIGINS`               | no          | Extra allowed origins, comma separated                              |
+| `AUTH_RATE_LIMIT`            | no          | Credential attempts per IP per 15 min, default 40                   |
+| `GOOGLE_CLIENT_ID`           | no          | Enables Google sign-in. See below                                   |
+| `GOOGLE_CLIENT_SECRET`       | no          | Enables Google sign-in. See below                                   |
+| `RESEND_API_KEY`             | no          | Enables email copies of in-app notifications                        |
+| `EMAIL_FROM`                 | no          | Verified Resend sender, e.g. `Atlas <notifications@example.com>`    |
+| `ASSISTANT_API_KEY`          | no          | Enables Atlasy, the in-app assistant. See below                     |
+| `ASSISTANT_BASE_URL`         | no          | OpenAI-compatible endpoint. Defaults to Groq                        |
+| `ASSISTANT_MODEL`            | no          | Model name, default `llama-3.3-70b-versatile`                       |
 
 The server validates all of this at startup and exits with a readable message
 listing exactly what is missing, rather than failing on the first query.
@@ -464,7 +466,7 @@ rendered at all — the app never offers a route it cannot complete.
 1. Go to <https://console.cloud.google.com/apis/credentials>.
 2. Create a project if you do not have one.
 3. **Configure the consent screen** (once): External, fill in the app name and
-   your support email. While it stays in *Testing* only accounts you list as
+   your support email. While it stays in _Testing_ only accounts you list as
    test users can sign in, so publish it when you are ready for your staff.
 4. **Create credentials → OAuth client ID → Web application.**
 5. Under **Authorised redirect URIs**, add the callback for every origin you
@@ -526,7 +528,7 @@ rendered at all — the app never offers a route it cannot complete.
   rate limited. Uploads are restricted by MIME type and size and served with
   `X-Content-Type-Options: nosniff`.
 - Knowledge documents are Markdown rendered by a small parser that HTML-escapes
-  the whole document *before* producing any tags, so a document cannot inject
+  the whole document _before_ producing any tags, so a document cannot inject
   markup or script.
 
 ---
@@ -546,7 +548,7 @@ anything:
 
 1. Separation comes from a hairline rule or a value step — **not a shadow**.
    Nothing floats except modals, drawers and menus.
-2. Anything that *describes* goes in the edge register (`.edge`), never body text.
+2. Anything that _describes_ goes in the edge register (`.edge`), never body text.
 3. Any number a person compares or reads aloud is set in the monospace.
 
 Radii never exceed 3px. The Tailwind palette is **replaced**, not extended, so
@@ -560,9 +562,8 @@ component classes) and `src/client/components/ui/index.tsx` (every primitive).
 
 Honest list of what a real deployment would want next:
 
-- **Outbound email.** Direct invitations create a code you send yourself; Atlas
-  never sends mail. Password reset therefore does not exist yet — it needs email
-  first. Wiring in Resend or Postmark is the highest-value next step.
+- **Password reset.** Notification email is delivered through Resend, but a
+  password-reset flow has not been added yet.
 - **Object storage for uploads.** Files go to local disk. S3 or Cloudflare R2
   would remove the volume requirement.
 - **Mobile app / offline mode.** The web app is responsive and works well on a
