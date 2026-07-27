@@ -9,6 +9,7 @@ import { InvitationsPage } from '@/pages/InvitationsPage';
 import { KnowledgeDocPage } from '@/pages/KnowledgeDocPage';
 import { KnowledgePage } from '@/pages/KnowledgePage';
 import { LandingPage } from '@/pages/LandingPage';
+import { MarketingDetailPage } from '@/pages/MarketingDetailPage';
 import { MyDayPage } from '@/pages/MyDayPage';
 import { NotFoundPage } from '@/pages/NotFoundPage';
 import { OrganizationMapPage } from '@/pages/OrganizationMapPage';
@@ -57,6 +58,7 @@ export function App() {
         <RealtimeProvider>
           <Routes>
             <Route path="/" element={<LandingPage />} />
+            <Route path="/explore/:section" element={<MarketingDetailPage />} />
             <Route path="/start" element={<StartPage />} />
             <Route path="/signin" element={<SignInPage />} />
             <Route path="/signup/owner" element={<OwnerSignupPage />} />

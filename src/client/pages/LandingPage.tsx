@@ -184,7 +184,11 @@ const PLANS = [
     name: 'Growth',
     price: '$500',
     description: 'More room for a growing team and its day-to-day work.',
-    features: ['Everything in Base', 'Manager workflows and approvals', 'Recurring work and activity history'],
+    features: [
+      'Everything in Base',
+      'Manager workflows and approvals',
+      'Recurring work and activity history',
+    ],
   },
   {
     name: 'Scale',
@@ -207,7 +211,7 @@ export function LandingPage() {
   return (
     <div className="min-h-full bg-paper">
       {/* ============================ title block ============================ */}
-      <header className="sticky top-0 z-30 border-b border-edge bg-paper/92 backdrop-blur-[3px]">
+      <header className="bg-paper/92 sticky top-0 z-30 border-b border-edge backdrop-blur-[3px]">
         <div className="mx-auto flex w-full max-w-[1120px] items-center justify-between px-5 py-3 sm:px-10">
           <Logo markClassName="h-[25px] w-[25px]" wordClassName="text-[15px]" />
 
@@ -304,7 +308,7 @@ export function LandingPage() {
         </section>
 
         {/* ------------------------------ the problem ------------------------ */}
-        <Section index="01" label="The problem">
+        <Section index="01" label="The problem" to="/explore/problem">
           <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
             <h2 className="display max-w-[14ch] text-[2rem] leading-[1.03] sm:text-[2.6rem]">
               A business that only runs because you remember everything.
@@ -331,7 +335,7 @@ export function LandingPage() {
         </Section>
 
         {/* ---------------------------- capabilities ------------------------- */}
-        <Section index="02" label="What Atlas does">
+        <Section index="02" label="What Atlas does" to="/explore/product">
           <h2 className="display max-w-[18ch] text-[2rem] leading-[1.03] sm:text-[2.6rem]">
             Four things, drawn properly.
           </h2>
@@ -358,9 +362,8 @@ export function LandingPage() {
           </div>
         </Section>
 
-
         {/* ---------------------------- two audiences ------------------------ */}
-        <Section index="03" label="Two views, one company">
+        <Section index="03" label="Two views, one company" to="/explore/roles">
           <div className="grid gap-10 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.25fr)]">
             <h2 className="display max-w-[13ch] text-[2rem] leading-[1.03] sm:text-[2.6rem]">
               The boss and the crew need different screens.
@@ -398,7 +401,7 @@ export function LandingPage() {
         </Section>
 
         {/* ------------------------------ the rest --------------------------- */}
-        <Section index="04" label="Everything else">
+        <Section index="04" label="Everything else" to="/explore/details">
           <div className="flex flex-wrap items-end justify-between gap-6">
             <h2 className="display max-w-[16ch] text-[2rem] leading-[1.03] sm:text-[2.6rem]">
               The details that decide whether it gets used.
@@ -420,7 +423,7 @@ export function LandingPage() {
         </Section>
 
         {/* ------------------------------- pricing -------------------------- */}
-        <Section index="05" label="Pricing" id="pricing">
+        <Section index="05" label="Pricing" id="pricing" to="/explore/pricing">
           <div className="flex flex-wrap items-end justify-between gap-6">
             <h2 className="display max-w-[15ch] text-[2rem] leading-[1.03] sm:text-[2.6rem]">
               A clear price for a clearer business.
@@ -432,7 +435,10 @@ export function LandingPage() {
 
           <div className="mt-12 grid border-l border-t border-edge md:grid-cols-3">
             {PLANS.map((plan) => (
-              <div key={plan.name} className="flex flex-col border-b border-r border-edge p-6 sm:p-8">
+              <div
+                key={plan.name}
+                className="flex flex-col border-b border-r border-edge p-6 sm:p-8"
+              >
                 <p className="edge-sm text-ink-4">{plan.name}</p>
                 <div className="mt-5 flex items-baseline gap-1.5">
                   <span className="display text-[2.6rem] leading-none">{plan.price}</span>
@@ -443,7 +449,10 @@ export function LandingPage() {
                 </p>
                 <ul className="mt-7 space-y-3 border-t border-edge pt-6">
                   {plan.features.map((feature) => (
-                    <li key={feature} className="flex items-start gap-2.5 text-[13.5px] leading-snug text-ink-2">
+                    <li
+                      key={feature}
+                      className="flex items-start gap-2.5 text-[13.5px] leading-snug text-ink-2"
+                    >
                       <Check className="mt-[3px] shrink-0 text-[12px] text-ink" />
                       {feature}
                     </li>
@@ -461,7 +470,7 @@ export function LandingPage() {
         </Section>
 
         {/* ------------------------------ how it works ----------------------- */}
-        <Section index="06" label="Getting started">
+        <Section index="06" label="Getting started" to="/explore/getting-started">
           <div className="grid gap-10 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.2fr)]">
             <h2 className="display max-w-[12ch] text-[2rem] leading-[1.03] sm:text-[2.6rem]">
               Running in an afternoon.
@@ -530,11 +539,13 @@ function Section({
   label,
   children,
   id,
+  to,
 }: {
   index: string;
   label: string;
   children: ReactNode;
   id?: string;
+  to?: string;
 }) {
   return (
     <section id={id} className="border-t border-edge py-16 sm:py-24">
@@ -542,6 +553,14 @@ function Section({
         <span className="font-mono text-[11px] text-ink-4">{index}</span>
         <span className="h-px w-8 bg-edgeStrong" aria-hidden />
         <span className="edge">{label}</span>
+        {to && (
+          <Link
+            to={to}
+            className="ml-auto inline-flex items-center gap-1 text-[12px] font-medium text-ink-3 transition-colors hover:text-ink"
+          >
+            Explore <ArrowRight className="text-[12px]" />
+          </Link>
+        )}
       </div>
       {children}
     </section>
