@@ -215,13 +215,21 @@ export function LandingPage() {
               the way in. Only one of the two is ever true. */}
           <nav className="flex items-center gap-2 sm:gap-4" aria-label="Account">
             {signedIn ? (
-              <Link
-                to="/app"
-                className="group inline-flex h-8 items-center gap-2 rounded-sm bg-ink px-3.5 text-[13px] font-medium text-white transition-colors duration-150 ease-draft hover:bg-ink-2"
-              >
-                Open panel
-                <ArrowRight className="text-[13px] transition-transform duration-300 ease-draft group-hover:translate-x-0.5" />
-              </Link>
+              <>
+                <a
+                  href="#pricing"
+                  className="px-2 py-1.5 text-[13px] font-medium text-ink-2 transition-colors hover:text-ink"
+                >
+                  Pricing
+                </a>
+                <Link
+                  to="/app"
+                  className="group inline-flex h-8 items-center gap-2 rounded-sm bg-ink px-3.5 text-[13px] font-medium text-white transition-colors duration-150 ease-draft hover:bg-ink-2"
+                >
+                  Open panel
+                  <ArrowRight className="text-[13px] transition-transform duration-300 ease-draft group-hover:translate-x-0.5" />
+                </Link>
+              </>
             ) : (
               <>
                 <Link
@@ -412,7 +420,7 @@ export function LandingPage() {
         </Section>
 
         {/* ------------------------------- pricing -------------------------- */}
-        <Section index="05" label="Pricing">
+        <Section index="05" label="Pricing" id="pricing">
           <div className="flex flex-wrap items-end justify-between gap-6">
             <h2 className="display max-w-[15ch] text-[2rem] leading-[1.03] sm:text-[2.6rem]">
               A clear price for a clearer business.
@@ -521,13 +529,15 @@ function Section({
   index,
   label,
   children,
+  id,
 }: {
   index: string;
   label: string;
   children: ReactNode;
+  id?: string;
 }) {
   return (
-    <section className="border-t border-edge py-16 sm:py-24">
+    <section id={id} className="border-t border-edge py-16 sm:py-24">
       <div className="mb-10 flex items-center gap-3">
         <span className="font-mono text-[11px] text-ink-4">{index}</span>
         <span className="h-px w-8 bg-edgeStrong" aria-hidden />
