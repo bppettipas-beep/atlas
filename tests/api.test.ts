@@ -579,7 +579,8 @@ describe('company roles', () => {
     // cannot express, like the cycle check.
     const badColor = await createRole(owner, { name: 'Driver', color: 'royal blue' });
     expect(badColor.status).toBe(422);
-    expect(badColor.body.error.details?.color).toContain('hex');
+    const issues = badColor.body.error.details as { path: string; message: string }[];
+    expect(issues.find((issue) => issue.path === 'color')?.message).toContain('hex');
   });
 
   it('nests roles and refuses to create a loop', async () => {
