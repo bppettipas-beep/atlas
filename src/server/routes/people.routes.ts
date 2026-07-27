@@ -173,7 +173,7 @@ peopleRouter.get(
 const listQuerySchema = z.object({
   search: z.string().trim().max(120).optional(),
   teamId: z.string().min(1).optional(),
-  role: z.enum(['OWNER', 'MANAGER', 'WORKER']).optional(),
+  role: z.enum(['OWNER', 'CO_OWNER', 'MANAGER', 'WORKER']).optional(),
   availability: z.enum(['AVAILABLE', 'BUSY', 'FOCUSED', 'OFF_SHIFT', 'ON_LEAVE']).optional(),
   includeInactive: z.coerce.boolean().default(false),
 });
@@ -710,11 +710,11 @@ peopleRouter.patch(
 peopleRouter.patch(
   '/:id/role',
   requireRole('OWNER'),
-  validateBody(z.object({ role: z.enum(['OWNER', 'MANAGER', 'WORKER']) })),
+  validateBody(z.object({ role: z.enum(['OWNER', 'CO_OWNER', 'MANAGER', 'WORKER']) })),
   asyncHandler(async (req, res) => {
     const auth = currentAuth(req);
     const membership = await loadPersonInCompany(req.params.id, auth.companyId);
-    const { role } = req.body as { role: 'OWNER' | 'MANAGER' | 'WORKER' };
+    const { role } = req.body as { role: 'OWNER' | 'CO_OWNER' | 'MANAGER' | 'WORKER' };
 
     if (membership.role === 'OWNER' && role !== 'OWNER') {
       const owners = await prisma.membership.count({
@@ -1094,7 +1094,7 @@ peopleRouter.delete(
       where: { id: req.params.noteId, companyId: auth.companyId, subjectId: req.params.id },
     });
     if (!note) throw ApiError.notFound('That note no longer exists.');
-    if (auth.role !== 'OWNER' && note.authorId !== auth.membershipId) {
+    if (auth.role !== 'OWNER' && auth.role !== 'CO_OWNER' && note.authorId !== auth.membershipId) {
       throw ApiError.forbidden('You can only delete notes you wrote.');
     }
     await prisma.memberNote.delete({ where: { id: note.id } });

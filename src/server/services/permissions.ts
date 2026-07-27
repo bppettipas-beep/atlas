@@ -6,12 +6,12 @@ import type { AuthContext } from '../middleware/authenticate';
  * cannot use, but that is only a courtesy — the API is the actual boundary.
  */
 
-export const isOwner = (auth: AuthContext) => auth.role === 'OWNER';
-export const isLeadership = (auth: AuthContext) => auth.role === 'OWNER' || auth.role === 'MANAGER';
+export const isOwner = (auth: AuthContext) => auth.role === 'OWNER' || auth.role === 'CO_OWNER';
+export const isLeadership = (auth: AuthContext) => isOwner(auth) || auth.role === 'MANAGER';
 
 /** Teams the manager leads or belongs to. */
 export async function managedTeamIds(auth: AuthContext): Promise<string[]> {
-  if (auth.role === 'OWNER') {
+  if (isOwner(auth)) {
     const teams = await prisma.team.findMany({
       where: { companyId: auth.companyId, archivedAt: null },
       select: { id: true },
@@ -34,7 +34,7 @@ export async function managedTeamIds(auth: AuthContext): Promise<string[]> {
 
 /** Membership ids a manager is responsible for (reports + team members). */
 export async function managedMembershipIds(auth: AuthContext): Promise<string[]> {
-  if (auth.role === 'OWNER') {
+  if (isOwner(auth)) {
     const all = await prisma.membership.findMany({
       where: { companyId: auth.companyId, deactivatedAt: null },
       select: { id: true },
@@ -61,7 +61,7 @@ export async function managedMembershipIds(auth: AuthContext): Promise<string[]>
 
 /** Can the caller edit this person's full profile (role, manager, notes…)? */
 export async function canManagePerson(auth: AuthContext, targetId: string): Promise<boolean> {
-  if (auth.role === 'OWNER') return true;
+  if (isOwner(auth)) return true;
   if (auth.role !== 'MANAGER') return false;
   if (targetId === auth.membershipId) return true;
   const managed = await managedMembershipIds(auth);
@@ -78,7 +78,7 @@ export async function canEditTask(
   auth: AuthContext,
   task: { assigneeId: string | null; createdById: string | null; teamId: string | null },
 ): Promise<boolean> {
-  if (auth.role === 'OWNER') return true;
+  if (isOwner(auth)) return true;
   if (auth.role === 'MANAGER') {
     if (!task.teamId) return true;
     const teamIds = await managedTeamIds(auth);

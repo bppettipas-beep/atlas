@@ -5,7 +5,7 @@
  * API actually serialises, so the client never depends on `@prisma/client`.
  */
 
-export const COMPANY_ROLES = ['OWNER', 'MANAGER', 'WORKER'] as const;
+export const COMPANY_ROLES = ['OWNER', 'CO_OWNER', 'MANAGER', 'WORKER'] as const;
 export type CompanyRole = (typeof COMPANY_ROLES)[number];
 
 export const MEMBERSHIP_STATUSES = ['ACTIVE', 'SUSPENDED'] as const;

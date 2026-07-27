@@ -15,7 +15,7 @@ async function escalationRecipients(companyId: string, assigneeId: string | null
   const recipients = new Set<string>();
 
   const owners = await prisma.membership.findMany({
-    where: { companyId, role: 'OWNER', deactivatedAt: null },
+    where: { companyId, role: { in: ['OWNER', 'CO_OWNER'] }, deactivatedAt: null },
     select: { id: true },
   });
   owners.forEach((owner) => recipients.add(owner.id));

@@ -186,6 +186,7 @@ export const AVAILABILITY_META: Record<
 
 export const ROLE_META: Record<CompanyRole, { label: string; chip: string }> = {
   OWNER: { label: 'Owner', chip: 'border-ink bg-ink text-white' },
+  CO_OWNER: { label: 'Co-owner', chip: 'border-pending bg-pending-wash text-pending' },
   MANAGER: { label: 'Manager', chip: 'border-ink/25 text-ink' },
   WORKER: { label: 'Worker', chip: 'text-ink-3' },
 };

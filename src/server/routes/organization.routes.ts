@@ -8,7 +8,7 @@ import { emitToCompany } from '../realtime/io';
 import { recordActivity } from '../services/activity';
 import { notify } from '../services/notifications';
 import { broadcastOrganizationChange, buildOrganizationGraph } from '../services/organization';
-import { managedTeamIds } from '../services/permissions';
+import { isOwner, managedTeamIds } from '../services/permissions';
 import { serializeTeam } from '../services/serializers';
 
 export const organizationRouter = Router();
@@ -259,7 +259,7 @@ async function assertCanManageTeam(auth: ReturnType<typeof currentAuth>, teamId:
     where: { id: teamId, companyId: auth.companyId, archivedAt: null },
   });
   if (!team) throw ApiError.notFound('That team no longer exists.');
-  if (auth.role === 'OWNER') return team;
+  if (isOwner(auth)) return team;
   const teamIds = await managedTeamIds(auth);
   if (!teamIds.includes(team.id)) {
     throw ApiError.forbidden('You can only manage teams you lead or belong to.');

@@ -176,8 +176,7 @@ scheduleRouter.patch(
 
     // Moving work onto somebody else is an assignment, not a reschedule, and
     // needs the permission that assignment needs.
-    const changingAssignee =
-      input.assigneeId !== undefined && input.assigneeId !== task.assigneeId;
+    const changingAssignee = input.assigneeId !== undefined && input.assigneeId !== task.assigneeId;
     if (changingAssignee && !isLeadership(auth)) {
       throw ApiError.forbidden('Only owners and managers can move work to somebody else.');
     }
@@ -219,9 +218,7 @@ scheduleRouter.patch(
         recipientId: updated.assigneeId,
         actorId: auth.membershipId,
         type: changingAssignee ? 'TASK_ASSIGNED' : 'TASK_DUE_CHANGED',
-        title: changingAssignee
-          ? `New task: ${updated.title}`
-          : `Rescheduled: ${updated.title}`,
+        title: changingAssignee ? `New task: ${updated.title}` : `Rescheduled: ${updated.title}`,
         body: `Now ${input.startAt.toLocaleString()}.`,
         entityType: 'task',
         entityId: updated.id,
@@ -255,12 +252,23 @@ scheduleRouter.patch(
 
 const HOURS = z.object({
   weekday: z.coerce.number().int().min(0).max(6),
-  startMinute: z.coerce.number().int().min(0).max(24 * 60),
-  endMinute: z.coerce.number().int().min(0).max(24 * 60),
+  startMinute: z.coerce
+    .number()
+    .int()
+    .min(0)
+    .max(24 * 60),
+  endMinute: z.coerce
+    .number()
+    .int()
+    .min(0)
+    .max(24 * 60),
 });
 
 /** Anybody may read their own; leadership may read the people they manage. */
-async function assertCanSeeAvailability(auth: ReturnType<typeof currentAuth>, membershipId: string) {
+async function assertCanSeeAvailability(
+  auth: ReturnType<typeof currentAuth>,
+  membershipId: string,
+) {
   if (membershipId === auth.membershipId) return;
   const scope = await scheduleScope(auth);
   if (!scope.membershipIds.includes(membershipId)) {
@@ -404,7 +412,7 @@ scheduleRouter.post(
       const managers = await prisma.membership.findMany({
         where: {
           companyId: auth.companyId,
-          role: { in: ['OWNER', 'MANAGER'] },
+          role: { in: ['OWNER', 'CO_OWNER', 'MANAGER'] },
           status: 'ACTIVE',
           deactivatedAt: null,
           isPlaceholder: false,

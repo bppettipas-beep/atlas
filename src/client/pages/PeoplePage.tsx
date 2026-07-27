@@ -92,10 +92,7 @@ export function PeoplePage() {
                 >
                   New team
                 </Button>
-                <Button
-                  icon={<Plus className="h-4 w-4" />}
-                  onClick={() => setAddPersonOpen(true)}
-                >
+                <Button icon={<Plus className="h-4 w-4" />} onClick={() => setAddPersonOpen(true)}>
                   Add person
                 </Button>
                 <Button
@@ -144,6 +141,7 @@ export function PeoplePage() {
               >
                 <option value="">Any role</option>
                 <option value="OWNER">Owner</option>
+                <option value="CO_OWNER">Co-owner</option>
                 <option value="MANAGER">Manager</option>
                 <option value="WORKER">Worker</option>
               </Select>

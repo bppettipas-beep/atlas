@@ -12,7 +12,7 @@ interface SocketAuth {
   userId: string;
   membershipId: string;
   companyId: string;
-  role: 'OWNER' | 'MANAGER' | 'WORKER';
+  role: 'OWNER' | 'CO_OWNER' | 'MANAGER' | 'WORKER';
 }
 
 /** Minimal cookie parser — Socket.IO handshakes do not run Express middleware. */
@@ -81,7 +81,7 @@ export function initRealtime(httpServer: HttpServer): SocketServer {
     const auth = (socket.data as { auth: SocketAuth }).auth;
     socket.join(companyRoom(auth.companyId));
     socket.join(memberRoom(auth.membershipId));
-    if (auth.role === 'OWNER' || auth.role === 'MANAGER') {
+    if (auth.role === 'OWNER' || auth.role === 'CO_OWNER' || auth.role === 'MANAGER') {
       socket.join(leadershipRoom(auth.companyId));
     }
     socket.emit('ready', { companyId: auth.companyId, membershipId: auth.membershipId });

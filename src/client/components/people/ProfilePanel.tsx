@@ -493,6 +493,7 @@ function OverviewTab({
                 onChange={(event) => void changeRole(event.target.value)}
               >
                 <option value="OWNER">Owner</option>
+                <option value="CO_OWNER">Co-owner</option>
                 <option value="MANAGER">Manager</option>
                 <option value="WORKER">Worker</option>
               </Select>

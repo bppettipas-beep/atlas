@@ -637,7 +637,7 @@ authRouter.post(
     const leadership = await prisma.membership.findMany({
       where: {
         companyId: invite.companyId,
-        role: { in: ['OWNER', 'MANAGER'] },
+        role: { in: ['OWNER', 'CO_OWNER', 'MANAGER'] },
         deactivatedAt: null,
         id: { not: membershipId },
       },

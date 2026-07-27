@@ -7,7 +7,7 @@ import { generateInviteCode } from '../lib/ids';
 import { prisma } from '../prisma';
 import { recordActivity } from '../services/activity';
 import { serializeInviteCode } from '../services/serializers';
-import type { DirectInviteDto } from '../../shared/types';
+import type { CompanyRole, DirectInviteDto } from '../../shared/types';
 
 export const invitesRouter = Router();
 
@@ -179,7 +179,7 @@ invitesRouter.delete(
 function serializeDirectInvite(invite: {
   id: string;
   email: string;
-  role: 'OWNER' | 'MANAGER' | 'WORKER';
+  role: CompanyRole;
   jobTitle: string | null;
   teamId: string | null;
   team: { name: string } | null;

@@ -162,7 +162,12 @@ export function requireRole(...roles: CompanyRole[]) {
       next(ApiError.unauthorized());
       return;
     }
-    if (!roles.includes(req.auth.role)) {
+    // Co-owners inherit every route guarded for an owner. Keeping that rule at
+    // the boundary means new owner-only routes cannot accidentally leave them
+    // with a lesser implementation of the same authority.
+    const allowed =
+      roles.includes(req.auth.role) || (req.auth.role === 'CO_OWNER' && roles.includes('OWNER'));
+    if (!allowed) {
       next(
         ApiError.forbidden(
           roles.includes('MANAGER')

@@ -77,12 +77,14 @@ describe('owner sign-up', () => {
   });
 
   it('rejects a weak password and names the field', async () => {
-    const response = await request(app).post('/api/auth/owner-signup').send({
-      fullName: 'Short Password',
-      email: uniqueEmail('weak'),
-      password: 'short',
-      companyName: 'Weak Co',
-    });
+    const response = await request(app)
+      .post('/api/auth/owner-signup')
+      .send({
+        fullName: 'Short Password',
+        email: uniqueEmail('weak'),
+        password: 'short',
+        companyName: 'Weak Co',
+      });
 
     expect(response.status).toBe(422);
     expect(response.body.error.details.map((d: { path: string }) => d.path)).toContain('password');
@@ -92,11 +94,15 @@ describe('owner sign-up', () => {
     const email = uniqueEmail('signin');
     await signUpOwner(app, { email });
 
-    const good = await request(app).post('/api/auth/login').send({ email, password: STRONG_PASSWORD });
+    const good = await request(app)
+      .post('/api/auth/login')
+      .send({ email, password: STRONG_PASSWORD });
     expect(good.status).toBe(200);
     expect(good.body.company).toBeTruthy();
 
-    const bad = await request(app).post('/api/auth/login').send({ email, password: 'not-it-at-all' });
+    const bad = await request(app)
+      .post('/api/auth/login')
+      .send({ email, password: 'not-it-at-all' });
     expect(bad.status).toBe(401);
     expect(bad.body.error.code).toBe('INVALID_CREDENTIALS');
   });
@@ -306,7 +312,11 @@ describe('task assignment', () => {
   it('sends work that needs sign-off to review instead of straight to done', async () => {
     const created = await owner.agent
       .post('/api/tasks')
-      .send({ title: 'Solo shift sign-off', assigneeId: workerMembershipId, requiresApproval: true });
+      .send({
+        title: 'Solo shift sign-off',
+        assigneeId: workerMembershipId,
+        requiresApproval: true,
+      });
 
     const finished = await workerAgent
       .patch(`/api/tasks/${created.body.id}/status`)
@@ -501,6 +511,24 @@ describe('role-based access protection', () => {
 
     expect(response.status).toBe(400);
     expect(response.body.error.code).toBe('LAST_OWNER');
+  });
+
+  it('lets an owner appoint a co-owner with full owner authority', async () => {
+    const code = await createInviteCode(owner);
+    const coOwner = await joinWithCode(app, code, { fullName: 'Casey Co-owner' });
+    const coOwnerId = (coOwner.response.body as { membership: { id: string } }).membership.id;
+
+    await owner.agent.patch(`/api/people/${coOwnerId}/role`).send({ role: 'CO_OWNER' }).expect(200);
+
+    const person = await owner.agent.get(`/api/people/${coOwnerId}`).expect(200);
+    expect(person.body.role).toBe('CO_OWNER');
+
+    // Company settings are owner-only, so this proves co-owners inherit that
+    // authority rather than merely looking like an elevated manager.
+    await coOwner.agent
+      .patch('/api/companies/current')
+      .send({ location: 'Halifax, Nova Scotia' })
+      .expect(200);
   });
 
   it('signs the user out and stops accepting the old cookies', async () => {

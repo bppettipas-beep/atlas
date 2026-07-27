@@ -27,6 +27,7 @@ datasource db {
 
 enum CompanyRole {
   OWNER
+  CO_OWNER
   MANAGER
   WORKER
 }
@@ -296,7 +297,7 @@ model Membership {
 /// A company's own named role — "Lead Cleaning Technician", "Dispatcher".
 ///
 /// These describe position, not permission. The three permission tiers
-/// (OWNER / MANAGER / WORKER) stay where they are, because letting people
+/// (OWNER / CO_OWNER / MANAGER / WORKER) stay where they are, because letting people
 /// invent roles that grant access would turn every role edit into a security
 /// decision. A role here is a label with a colour and a place in a hierarchy.
 model Role {

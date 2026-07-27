@@ -134,7 +134,9 @@ export async function notifyLeadership(input: LeadershipNotificationInput) {
       status: 'ACTIVE',
       deactivatedAt: null,
       isPlaceholder: false,
-      role: input.ownersOnly ? 'OWNER' : { in: ['OWNER', 'MANAGER'] },
+      role: input.ownersOnly
+        ? { in: ['OWNER', 'CO_OWNER'] }
+        : { in: ['OWNER', 'CO_OWNER', 'MANAGER'] },
     },
     select: { id: true },
   });

@@ -7,7 +7,7 @@ export interface AccessTokenClaims {
   sub: string; // user id
   mid: string; // membership id
   cid: string; // company id
-  role: 'OWNER' | 'MANAGER' | 'WORKER';
+  role: 'OWNER' | 'CO_OWNER' | 'MANAGER' | 'WORKER';
 }
 
 const BCRYPT_ROUNDS = 12;
@@ -34,7 +34,8 @@ export function verifyAccessToken(token: string): AccessTokenClaims | null {
     if (typeof payload === 'string') return null;
     const { sub, mid, cid, role } = payload as Record<string, unknown>;
     if (typeof sub !== 'string' || typeof mid !== 'string' || typeof cid !== 'string') return null;
-    if (role !== 'OWNER' && role !== 'MANAGER' && role !== 'WORKER') return null;
+    if (role !== 'OWNER' && role !== 'CO_OWNER' && role !== 'MANAGER' && role !== 'WORKER')
+      return null;
     return { sub, mid, cid, role };
   } catch {
     return null;
