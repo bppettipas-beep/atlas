@@ -74,7 +74,9 @@ export function AtlasyPanel({ open, onClose }: { open: boolean; onClose: () => v
 
     try {
       const result = await api.post<{ reply: string; actions: ToolTrace[] }>('/assistant/chat', {
-        messages: next.map((turn) => ({ role: turn.role, content: turn.content })),
+        // Keep the payload within the API limit as the panel grows. The model
+        // only needs the most recent context to continue the conversation.
+        messages: next.slice(-40).map((turn) => ({ role: turn.role, content: turn.content })),
       });
       setTurns([...next, { role: 'assistant', content: result.reply, actions: result.actions }]);
     } catch (caught) {

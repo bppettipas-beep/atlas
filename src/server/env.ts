@@ -31,13 +31,13 @@ const schema = z.object({
   // button — the app never shows a sign-in option it cannot honour.
   GOOGLE_CLIENT_ID: z.string().default(''),
   GOOGLE_CLIENT_SECRET: z.string().default(''),
-  // Atlasy, the in-app assistant. Any OpenAI-compatible endpoint works —
-  // Google AI Studio, Groq, OpenRouter, Cerebras. Unset hides the button.
+  // Atlasy, the in-app assistant. The key is the only thing that has to be
+  // set; the defaults below point at Groq, which is free and fast and handles
+  // the tool list well. Any OpenAI-compatible endpoint works if you override
+  // them — Google AI Studio, OpenRouter, Cerebras.
   ASSISTANT_API_KEY: z.string().default(''),
-  ASSISTANT_BASE_URL: z
-    .string()
-    .default('https://generativelanguage.googleapis.com/v1beta/openai'),
-  ASSISTANT_MODEL: z.string().default('gemini-2.0-flash'),
+  ASSISTANT_BASE_URL: z.string().default('https://api.groq.com/openai/v1'),
+  ASSISTANT_MODEL: z.string().default('llama-3.3-70b-versatile'),
 });
 
 const parsed = schema.safeParse(process.env);

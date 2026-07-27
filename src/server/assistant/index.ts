@@ -15,6 +15,8 @@ import { runTool, toolSchemas } from './tools';
 
 /** How many times the model may call tools before we make it answer. */
 const MAX_ROUNDS = 5;
+/** Do not leave a browser request open forever when a model provider stalls. */
+const COMPLETION_TIMEOUT_MS = 30_000;
 
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant' | 'tool';
@@ -64,20 +66,29 @@ interface Completion {
 }
 
 async function complete(messages: ChatMessage[]): Promise<ChatMessage> {
-  const response = await fetch(`${env.ASSISTANT_BASE_URL.replace(/\/+$/, '')}/chat/completions`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${env.ASSISTANT_API_KEY}`,
-    },
-    body: JSON.stringify({
-      model: env.ASSISTANT_MODEL,
-      messages,
-      tools: toolSchemas(),
-      tool_choice: 'auto',
-      temperature: 0.2,
-    }),
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${env.ASSISTANT_BASE_URL.replace(/\/+$/, '')}/chat/completions`, {
+      method: 'POST',
+      signal: AbortSignal.timeout(COMPLETION_TIMEOUT_MS),
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${env.ASSISTANT_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: env.ASSISTANT_MODEL,
+        messages,
+        tools: toolSchemas(),
+        tool_choice: 'auto',
+        temperature: 0.2,
+      }),
+    });
+  } catch {
+    throw ApiError.badRequest(
+      'Atlasy could not reach its model provider. Try again in a moment.',
+      'ASSISTANT_UNAVAILABLE',
+    );
+  }
 
   if (!response.ok) {
     const detail = await response.text();
