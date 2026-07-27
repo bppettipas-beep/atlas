@@ -29,7 +29,7 @@ export const TOOLS: ToolDefinition[] = [
   {
     name: 'search_people',
     description:
-      'Find people in the company by name, job title or skill. Use this to turn a name the user said into the person id that other tools need.',
+      'Find people who work at this company, by name, job title or skill. Use this to turn a name into the membership id other tools need. It only searches staff — customers and clients are not in here, so an empty result usually means the name is not a colleague.',
     method: 'GET',
     path: '/api/people',
     parameters: {
@@ -73,7 +73,7 @@ export const TOOLS: ToolDefinition[] = [
   {
     name: 'create_task',
     description:
-      'Create a task. Always confirm the title and who it is for with the user before calling this. Only owners and managers may assign work to other people.',
+      'Create a task. assigneeId must be a real membership id from search_people, or the membership id of the person you are talking to when they say "me" or "mine". If you cannot find the person they named, STOP and ask who they mean — never guess, and never assign it to somebody else. Omit assigneeId entirely to leave the task unassigned, which is how work is left for anyone to pick up.',
     method: 'POST',
     path: '/api/tasks',
     parameters: {
@@ -123,24 +123,6 @@ export const TOOLS: ToolDefinition[] = [
       properties: {
         id: str('Membership id of the person, from search_people.'),
         roleId: str('Role id from list_roles, or null to clear their role.'),
-      },
-    },
-  },
-  {
-    name: 'add_person',
-    description:
-      'Add somebody to the company by hand who does not need to sign in. Owners and managers only. Confirm the name with the user first.',
-    method: 'POST',
-    path: '/api/people',
-    parameters: {
-      type: 'object',
-      required: ['fullName'],
-      properties: {
-        fullName: str('Their full name.'),
-        jobTitle: str('Their job title.'),
-        roleId: str('Role id from list_roles.'),
-        managerId: str('Membership id of who they report to.'),
-        teamId: str('Team id from list_teams.'),
       },
     },
   },

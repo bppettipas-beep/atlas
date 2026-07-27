@@ -75,6 +75,9 @@ assistantRouter.post(
         fullName: membership.user.fullName,
         role: membership.role,
         companyName: membership.company.name,
+        // So "assign it to me" resolves without a lookup that could pick the
+        // wrong person with a similar name.
+        membershipId: membership.id,
       },
     });
 

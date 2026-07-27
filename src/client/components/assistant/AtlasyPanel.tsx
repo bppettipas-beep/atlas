@@ -1,7 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Check, PaperPlane, Warning, X } from '@/components/icons';
-import { LogoMark } from '@/components/Logo';
 import { Button, DRAFT_EASE, Spinner, Textarea } from '@/components/ui';
 import { api, errorMessage } from '@/lib/api';
 import { cn } from '@/lib/utils';
@@ -23,6 +22,18 @@ const OPENERS = [
   'What is overdue right now?',
   'Add a Dispatcher role and give it to Rosa',
 ];
+
+/** Atlasy's dedicated mark; the Atlas product mark remains reserved for Atlas itself. */
+function AtlasyMark({ className }: { className?: string }) {
+  return (
+    <img
+      src="/brand/atlasy-mark.png"
+      alt=""
+      aria-hidden="true"
+      className={cn('shrink-0 object-contain', className)}
+    />
+  );
+}
 
 /** Whether this instance has an assistant configured. Null while unknown. */
 export function useAssistantEnabled(): boolean | null {
@@ -100,7 +111,7 @@ export function AtlasyPanel({ open, onClose }: { open: boolean; onClose: () => v
           {/* ---------------------------- title block --------------------------- */}
           <header className="flex shrink-0 items-center justify-between border-b border-rule px-4 py-3">
             <span className="inline-flex items-center gap-2.5">
-              <LogoMark className="h-5 w-5 text-ink" />
+              <AtlasyMark className="h-7 w-7" />
               <span className="title text-[14px] leading-none">Atlasy</span>
               <span className="edge-sm border border-edge px-1 py-px text-ink-4">Beta</span>
             </span>
@@ -250,7 +261,7 @@ export function AtlasyButton({ onClick, open }: { onClick: () => void; open: boo
           : 'border-edge bg-sheet text-ink hover:border-edgeStrong hover:bg-paper',
       )}
     >
-      <LogoMark className="h-[15px] w-[15px]" />
+      <AtlasyMark className="h-6 w-6" />
       Atlasy
     </button>
   );
