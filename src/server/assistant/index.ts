@@ -11,7 +11,7 @@
  */
 import { env } from '../env';
 import { ApiError } from '../http/errors';
-import { runTool, toolSchemas } from './tools';
+import { TOOLS, runTool, toolSchemas } from './tools';
 
 /** How many times the model may call tools before we make it answer. */
 const MAX_ROUNDS = 5;
@@ -51,6 +51,7 @@ function systemPrompt(context: {
     '',
     'How to behave:',
     '- Be brief. These are busy people on a shop floor, not readers of documentation.',
+    '- Do not use a tool unless the message actually needs one. "Hi", "thanks", "what can you do" and anything else conversational gets a one-line reply and no tool call at all. Reaching for a tool to answer a greeting is always wrong.',
     '- After you act, say in one sentence what you did. Nothing else.',
     '',
     'How to talk:',
@@ -144,6 +145,7 @@ function describe(name: string, ok: boolean, data: unknown): string {
     return `Created the role “${(data as { name: string }).name}”`;
   }
   if (name === 'assign_role') return 'Role assigned';
+  if (name === 'remove_person') return 'Removed from the company';
   return 'Looked it up';
 }
 
@@ -194,11 +196,17 @@ export async function runAssistant(options: {
       }
 
       const result = await runTool(call.function.name, args, options.cookie);
-      actions.push({
-        name: call.function.name,
-        ok: result.ok,
-        summary: describe(call.function.name, result.ok, result.data),
-      });
+
+      // Report what changed, plus anything that failed — a refused lookup is
+      // worth seeing. A successful read is not: it is how it thinks.
+      const mutates = TOOLS.find((tool) => tool.name === call.function.name)?.mutates ?? false;
+      if (mutates || !result.ok) {
+        actions.push({
+          name: call.function.name,
+          ok: result.ok,
+          summary: describe(call.function.name, result.ok, result.data),
+        });
+      }
 
       messages.push({
         role: 'tool',

@@ -107,7 +107,17 @@ export function AtlasyPanel({ open, onClose }: { open: boolean; onClose: () => v
   };
 
   useEffect(() => {
-    if (open) inputRef.current?.focus();
+    if (open) {
+      inputRef.current?.focus();
+      return;
+    }
+    // Closing the panel ends the conversation. The thread is the only memory
+    // Atlasy has — it is what gets sent on the next question — so wiping it
+    // here is the difference between "closed" and "minimised", and closed is
+    // what the button reads as.
+    setTurns([]);
+    setInput('');
+    setError(null);
   }, [open]);
 
   useEffect(() => {

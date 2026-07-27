@@ -21,6 +21,12 @@ export interface ToolDefinition {
   method: 'GET' | 'POST' | 'PATCH' | 'DELETE';
   /** `:param` segments are filled from the arguments; the rest become body or query. */
   path: string;
+  /**
+   * Whether this changes anything. Only mutations are reported back to the
+   * panel: a lookup is how the assistant thinks, not something it did, and
+   * showing "Looked it up" for every read is noise the user cannot act on.
+   */
+  mutates?: boolean;
 }
 
 const str = (description: string) => ({ type: 'string', description });
@@ -72,6 +78,7 @@ export const TOOLS: ToolDefinition[] = [
   },
   {
     name: 'create_task',
+    mutates: true,
     description:
       'Create a task. assigneeId must be a real membership id from search_people, or the membership id of the person you are talking to when they say "me" or "mine". If you cannot find the person they named, STOP and ask who they mean — never guess, and never assign it to somebody else. Omit assigneeId entirely to leave the task unassigned, which is how work is left for anyone to pick up.',
     method: 'POST',
@@ -96,6 +103,7 @@ export const TOOLS: ToolDefinition[] = [
   },
   {
     name: 'create_role',
+    mutates: true,
     description:
       'Create a named company role with a colour. Owners and managers only. Roles describe position and grant no access.',
     method: 'POST',
@@ -114,6 +122,7 @@ export const TOOLS: ToolDefinition[] = [
   },
   {
     name: 'assign_role',
+    mutates: true,
     description: 'Give somebody one of the company’s roles. Owners and managers only.',
     method: 'PATCH',
     path: '/api/people/:id/assigned-role',
@@ -128,6 +137,7 @@ export const TOOLS: ToolDefinition[] = [
   },
   {
     name: 'remove_person',
+    mutates: true,
     description:
       'Remove somebody from the company. Owners only. This is destructive and cannot be undone from here — always state the person’s full name and ask the user to confirm before calling it, and never call it in the same reply as the confirmation question.',
     method: 'DELETE',
