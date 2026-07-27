@@ -93,11 +93,100 @@ export const TOOLS: ToolDefinition[] = [
         teamId: str('Team id from list_teams.'),
         priority: { type: 'string', enum: ['LOW', 'MEDIUM', 'HIGH', 'URGENT'] },
         dueAt: str('ISO 8601 date-time, e.g. 2026-08-01T17:00:00Z.'),
+        startAt: str('Optional scheduled start as an ISO 8601 date-time.'),
+        endAt: str(
+          'Optional scheduled end as an ISO 8601 date-time. Required when startAt is set.',
+        ),
         location: str('Where the work happens.'),
         requiresApproval: {
           type: 'boolean',
           description: 'True if a manager must sign it off rather than it going straight to done.',
         },
+      },
+    },
+  },
+  {
+    name: 'get_schedule',
+    description:
+      'Read scheduled work, availability and workload for a time window. Use this for questions such as what is on someone’s schedule, who is free, or when a team is available. `resources` is an optional comma-separated list of person membership ids or team ids.',
+    method: 'GET',
+    path: '/api/schedule',
+    parameters: {
+      type: 'object',
+      required: ['from', 'to'],
+      properties: {
+        from: str('ISO 8601 start of the time window.'),
+        to: str('ISO 8601 end of the time window.'),
+        resources: str('Optional comma-separated person membership ids or team ids.'),
+        status: str('Optional comma-separated task statuses.'),
+        priority: str('Optional comma-separated task priorities.'),
+        location: str('Optional location to filter by.'),
+      },
+    },
+  },
+  {
+    name: 'check_schedule_conflicts',
+    description:
+      'Check whether a person is already booked or unavailable in a proposed time range. Use this before scheduling or moving work for a person.',
+    method: 'GET',
+    path: '/api/schedule/conflicts',
+    parameters: {
+      type: 'object',
+      required: ['membershipId', 'startAt', 'endAt'],
+      properties: {
+        membershipId: str('Person membership id from search_people.'),
+        startAt: str('Proposed ISO 8601 start date-time.'),
+        endAt: str('Proposed ISO 8601 end date-time.'),
+        ignoreTaskId: str('Task id to exclude when moving an existing task.'),
+      },
+    },
+  },
+  {
+    name: 'schedule_task',
+    mutates: true,
+    description:
+      'Schedule, reschedule, reassign, or remove a task from the schedule. The signed-in user’s normal schedule permissions are enforced by Atlas.',
+    method: 'PATCH',
+    path: '/api/schedule/tasks/:id',
+    parameters: {
+      type: 'object',
+      required: ['id', 'startAt'],
+      properties: {
+        id: str('Task id from list_tasks or schedule results.'),
+        startAt: {
+          type: ['string', 'null'],
+          description: 'ISO 8601 start, or null to remove the task from the schedule.',
+        },
+        endAt: {
+          type: ['string', 'null'],
+          description: 'ISO 8601 end. Required when startAt is a date-time.',
+        },
+        assigneeId: {
+          type: ['string', 'null'],
+          description: 'Optional person membership id to assign.',
+        },
+        teamId: { type: ['string', 'null'], description: 'Optional team id to assign.' },
+        location: { type: ['string', 'null'], description: 'Optional location.' },
+      },
+    },
+  },
+  {
+    name: 'report_time_off',
+    mutates: true,
+    description:
+      'Report an unavailable period or time off for yourself. Managers may also do this for people they manage; Atlas enforces that permission.',
+    method: 'POST',
+    path: '/api/schedule/availability/:membershipId/time-off',
+    parameters: {
+      type: 'object',
+      required: ['membershipId', 'startAt', 'endAt'],
+      properties: {
+        membershipId: str(
+          'Your membership id for yourself, or a person id from search_people when permitted.',
+        ),
+        startAt: str('ISO 8601 start date-time.'),
+        endAt: str('ISO 8601 end date-time.'),
+        note: str('Optional short reason or note.'),
       },
     },
   },

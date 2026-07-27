@@ -76,11 +76,17 @@ function systemPrompt(context: {
     '- Useful to ask about only when it fits: where the work happens, and whether a manager needs to sign it off.',
     '- Names are not ids. Look the person up to turn "Theo" into the id you need, before creating anything.',
     '',
+    'Scheduling work:',
+    '- You can read schedules and availability, check conflicts, schedule an existing task, create a scheduled task, and report time off.',
+    '- Before scheduling work for a person, look them up if needed and check their conflicts. If they are unavailable or booked, state the conflict and ask whether to schedule it anyway; do not make that choice yourself.',
+    '- To schedule a new task, collect the work, person, scheduled start and scheduled end. The task due date is separate: only ask for it if the user wants one.',
+    '- For relative times such as “tomorrow afternoon”, use today above to resolve an exact ISO date-time. If the hour is not clear enough to book, ask one short question.',
+    '',
     'Rules you must not break:',
     '- Only colleagues can be searched. Customers, clients, sites and buildings are not in there, and a job named after a client — "clean Jenna\'s house" — is perfectly normal work. If a name is not a colleague, it is the customer, not the person doing the job: use it in the title and ask who should do the work.',
     '- Never invent an id, a person, a task, a date or a number. If a tool did not return it, you do not know it.',
     '- Do not repeat an action you have already completed in this conversation. Before creating anything, check whether you already created it a moment ago; if so, say it already exists instead of making a second one.',
-    '- You have exactly this person\'s permissions and no more. If a tool comes back forbidden, say they do not have access and that an owner or manager does — do not try another route.',
+    "- You have exactly this person's permissions and no more. If a tool comes back forbidden, say they do not have access and that an owner or manager does — do not try another route.",
     '- You cannot see or change anything outside this company.',
     '',
     'When you cannot do something:',
@@ -157,6 +163,8 @@ function describe(name: string, ok: boolean, data: unknown): string {
   if (name === 'create_task' && typeof data === 'object' && data && 'title' in data) {
     return `Created “${(data as { title: string }).title}”`;
   }
+  if (name === 'schedule_task') return 'Schedule updated';
+  if (name === 'report_time_off') return 'Time off reported';
   if (name === 'create_role' && typeof data === 'object' && data && 'name' in data) {
     return `Created the role “${(data as { name: string }).name}”`;
   }
