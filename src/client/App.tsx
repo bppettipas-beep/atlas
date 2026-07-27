@@ -1,4 +1,4 @@
-import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { Navigate, Route, Routes, useLocation, useParams } from 'react-router-dom';
 import { AppShell } from '@/components/layout/AppShell';
 import { LoadingState, ToastProvider } from '@/components/ui';
 import { AccountPage } from '@/pages/AccountPage';
@@ -51,6 +51,16 @@ function AppIndex() {
   return <Navigate to={isLeadership ? '/app/organization' : '/app/my-day'} replace />;
 }
 
+/**
+ * Marketing pages share one component, but each topic is its own document.
+ * Keying it by the route parameter guarantees a clean page instance when a
+ * visitor moves directly from one top tab to another.
+ */
+function MarketingRoute() {
+  const { section } = useParams();
+  return <MarketingDetailPage key={section} />;
+}
+
 export function App() {
   return (
     <ToastProvider>
@@ -58,7 +68,7 @@ export function App() {
         <RealtimeProvider>
           <Routes>
             <Route path="/" element={<LandingPage />} />
-            <Route path="/explore/:section" element={<MarketingDetailPage />} />
+            <Route path="/explore/:section" element={<MarketingRoute />} />
             <Route path="/start" element={<StartPage />} />
             <Route path="/signin" element={<SignInPage />} />
             <Route path="/signup/owner" element={<OwnerSignupPage />} />

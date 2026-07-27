@@ -331,7 +331,7 @@ export function MarketingDetailPage() {
             </h2>
           </div>
           <div className="mt-10 grid border-l border-t border-edge md:grid-cols-3">
-            {page.inPractice.map(([title, body], index) => (
+            {(page.inPractice ?? []).map(([title, body], index) => (
               <article key={title} className="border-b border-r border-edge p-6 sm:p-7">
                 <span className="font-mono text-[11px] text-ink-4">
                   {String(index + 1).padStart(2, '0')}
