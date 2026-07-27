@@ -198,6 +198,15 @@ const PLANS = [
   },
 ];
 
+const MARKETING_TABS = [
+  ['problem', 'Problem'],
+  ['product', 'Product'],
+  ['roles', 'Teams'],
+  ['details', 'Details'],
+  ['pricing', 'Pricing'],
+  ['getting-started', 'Start'],
+] as const;
+
 export function LandingPage() {
   const { session, loading } = useAuth();
 
@@ -212,20 +221,29 @@ export function LandingPage() {
     <div className="min-h-full bg-paper">
       {/* ============================ title block ============================ */}
       <header className="bg-paper/92 sticky top-0 z-30 border-b border-edge backdrop-blur-[3px]">
-        <div className="mx-auto flex w-full max-w-[1120px] items-center justify-between px-5 py-3 sm:px-10">
+        <div className="mx-auto flex w-full max-w-[1120px] flex-wrap items-center justify-between gap-y-2 px-5 py-3 sm:px-10">
           <Logo markClassName="h-[25px] w-[25px]" wordClassName="text-[15px]" />
+
+          <nav
+            className="order-3 flex w-full gap-1 overflow-x-auto pb-0.5 md:order-none md:w-auto md:overflow-visible"
+            aria-label="Explore Atlas"
+          >
+            {MARKETING_TABS.map(([section, label]) => (
+              <Link
+                key={section}
+                to={`/explore/${section}`}
+                className="shrink-0 border-b border-transparent px-2 py-1.5 text-[12px] font-medium text-ink-3 transition-colors hover:border-ink hover:text-ink"
+              >
+                {label}
+              </Link>
+            ))}
+          </nav>
 
           {/* Signed in, this is the way back to your company. Signed out, it is
               the way in. Only one of the two is ever true. */}
           <nav className="flex items-center gap-2 sm:gap-4" aria-label="Account">
             {signedIn ? (
               <>
-                <a
-                  href="#pricing"
-                  className="px-2 py-1.5 text-[13px] font-medium text-ink-2 transition-colors hover:text-ink"
-                >
-                  Pricing
-                </a>
                 <Link
                   to="/app"
                   className="group inline-flex h-8 items-center gap-2 rounded-sm bg-ink px-3.5 text-[13px] font-medium text-white transition-colors duration-150 ease-draft hover:bg-ink-2"

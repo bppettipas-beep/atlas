@@ -1,5 +1,4 @@
 import {
-  ArrowLeft,
   ArrowRight,
   BookOpen,
   Building,
@@ -12,6 +11,15 @@ import { Logo } from '@/components/Logo';
 import { useAuth } from '@/providers/AuthProvider';
 import { useEffect } from 'react';
 import { Link, Navigate, useParams } from 'react-router-dom';
+
+const MARKETING_TABS = [
+  ['problem', 'Problem'],
+  ['product', 'Product'],
+  ['roles', 'Teams'],
+  ['details', 'Details'],
+  ['pricing', 'Pricing'],
+  ['getting-started', 'Start'],
+] as const;
 
 const PAGES = {
   problem: {
@@ -29,6 +37,20 @@ const PAGES = {
       [
         'Keep know-how',
         'Processes belong to the company, not to the one person who happens to remember them.',
+      ],
+    ],
+    inPractice: [
+      [
+        'Start with the handoffs',
+        'Map the moments where one person has to remember to tell another person something. Those are the first gaps Atlas makes visible.',
+      ],
+      [
+        'Give every job an owner',
+        'A task, process, and decision should have a person attached to it. Clarity is less about adding process and more about removing ambiguity.',
+      ],
+      [
+        'Keep the signal in one place',
+        'Updates belong beside the work, not buried in a chat thread that only a few people can find later.',
       ],
     ],
     icon: TreeStructure,
@@ -57,6 +79,20 @@ const PAGES = {
         'Living documents with ownership, version history, and acknowledgement when a process must be read.',
       ],
     ],
+    inPractice: [
+      [
+        'See the whole chain',
+        'A job can begin with a person, be assigned to a team, scheduled into a day, and linked to the instructions needed to complete it.',
+      ],
+      [
+        'Work from context',
+        'Instead of asking around, the person doing the work can see the notes, documents, attachments, and updates that matter.',
+      ],
+      [
+        'Let the record build itself',
+        'Changes, comments, approvals, and completed work stay connected, making the next handoff easier than the last.',
+      ],
+    ],
     icon: CheckSquare,
   },
   roles: {
@@ -77,6 +113,20 @@ const PAGES = {
       [
         'Permissions that hold',
         'Access is enforced by the server, so the view is not merely hiding information a person should not access.',
+      ],
+    ],
+    inPractice: [
+      [
+        'A calm worker day',
+        'Workers open a focused list of today’s work instead of a dashboard full of decisions that are not theirs to make.',
+      ],
+      [
+        'A useful manager view',
+        'Managers can spot overdue, blocked, unassigned, and scheduled work early enough to do something about it.',
+      ],
+      [
+        'One source of truth',
+        'Both views come from the same data, so a worker update is immediately useful to the people coordinating the business.',
       ],
     ],
     icon: Building,
@@ -101,6 +151,20 @@ const PAGES = {
         'Attachments, mentions, sign-off, Google sign-in, invitations, and multi-company access fit into the same operating model.',
       ],
     ],
+    inPractice: [
+      [
+        'Updates reach the right people',
+        'Assignments, comments, schedule changes, and announcements become notifications in Atlas and can also arrive by email.',
+      ],
+      [
+        'Processes stay usable',
+        'A document can be owned, published, revised, and acknowledged, turning “the way we do it” into something people can actually follow.',
+      ],
+      [
+        'Small actions add up',
+        'Attachments, mentions, approvals, recurring tasks, and availability are deliberately connected instead of being separate little tools.',
+      ],
+    ],
     icon: ShieldCheck,
   },
   pricing: {
@@ -118,6 +182,20 @@ const PAGES = {
       [
         'Scale — $1,000 / month',
         'Everything in Growth, multi-company support, and priority onboarding support.',
+      ],
+    ],
+    inPractice: [
+      [
+        'Start with the plan you need',
+        'Every plan begins with the shared operating picture: people, work, knowledge, and live updates in one place.',
+      ],
+      [
+        'Grow without replacing the system',
+        'As routines and management needs increase, the same company record can support approvals, recurring work, and richer coordination.',
+      ],
+      [
+        'Know what you are paying for',
+        'The price reflects the level of operational support, not a maze of add-ons that makes planning difficult.',
       ],
     ],
     icon: Calendar,
@@ -139,6 +217,20 @@ const PAGES = {
         'Assign work, attach the process, schedule it when appropriate, and let the shared picture start doing its work.',
       ],
     ],
+    inPractice: [
+      [
+        'Begin with what is true today',
+        'Add the people, teams, and reporting lines you already know. You do not need a perfect org chart to make the first version useful.',
+      ],
+      [
+        'Choose one real workflow',
+        'Bring in a current job, assign it, attach the instructions, and let the team use Atlas on something that matters.',
+      ],
+      [
+        'Build in layers',
+        'Once the first work is moving, add recurring routines, announcements, schedules, and the company knowledge that makes handoffs reliable.',
+      ],
+    ],
     icon: BookOpen,
   },
 } as const;
@@ -155,16 +247,53 @@ export function MarketingDetailPage() {
   return (
     <div className="min-h-full bg-paper">
       <header className="border-b border-edge bg-paper">
-        <div className="mx-auto flex w-full max-w-[960px] items-center justify-between px-5 py-3 sm:px-8">
+        <div className="mx-auto flex w-full max-w-[1120px] flex-wrap items-center justify-between gap-y-2 px-5 py-3 sm:px-8">
           <Link to="/" aria-label="Atlas home">
             <Logo markClassName="h-[24px] w-[24px]" wordClassName="text-[15px]" />
           </Link>
-          <Link
-            to="/"
-            className="inline-flex items-center gap-1.5 text-[13px] font-medium text-ink-2 hover:text-ink"
+          <nav
+            className="order-3 flex w-full gap-1 overflow-x-auto pb-0.5 md:order-none md:w-auto md:overflow-visible"
+            aria-label="Explore Atlas"
           >
-            <ArrowLeft className="text-[13px]" /> Overview
-          </Link>
+            {MARKETING_TABS.map(([tabSection, label]) => (
+              <Link
+                key={tabSection}
+                to={`/explore/${tabSection}`}
+                className={`shrink-0 border-b px-2 py-1.5 text-[12px] font-medium transition-colors ${
+                  tabSection === section
+                    ? 'border-ink text-ink'
+                    : 'border-transparent text-ink-3 hover:border-ink hover:text-ink'
+                }`}
+              >
+                {label}
+              </Link>
+            ))}
+          </nav>
+          <div className="flex items-center gap-2">
+            {session ? (
+              <Link
+                to="/app"
+                className="inline-flex h-8 items-center rounded-sm bg-ink px-3.5 text-[13px] font-medium text-white transition-colors hover:bg-ink-2"
+              >
+                Open panel
+              </Link>
+            ) : (
+              <>
+                <Link
+                  to="/signin"
+                  className="px-2 py-1.5 text-[13px] font-medium text-ink-2 transition-colors hover:text-ink"
+                >
+                  Sign in
+                </Link>
+                <Link
+                  to="/start"
+                  className="inline-flex h-8 items-center rounded-sm bg-ink px-3.5 text-[13px] font-medium text-white transition-colors hover:bg-ink-2"
+                >
+                  Sign up
+                </Link>
+              </>
+            )}
+          </div>
         </div>
       </header>
       <main className="mx-auto w-full max-w-[960px] px-5 py-14 sm:px-8 sm:py-20">
@@ -193,6 +322,25 @@ export function MarketingDetailPage() {
               </div>
             </article>
           ))}
+        </section>
+        <section className="mt-16">
+          <div className="max-w-[58ch]">
+            <p className="edge">In practice</p>
+            <h2 className="display mt-4 max-w-[18ch] text-[2rem] leading-[1.02] sm:text-[2.8rem]">
+              Made for the way a real company moves.
+            </h2>
+          </div>
+          <div className="mt-10 grid border-l border-t border-edge md:grid-cols-3">
+            {page.inPractice.map(([title, body], index) => (
+              <article key={title} className="border-b border-r border-edge p-6 sm:p-7">
+                <span className="font-mono text-[11px] text-ink-4">
+                  {String(index + 1).padStart(2, '0')}
+                </span>
+                <h3 className="title mt-8 text-[17px]">{title}</h3>
+                <p className="mt-3 text-[14px] leading-relaxed text-ink-3">{body}</p>
+              </article>
+            ))}
+          </div>
         </section>
         <div className="mt-12 flex flex-wrap items-center gap-3">
           <Link
