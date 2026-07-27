@@ -442,6 +442,7 @@ Every variable is documented in `.env.example`. The ones that matter:
 | `COOKIE_SECURE` | no | Forced on when `NODE_ENV=production` |
 | `SCHEDULER_INTERVAL_SECONDS` | no | Overdue escalation and recurring tasks. `0` disables |
 | `CORS_ORIGINS` | no | Extra allowed origins, comma separated |
+| `AUTH_RATE_LIMIT` | no | Credential attempts per IP per 15 min, default 40 |
 | `GOOGLE_CLIENT_ID` | no | Enables Google sign-in. See below |
 | `GOOGLE_CLIENT_SECRET` | no | Enables Google sign-in. See below |
 

@@ -549,6 +549,116 @@ describe('health', () => {
   });
 });
 
+describe('deleting an account', () => {
+  it('refuses without the correct password', async () => {
+    const owner = await signUpOwner(app);
+    const response = await owner.agent
+      .post('/api/auth/account/delete')
+      .send({ password: 'not-the-password' });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toMatchObject({ code: 'INVALID_CREDENTIALS' });
+
+    // Still there, still able to use the app.
+    expect((await owner.agent.get('/api/auth/session')).status).toBe(200);
+  });
+
+  it('refuses to strand a company that still has staff in it', async () => {
+    const owner = await signUpOwner(app);
+    const code = await createInviteCode(owner);
+    await joinWithCode(app, code);
+
+    const response = await owner.agent
+      .post('/api/auth/account/delete')
+      .send({ password: STRONG_PASSWORD });
+
+    expect(response.status).toBe(409);
+    expect(response.body.error).toMatchObject({ code: 'LAST_OWNER' });
+    expect(response.body.error.message).toContain('only owner');
+
+    const stillThere = await prisma.user.findUnique({ where: { id: owner.session.user.id } });
+    expect(stillThere).not.toBeNull();
+  });
+
+  it('deletes a lone owner and takes the empty company with them', async () => {
+    const owner = await signUpOwner(app);
+    const { id: userId } = owner.session.user;
+    const companyId = owner.session.company.id;
+
+    const response = await owner.agent
+      .post('/api/auth/account/delete')
+      .send({ password: STRONG_PASSWORD });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({ ok: true, companiesDeleted: 1 });
+
+    expect(await prisma.user.findUnique({ where: { id: userId } })).toBeNull();
+    expect(await prisma.company.findUnique({ where: { id: companyId } })).toBeNull();
+    // The cookies are gone, so the session is too.
+    expect((await owner.agent.get('/api/auth/session')).status).toBe(401);
+  });
+
+  it('lets a worker leave without destroying the work they did', async () => {
+    const owner = await signUpOwner(app);
+    const code = await createInviteCode(owner);
+    const worker = await joinWithCode(app, code);
+    const workerSession = worker.response.body as typeof owner.session;
+
+    const task = await owner.agent.post('/api/tasks').send({
+      title: 'Restock the supply cupboard',
+      assigneeId: workerSession.membership.id,
+    });
+    expect(task.status).toBe(201);
+    const taskId = task.body.id as string;
+
+    const response = await worker.agent
+      .post('/api/auth/account/delete')
+      .send({ password: STRONG_PASSWORD });
+
+    expect(response.status).toBe(200);
+    expect(response.body.companiesDeleted).toBe(0);
+
+    expect(await prisma.user.findUnique({ where: { id: workerSession.user.id } })).toBeNull();
+
+    // The company keeps the task; it simply stops naming a person.
+    const survivor = await prisma.task.findUnique({ where: { id: taskId } });
+    expect(survivor).not.toBeNull();
+    expect(survivor?.assigneeId).toBeNull();
+    expect(survivor?.title).toBe('Restock the supply cupboard');
+
+    // And the owner's own company is untouched.
+    expect((await owner.agent.get('/api/auth/session')).status).toBe(200);
+  });
+
+  it('requires the typed email address when there is no password', async () => {
+    const owner = await signUpOwner(app);
+    // Simulate a Google-only account: no password to re-enter.
+    await prisma.user.update({
+      where: { id: owner.session.user.id },
+      data: { passwordHash: null, googleId: `google-${owner.session.user.id}` },
+    });
+
+    const wrong = await owner.agent
+      .post('/api/auth/account/delete')
+      .send({ confirmEmail: 'someone.else@example.com' });
+    expect(wrong.status).toBe(400);
+    expect(wrong.body.error).toMatchObject({ code: 'CONFIRMATION_REQUIRED' });
+
+    const right = await owner.agent
+      .post('/api/auth/account/delete')
+      .send({ confirmEmail: owner.session.user.email.toUpperCase() });
+    expect(right.status).toBe(200);
+    expect(await prisma.user.findUnique({ where: { id: owner.session.user.id } })).toBeNull();
+  });
+
+  it('cannot be called without being signed in', async () => {
+    const response = await request(app)
+      .post('/api/auth/account/delete')
+      .send({ password: STRONG_PASSWORD });
+    expect(response.status).toBe(401);
+  });
+});
+
 describe('Google sign-in', () => {
   // The tests run without GOOGLE_CLIENT_ID/SECRET, which is the same state a
   // fresh deployment is in. Everything here checks that the feature stays shut

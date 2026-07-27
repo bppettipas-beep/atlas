@@ -47,7 +47,7 @@ export const authRouter = Router();
 /** Brute-force protection on the credential endpoints. */
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  limit: 40,
+  limit: env.AUTH_RATE_LIMIT,
   standardHeaders: 'draft-7',
   legacyHeaders: false,
   message: {
@@ -763,6 +763,114 @@ authRouter.post(
 
     await issueSession(req, res, auth.userId, target.id);
     res.json(await buildSessionPayload(auth.userId, target.id));
+  }),
+);
+
+/**
+ * Deletes the signed-in person's account.
+ *
+ * What survives is deliberate. Every attribution in the schema — task assignee,
+ * comment author, document owner, activity actor — is `onDelete: SetNull`, so
+ * the company keeps its work and its history; those records simply stop naming
+ * a person. What goes is the account itself: the login, the sessions, and the
+ * memberships that made it *this* person's work.
+ *
+ * The one thing this must never do is strand a company. An owner who is the
+ * last owner of a company that still has staff in it is refused, because
+ * deleting them would leave a business nobody can administer. If they are the
+ * last person in the company altogether, the company goes with them — leaving
+ * it behind would only create an unreachable orphan.
+ */
+authRouter.post(
+  '/account/delete',
+  authLimiter,
+  requireAuth,
+  validateBody(
+    z.object({
+      password: z.string().optional(),
+      confirmEmail: z.string().trim().optional(),
+    }),
+  ),
+  asyncHandler(async (req, res) => {
+    const auth = currentAuth(req);
+    const input = req.body as { password?: string; confirmEmail?: string };
+
+    const user = await prisma.user.findUniqueOrThrow({
+      where: { id: auth.userId },
+      include: {
+        memberships: {
+          where: { status: 'ACTIVE', deactivatedAt: null },
+          include: { company: { select: { id: true, name: true } } },
+        },
+      },
+    });
+
+    // Prove it is really them. A password account re-enters its password; a
+    // Google account has none, so it types its own address instead.
+    if (user.passwordHash) {
+      if (!input.password || !(await verifyPassword(input.password, user.passwordHash))) {
+        throw ApiError.badRequest('That password is not correct.', 'INVALID_CREDENTIALS');
+      }
+    } else if (input.confirmEmail?.trim().toLowerCase() !== user.email) {
+      throw ApiError.badRequest(
+        'Type your email address exactly to confirm.',
+        'CONFIRMATION_REQUIRED',
+      );
+    }
+
+    // Companies this person would leave without an owner.
+    const companiesToDelete: string[] = [];
+    const blocking: string[] = [];
+
+    for (const membership of user.memberships) {
+      if (membership.role !== 'OWNER') continue;
+
+      const [otherOwners, otherMembers] = await Promise.all([
+        prisma.membership.count({
+          where: {
+            companyId: membership.companyId,
+            role: 'OWNER',
+            status: 'ACTIVE',
+            deactivatedAt: null,
+            id: { not: membership.id },
+          },
+        }),
+        prisma.membership.count({
+          where: {
+            companyId: membership.companyId,
+            status: 'ACTIVE',
+            deactivatedAt: null,
+            id: { not: membership.id },
+          },
+        }),
+      ]);
+
+      if (otherOwners > 0) continue;
+      if (otherMembers > 0) blocking.push(membership.company.name);
+      else companiesToDelete.push(membership.companyId);
+    }
+
+    if (blocking.length > 0) {
+      throw ApiError.conflict(
+        `You are the only owner of ${blocking.join(' and ')}. Make someone else an owner first, ` +
+          'or your company would be left with nobody who can administer it.',
+        'LAST_OWNER',
+      );
+    }
+
+    await prisma.$transaction(async (tx) => {
+      // Deleting the company cascades everything inside it. Do this first so
+      // the user's memberships are already gone by the time the user goes.
+      for (const companyId of companiesToDelete) {
+        await tx.company.delete({ where: { id: companyId } });
+      }
+      // Cascades memberships and refresh tokens; SetNull elsewhere.
+      await tx.user.delete({ where: { id: user.id } });
+    });
+
+    clearAuthCookies(res);
+    clearGoogleCookies(res);
+    res.json({ ok: true, companiesDeleted: companiesToDelete.length });
   }),
 );
 

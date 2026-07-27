@@ -24,6 +24,9 @@ const schema = z.object({
   REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().positive().default(30),
   COOKIE_SECURE: booleanish.default(false),
   SCHEDULER_INTERVAL_SECONDS: z.coerce.number().int().min(0).default(60),
+  // Attempts allowed per IP per 15 minutes on the credential endpoints. Raised
+  // by the test suite, where every request arrives from the same address.
+  AUTH_RATE_LIMIT: z.coerce.number().int().positive().default(40),
   // Optional. Leaving these unset simply hides the "Continue with Google"
   // button — the app never shows a sign-in option it cannot honour.
   GOOGLE_CLIENT_ID: z.string().default(''),

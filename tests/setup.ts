@@ -13,3 +13,7 @@ process.env.COOKIE_SECURE = 'false';
 process.env.SCHEDULER_INTERVAL_SECONDS = '0';
 process.env.UPLOAD_DIR = './.uploads-test';
 process.env.APP_ORIGIN = 'http://localhost:5173';
+// Every test request comes from 127.0.0.1, so the production per-IP limit would
+// be hit by the suite itself. The limiter still runs — it is just not the thing
+// under test here.
+process.env.AUTH_RATE_LIMIT = '10000';

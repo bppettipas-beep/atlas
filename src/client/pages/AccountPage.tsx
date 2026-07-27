@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
+import { SignOut, Trash } from '@/components/icons';
 import { PageBody, PageTransition } from '@/components/layout/AppShell';
 import {
   Button,
   Field,
   InlineError,
   Input,
+  Modal,
   Notice,
   PageHeader,
   RuledHead,
@@ -70,6 +72,29 @@ export function AccountPage() {
   const [passwords, setPasswords] = useState({ currentPassword: '', newPassword: '', confirm: '' });
   const [changing, setChanging] = useState(false);
   const [passwordError, setPasswordError] = useState<string | null>(null);
+
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  /** Their password, or their typed email address — whichever proves it is them. */
+  const [confirmText, setConfirmText] = useState('');
+
+  const deleteAccount = async () => {
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await api.post('/auth/account/delete', {
+        password: hasPassword ? confirmText : undefined,
+        confirmEmail: hasPassword ? undefined : confirmText,
+      });
+      // The server has already cleared the cookies; this clears the client and
+      // sends them back to the landing page.
+      await signOut();
+    } catch (error) {
+      setDeleteError(errorMessage(error));
+      setDeleting(false);
+    }
+  };
 
   const updatePreference = async (key: keyof Preferences, value: boolean) => {
     if (!prefs) return;
@@ -239,16 +264,104 @@ export function AccountPage() {
           </div>
         </Sheet>
 
-        <div className="flex justify-end border-t border-rule pt-5">
-          <Button
-            variant="ghost"
-            className="text-alert hover:bg-alert-wash"
-            onClick={() => void signOut()}
-          >
+        {/* ------------------------------ sign out -------------------------- */}
+        <Sheet className="flex flex-wrap items-center justify-between gap-4 p-5">
+          <div className="min-w-0">
+            <p className="title text-[13.5px] leading-tight">Sign out</p>
+            <p className="mt-1 text-[12.5px] leading-relaxed text-ink-3">
+              Ends this session on this device. Everything stays where it is.
+            </p>
+          </div>
+          <Button icon={<SignOut />} onClick={() => void signOut()}>
             Sign out
           </Button>
-        </div>
+        </Sheet>
+
+        {/* ---------------------------- danger zone ------------------------- */}
+        <Sheet className="border-alert/40 p-5">
+          <RuledHead title="Delete account" className="mb-4" />
+          <div className="flex flex-wrap items-end justify-between gap-4">
+            <p className="max-w-prose text-[12.5px] leading-relaxed text-ink-3">
+              Permanently deletes your login, your sessions and your place in{' '}
+              {session.memberships.length === 1
+                ? session.company.name
+                : `${session.memberships.length} companies`}
+              . Work you created — tasks, comments, documents — stays with the company, but stops
+              being attributed to you. This cannot be undone.
+            </p>
+            <Button
+              variant="danger"
+              icon={<Trash />}
+              onClick={() => {
+                setDeleteError(null);
+                setConfirmText('');
+                setDeleteOpen(true);
+              }}
+            >
+              Delete account
+            </Button>
+          </div>
+        </Sheet>
       </PageBody>
+
+      <Modal
+        open={deleteOpen}
+        onClose={() => setDeleteOpen(false)}
+        size="sm"
+        title="Delete your account?"
+        description="This cannot be undone."
+        footer={
+          <div className="flex justify-end gap-2">
+            <Button onClick={() => setDeleteOpen(false)} disabled={deleting}>
+              Keep my account
+            </Button>
+            <Button
+              variant="danger"
+              loading={deleting}
+              disabled={confirmText.length === 0}
+              onClick={() => void deleteAccount()}
+            >
+              Delete permanently
+            </Button>
+          </div>
+        }
+      >
+        <div className="space-y-4">
+          {deleteError && <InlineError message={deleteError} />}
+
+          <Notice tone="alert">
+            You will be signed out immediately and will not be able to sign back in.
+          </Notice>
+
+          {/* A password account re-enters its password. A Google account has
+              none, so it types its own address — the same deliberate friction. */}
+          {hasPassword ? (
+            <Field label="Confirm your password" htmlFor="delete-password" required>
+              <Input
+                id="delete-password"
+                type="password"
+                autoComplete="current-password"
+                value={confirmText}
+                onChange={(event) => setConfirmText(event.target.value)}
+              />
+            </Field>
+          ) : (
+            <Field
+              label="Type your email address to confirm"
+              htmlFor="delete-email"
+              hint={session.user.email}
+              required
+            >
+              <Input
+                id="delete-email"
+                value={confirmText}
+                onChange={(event) => setConfirmText(event.target.value)}
+                placeholder={session.user.email}
+              />
+            </Field>
+          )}
+        </div>
+      </Modal>
     </PageTransition>
   );
 }
