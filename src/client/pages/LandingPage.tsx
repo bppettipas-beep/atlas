@@ -173,6 +173,27 @@ const STEPS = [
   },
 ];
 
+const PLANS = [
+  {
+    name: 'Base',
+    price: '$200',
+    description: 'The essentials for getting your company organised.',
+    features: ['Organisation map', 'People, work and knowledge', 'Real-time updates'],
+  },
+  {
+    name: 'Growth',
+    price: '$500',
+    description: 'More room for a growing team and its day-to-day work.',
+    features: ['Everything in Base', 'Manager workflows and approvals', 'Recurring work and activity history'],
+  },
+  {
+    name: 'Scale',
+    price: '$1,000',
+    description: 'A complete operating system for a larger operation.',
+    features: ['Everything in Growth', 'Multi-company support', 'Priority onboarding support'],
+  },
+];
+
 export function LandingPage() {
   const { session, loading } = useAuth();
 
@@ -390,8 +411,49 @@ export function LandingPage() {
           </div>
         </Section>
 
+        {/* ------------------------------- pricing -------------------------- */}
+        <Section index="05" label="Pricing">
+          <div className="flex flex-wrap items-end justify-between gap-6">
+            <h2 className="display max-w-[15ch] text-[2rem] leading-[1.03] sm:text-[2.6rem]">
+              A clear price for a clearer business.
+            </h2>
+            <p className="max-w-[38ch] text-[13.5px] leading-relaxed text-ink-3">
+              Choose the level of support that fits the way your company works today.
+            </p>
+          </div>
+
+          <div className="mt-12 grid border-l border-t border-edge md:grid-cols-3">
+            {PLANS.map((plan) => (
+              <div key={plan.name} className="flex flex-col border-b border-r border-edge p-6 sm:p-8">
+                <p className="edge-sm text-ink-4">{plan.name}</p>
+                <div className="mt-5 flex items-baseline gap-1.5">
+                  <span className="display text-[2.6rem] leading-none">{plan.price}</span>
+                  <span className="text-[13px] text-ink-3">/ month</span>
+                </div>
+                <p className="mt-5 min-h-[3rem] text-[13.5px] leading-relaxed text-ink-3">
+                  {plan.description}
+                </p>
+                <ul className="mt-7 space-y-3 border-t border-edge pt-6">
+                  {plan.features.map((feature) => (
+                    <li key={feature} className="flex items-start gap-2.5 text-[13.5px] leading-snug text-ink-2">
+                      <Check className="mt-[3px] shrink-0 text-[12px] text-ink" />
+                      {feature}
+                    </li>
+                  ))}
+                </ul>
+                <Link
+                  to={signedIn ? '/app' : '/start'}
+                  className="mt-8 inline-flex h-10 items-center justify-center rounded-sm bg-ink px-4 text-[13px] font-medium text-white transition-colors duration-150 ease-draft hover:bg-ink-2"
+                >
+                  Choose {plan.name}
+                </Link>
+              </div>
+            ))}
+          </div>
+        </Section>
+
         {/* ------------------------------ how it works ----------------------- */}
-        <Section index="05" label="Getting started">
+        <Section index="06" label="Getting started">
           <div className="grid gap-10 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.2fr)]">
             <h2 className="display max-w-[12ch] text-[2rem] leading-[1.03] sm:text-[2.6rem]">
               Running in an afternoon.
