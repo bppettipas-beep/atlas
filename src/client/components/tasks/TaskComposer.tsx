@@ -97,6 +97,10 @@ export function TaskComposer({
     session?.membership.id,
   ]);
 
+  // The API enforces this as well. Keeping the composer out of the worker UI
+  // makes the boundary clear: workers carry out work; management creates it.
+  if (!isLeadership) return null;
+
   const submit = async () => {
     setSaving(true);
     setError(null);

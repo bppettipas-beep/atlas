@@ -120,13 +120,15 @@ export function HomePage() {
                   Announce
                 </Button>
               )}
-              <Button
-                variant="primary"
-                icon={<Plus className="h-4 w-4" />}
-                onClick={() => setComposerOpen(true)}
-              >
-                New task
-              </Button>
+              {isLeadership && (
+                <Button
+                  variant="primary"
+                  icon={<Plus className="h-4 w-4" />}
+                  onClick={() => setComposerOpen(true)}
+                >
+                  New task
+                </Button>
+              )}
             </>
           }
         />

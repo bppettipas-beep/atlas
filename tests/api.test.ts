@@ -412,11 +412,11 @@ describe('role-based access protection', () => {
     expect(response.body.error.message).toMatch(/owners and managers/i);
   });
 
-  it('lets a worker create work for themselves', async () => {
+  it('stops a worker creating work for themselves', async () => {
     const response = await workerAgent
       .post('/api/tasks')
       .send({ title: 'My own reminder', assigneeId: workerMembershipId });
-    expect(response.status).toBe(201);
+    expect(response.status).toBe(403);
   });
 
   it('stops a worker rearranging the organization map', async () => {
@@ -1164,21 +1164,17 @@ describe('notifications', () => {
     expect(types(await inbox(owner))).toContain('MEMBER_JOINED');
   });
 
-  it('tells the owner when somebody else creates work', async () => {
+  it('does not let a worker create work for the company', async () => {
     const { owner, worker } = await companyOfTwo();
 
-    await worker.agent.post('/api/tasks').send({ title: 'Restock the van' }).expect(201);
-
-    const box = await inbox(owner);
-    expect(types(box)).toContain('TASK_CREATED');
-    expect(box.items[0].title).toBe('New task: Restock the van');
-    expect(box.unread).toBe(1);
+    await worker.agent.post('/api/tasks').send({ title: 'Restock the van' }).expect(403);
+    expect((await inbox(owner)).items).toHaveLength(0);
   });
 
   it('tells the owner when somebody else finishes work, without telling them twice', async () => {
     const { owner, worker } = await companyOfTwo();
 
-    const task = await worker.agent
+    const task = await owner.agent
       .post('/api/tasks')
       .send({ title: 'Sweep the yard', assigneeId: worker.session.membership.id })
       .expect(201);
@@ -1188,8 +1184,6 @@ describe('notifications', () => {
       .expect(200);
 
     const box = await inbox(owner);
-    // The worker is both assignee and creator; neither role should produce a
-    // duplicate of the leadership notification.
     expect(types(box).filter((type) => type === 'TASK_COMPLETED')).toHaveLength(1);
   });
 
@@ -1230,9 +1224,6 @@ describe('notifications', () => {
       .send({ companyActivity: false })
       .expect(200);
 
-    // Unassigned, so the only reason the owner would hear about it is the feed.
-    await worker.agent.post('/api/tasks').send({ title: 'Nobody assigned' }).expect(201);
-
     // A task the owner created, commented on by somebody else. That is their
     // own work, and no feed switch should be able to silence it.
     const task = await owner.agent
@@ -1251,8 +1242,22 @@ describe('notifications', () => {
 
   it('clears read notifications and leaves the unread ones alone', async () => {
     const { owner, worker } = await companyOfTwo();
-    await worker.agent.post('/api/tasks').send({ title: 'First' }).expect(201);
-    await worker.agent.post('/api/tasks').send({ title: 'Second' }).expect(201);
+    const first = await owner.agent
+      .post('/api/tasks')
+      .send({ title: 'First', assigneeId: worker.session.membership.id })
+      .expect(201);
+    const second = await owner.agent
+      .post('/api/tasks')
+      .send({ title: 'Second', assigneeId: worker.session.membership.id })
+      .expect(201);
+    await worker.agent
+      .post(`/api/tasks/${first.body.id}/comments`)
+      .send({ body: 'First update' })
+      .expect(201);
+    await worker.agent
+      .post(`/api/tasks/${second.body.id}/comments`)
+      .send({ body: 'Second update' })
+      .expect(201);
 
     const before = await inbox(owner);
     expect(before.items).toHaveLength(2);

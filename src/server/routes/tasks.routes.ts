@@ -256,15 +256,11 @@ async function assertRelationsInCompany(
 
 tasksRouter.post(
   '/',
+  requireRole('OWNER', 'MANAGER'),
   validateBody(createSchema),
   asyncHandler(async (req, res) => {
     const auth = currentAuth(req);
     const input = req.body as z.infer<typeof createSchema>;
-
-    // Workers may create work, but only for themselves.
-    if (!isLeadership(auth) && input.assigneeId && input.assigneeId !== auth.membershipId) {
-      throw ApiError.forbidden('Only owners and managers can assign work to other people.');
-    }
 
     await assertRelationsInCompany(auth.companyId, input);
 
@@ -350,6 +346,7 @@ const updateSchema = createSchema
 
 tasksRouter.patch(
   '/:id',
+  requireRole('OWNER', 'MANAGER'),
   validateBody(updateSchema),
   asyncHandler(async (req, res) => {
     const auth = currentAuth(req);
@@ -649,14 +646,10 @@ tasksRouter.delete(
 
 tasksRouter.delete(
   '/:id/permanent',
+  requireRole('OWNER', 'MANAGER'),
   asyncHandler(async (req, res) => {
     const auth = currentAuth(req);
     const existing = await loadTask(req.params.id, auth);
-    if (!isLeadership(auth) && existing.createdById !== auth.membershipId) {
-      throw ApiError.forbidden(
-        'Only the person who created this task, a manager or the owner can delete it.',
-      );
-    }
     // Atlasy's confirmed delete is intentionally final. Its related comments,
     // subtasks, attachments and task-scoped activity cascade with the record,
     // so a deleted task can never return through a stale archive query.
@@ -668,14 +661,10 @@ tasksRouter.delete(
 
 tasksRouter.delete(
   '/:id',
+  requireRole('OWNER', 'MANAGER'),
   asyncHandler(async (req, res) => {
     const auth = currentAuth(req);
     const existing = await loadTask(req.params.id, auth);
-    if (!isLeadership(auth) && existing.createdById !== auth.membershipId) {
-      throw ApiError.forbidden(
-        'Only the person who created this task, a manager or the owner can delete it.',
-      );
-    }
     // Archived, not deleted — the activity feed keeps referencing it.
     await prisma.task.update({ where: { id: existing.id }, data: { archivedAt: new Date() } });
     emitToCompany(auth.companyId, 'task:deleted', { taskId: existing.id });
@@ -697,6 +686,7 @@ async function recalculateProgress(taskId: string) {
 
 tasksRouter.post(
   '/:id/subtasks',
+  requireRole('OWNER', 'MANAGER'),
   validateBody(z.object({ title: z.string().trim().min(1, 'Name the step').max(200) })),
   asyncHandler(async (req, res) => {
     const auth = currentAuth(req);
@@ -727,6 +717,12 @@ tasksRouter.patch(
     const isAssignee = task.assigneeId === auth.membershipId;
     if (!isAssignee && !(await canEditTask(auth, task))) throw ApiError.forbidden();
 
+    // Workers can check off the steps they were given, but only management can
+    // rewrite the job plan itself.
+    if (!isLeadership(auth) && (req.body as { title?: string }).title !== undefined) {
+      throw ApiError.forbidden('Only owners and managers can change the task steps.');
+    }
+
     await prisma.subtask.updateMany({
       where: { id: req.params.subtaskId, taskId: task.id },
       data: req.body as Record<string, unknown>,
@@ -739,6 +735,7 @@ tasksRouter.patch(
 
 tasksRouter.delete(
   '/:id/subtasks/:subtaskId',
+  requireRole('OWNER', 'MANAGER'),
   asyncHandler(async (req, res) => {
     const auth = currentAuth(req);
     const task = await loadTask(req.params.id, auth);

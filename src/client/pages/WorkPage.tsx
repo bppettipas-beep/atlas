@@ -150,13 +150,15 @@ export function WorkPage() {
                   </button>
                 ))}
               </div>
-              <Button
-                variant="primary"
-                icon={<Plus className="h-4 w-4" />}
-                onClick={() => setComposerOpen(true)}
-              >
-                New task
-              </Button>
+              {isLeadership && (
+                <Button
+                  variant="primary"
+                  icon={<Plus className="h-4 w-4" />}
+                  onClick={() => setComposerOpen(true)}
+                >
+                  New task
+                </Button>
+              )}
             </>
           }
         />
@@ -260,7 +262,7 @@ export function WorkPage() {
             action={
               hasFilters ? (
                 <Button onClick={clearFilters}>Clear filters</Button>
-              ) : (
+              ) : isLeadership ? (
                 <Button
                   variant="primary"
                   icon={<Plus className="h-4 w-4" />}
@@ -268,7 +270,7 @@ export function WorkPage() {
                 >
                   New task
                 </Button>
-              )
+              ) : undefined
             }
           />
         )}

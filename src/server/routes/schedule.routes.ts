@@ -10,7 +10,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { ApiError, asyncHandler } from '../http/errors';
 import { parsedQuery, validateBody, validateQuery } from '../http/validate';
-import { currentAuth, requireAuth } from '../middleware/authenticate';
+import { currentAuth, requireAuth, requireRole } from '../middleware/authenticate';
 import { prisma } from '../prisma';
 import { emitToCompany } from '../realtime/io';
 import { recordActivity } from '../services/activity';
@@ -143,6 +143,7 @@ scheduleRouter.get(
  */
 scheduleRouter.patch(
   '/tasks/:id',
+  requireRole('OWNER', 'MANAGER'),
   validateBody(
     z.object({
       startAt: z.coerce.date().nullable(),
