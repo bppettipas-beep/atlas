@@ -54,7 +54,22 @@ async function handle<T>(response: Response): Promise<T> {
   if (response.status === 204) return undefined as T;
 
   const text = await response.text();
-  const payload: unknown = text ? JSON.parse(text) : null;
+
+  // A gateway, a proxy or a crashed process answers with HTML, not JSON. Left
+  // unguarded the parse threw a raw SyntaxError past every `catch (ApiError)`
+  // in the app, and the user was shown "Unexpected token '<'".
+  let payload: unknown = null;
+  try {
+    payload = text ? JSON.parse(text) : null;
+  } catch {
+    throw new ApiError(
+      response.status,
+      'BAD_RESPONSE',
+      response.ok
+        ? 'The server sent back something Atlas could not read. Please try again.'
+        : 'The server is not responding properly right now. Please try again in a moment.',
+    );
+  }
 
   if (!response.ok) {
     const shape = payload as ApiErrorShape | null;

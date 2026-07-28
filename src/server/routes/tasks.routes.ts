@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import type { Prisma } from '@prisma/client';
 import { ApiError, asyncHandler } from '../http/errors';
-import { parsedQuery, validateBody, validateQuery } from '../http/validate';
+import { booleanQuery, parsedQuery, validateBody, validateQuery } from '../http/validate';
 import { currentAuth, requireAuth, requireRole } from '../middleware/authenticate';
 import { endOfDay, startOfDay } from '../lib/dates';
 import { upload } from '../lib/uploads';
@@ -146,7 +146,7 @@ const listQuerySchema = z.object({
   teamId: z.string().min(1).optional(),
   search: z.string().trim().max(160).optional(),
   scope: z.enum(['all', 'mine', 'unassigned', 'overdue', 'today']).default('all'),
-  includeDone: z.coerce.boolean().default(true),
+  includeDone: booleanQuery(true),
   limit: z.coerce.number().int().min(1).max(200).default(100),
 });
 
@@ -169,25 +169,33 @@ tasksRouter.get(
               ? { dueAt: { gte: startOfDay(now), lte: endOfDay(now) } }
               : {};
 
+    // Conditions are collected into AND rather than spread as sibling keys.
+    // Spreading meant the last writer of a key silently replaced the earlier
+    // ones — and since both the visibility rule and the search are expressed as
+    // `OR`, a worker who typed anything into the search box had their
+    // visibility filter overwritten and saw the whole company's tasks.
+    const conditions: Prisma.TaskWhereInput[] = [await visibilityFilter(auth)];
+
+    if (query.status) conditions.push({ status: { in: query.status } });
+    if (!query.includeDone) conditions.push({ status: { not: 'DONE' } });
+    if (query.search) {
+      conditions.push({
+        OR: [
+          { title: { contains: query.search, mode: 'insensitive' as const } },
+          { description: { contains: query.search, mode: 'insensitive' as const } },
+          { location: { contains: query.search, mode: 'insensitive' as const } },
+        ],
+      });
+    }
+
     const where: Prisma.TaskWhereInput = {
       companyId: auth.companyId,
       archivedAt: null,
-      ...(await visibilityFilter(auth)),
       ...scopeFilter,
-      ...(query.status ? { status: { in: query.status } } : {}),
       ...(query.priority ? { priority: query.priority } : {}),
       ...(query.assigneeId ? { assigneeId: query.assigneeId } : {}),
       ...(query.teamId ? { teamId: query.teamId } : {}),
-      ...(query.includeDone ? {} : { status: { not: 'DONE' } }),
-      ...(query.search
-        ? {
-            OR: [
-              { title: { contains: query.search, mode: 'insensitive' as const } },
-              { description: { contains: query.search, mode: 'insensitive' as const } },
-              { location: { contains: query.search, mode: 'insensitive' as const } },
-            ],
-          }
-        : {}),
+      AND: conditions,
     };
     const [tasks, total] = await Promise.all([
       prisma.task.findMany({

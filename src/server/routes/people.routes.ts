@@ -2,7 +2,7 @@ import crypto from 'node:crypto';
 import { Router } from 'express';
 import { z } from 'zod';
 import { ApiError, asyncHandler } from '../http/errors';
-import { parsedQuery, validateBody, validateQuery } from '../http/validate';
+import { booleanQuery, parsedQuery, validateBody, validateQuery } from '../http/validate';
 import { currentAuth, requireAuth, requireRole } from '../middleware/authenticate';
 import { daysAgo, endOfDay, startOfDay } from '../lib/dates';
 import { prisma } from '../prisma';
@@ -175,7 +175,7 @@ const listQuerySchema = z.object({
   teamId: z.string().min(1).optional(),
   role: z.enum(['OWNER', 'CO_OWNER', 'MANAGER', 'WORKER']).optional(),
   availability: z.enum(['AVAILABLE', 'BUSY', 'FOCUSED', 'OFF_SHIFT', 'ON_LEAVE']).optional(),
-  includeInactive: z.coerce.boolean().default(false),
+  includeInactive: booleanQuery(false),
 });
 
 peopleRouter.get(

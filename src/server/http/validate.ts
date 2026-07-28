@@ -1,6 +1,33 @@
 import type { NextFunction, Request, Response } from 'express';
-import type { ZodTypeAny, z } from 'zod';
+import { z, type ZodTypeAny } from 'zod';
 import { ApiError } from './errors';
+
+/**
+ * A boolean read off a query string.
+ *
+ * `z.coerce.boolean()` is the wrong tool here: it is `Boolean(value)`, and
+ * every non-empty string is truthy, so `?includeDone=false` arrived as `true`
+ * and the filter quietly did nothing. Query values are always strings, so the
+ * words have to be read rather than coerced.
+ */
+const TRUE_WORDS = new Set(['true', '1', 'yes', 'on']);
+const FALSE_WORDS = new Set(['false', '0', 'no', 'off', '']);
+
+export function booleanQuery(defaultValue: boolean) {
+  return z
+    .union([z.boolean(), z.string()])
+    .optional()
+    .transform((value) => {
+      if (value === undefined) return defaultValue;
+      if (typeof value === 'boolean') return value;
+      const word = value.trim().toLowerCase();
+      if (TRUE_WORDS.has(word)) return true;
+      if (FALSE_WORDS.has(word)) return false;
+      // Anything unrecognised falls back rather than failing the whole request:
+      // a malformed filter should not break the page it belongs to.
+      return defaultValue;
+    });
+}
 
 function format(error: z.ZodError) {
   return error.issues.map((issue) => ({

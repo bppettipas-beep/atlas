@@ -14,8 +14,8 @@ import { Avatar } from '@/components/ui';
 import { cn } from '@/lib/utils';
 import type { ScheduleAvailability, ScheduleBlock } from '@shared/types';
 
-/** Pixels per hour. Tall enough to read a title in a one-hour block. */
-const HOUR_HEIGHT = 64;
+/** Fallback until the grid measures its available screen height. */
+const DEFAULT_HOUR_HEIGHT = 24;
 /** Everything snaps to this, so two blocks booked "at 9" line up exactly. */
 const SNAP_MINUTES = 15;
 
@@ -68,8 +68,8 @@ export interface ScheduleGridProps {
 const STATUS_TONE: Record<string, string> = {
   NOT_STARTED: 'border-l-ink-4',
   IN_PROGRESS: 'border-l-mark',
-  BLOCKED: 'border-l-danger',
-  AWAITING_REVIEW: 'border-l-warning',
+  BLOCKED: 'border-l-alert',
+  AWAITING_REVIEW: 'border-l-pending',
   DONE: 'border-l-ink-4',
 };
 
@@ -135,6 +135,7 @@ export function ScheduleGrid({
   onCreate,
   onMove,
 }: ScheduleGridProps) {
+  const gridRef = useRef<HTMLDivElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
   const [drag, setDrag] = useState<DragState | null>(null);
   const [now, setNow] = useState(() => new Date());
@@ -142,7 +143,23 @@ export function ScheduleGrid({
   const dayStartMinute = dayStartHour * 60;
   const dayEndMinute = dayEndHour * 60;
   const totalMinutes = dayEndMinute - dayStartMinute;
-  const bodyHeight = (totalMinutes / 60) * HOUR_HEIGHT;
+  const [hourHeight, setHourHeight] = useState(DEFAULT_HOUR_HEIGHT);
+  const bodyHeight = (totalMinutes / 60) * hourHeight;
+
+  // The schedule is a full-day board, not a vertically scrolling document.
+  // Scale the hour rows to the available screen height so every hour is visible.
+  useEffect(() => {
+    const grid = gridRef.current;
+    if (!grid) return;
+    const measure = () => {
+      const available = grid.getBoundingClientRect().height - 49;
+      setHourHeight(Math.max(16, Math.floor(available / (totalMinutes / 60))));
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(grid);
+    return () => observer.disconnect();
+  }, [totalMinutes]);
 
   // The "now" line is only honest if it moves.
   useEffect(() => {
@@ -187,10 +204,10 @@ export function ScheduleGrid({
       if (!body) return dayStartMinute;
       const rect = body.getBoundingClientRect();
       const offset = clientY - rect.top + body.scrollTop;
-      const minute = dayStartMinute + (offset / HOUR_HEIGHT) * 60;
+      const minute = dayStartMinute + (offset / hourHeight) * 60;
       return Math.min(Math.max(minute, dayStartMinute), dayEndMinute);
     },
-    [dayStartMinute, dayEndMinute],
+    [dayStartMinute, dayEndMinute, hourHeight],
   );
 
   const dateAt = useCallback((column: ScheduleColumn, minute: number) => {
@@ -322,10 +339,10 @@ export function ScheduleGrid({
     });
   };
 
-  const topFor = (minute: number) => ((minute - dayStartMinute) / 60) * HOUR_HEIGHT;
+  const topFor = (minute: number) => ((minute - dayStartMinute) / 60) * hourHeight;
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-sm border border-edge bg-sheet shadow-panel">
+    <div ref={gridRef} className="flex h-full min-h-0 flex-1 flex-col overflow-hidden rounded-sm border border-edge bg-sheet shadow-panel">
       {/* --------------------------- column heads --------------------------- */}
       <div className="flex shrink-0 border-b border-rule bg-paper/80">
         <div className="w-14 shrink-0 border-r border-rule" />
@@ -355,7 +372,7 @@ export function ScheduleGrid({
       </div>
 
       {/* ------------------------------ body -------------------------------- */}
-      <div ref={bodyRef} className="relative flex min-h-0 flex-1 overflow-y-auto">
+      <div ref={bodyRef} className="relative flex min-h-0 flex-1 overflow-hidden">
         {/* hour gutter */}
         <div className="sticky left-0 z-10 w-14 shrink-0 border-r border-rule bg-sheet">
           <div style={{ height: bodyHeight }} className="relative">
@@ -516,7 +533,7 @@ export function ScheduleGrid({
                         </span>
                       )}
                       {entry.block.conflictsWith.length > 0 && (
-                        <span className="bg-danger absolute right-1 top-1 h-1.5 w-1.5 rounded-full" />
+                        <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-alert" />
                       )}
 
                       {editable && (

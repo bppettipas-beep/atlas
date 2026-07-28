@@ -311,13 +311,11 @@ describe('task assignment', () => {
   });
 
   it('sends work that needs sign-off to review instead of straight to done', async () => {
-    const created = await owner.agent
-      .post('/api/tasks')
-      .send({
-        title: 'Solo shift sign-off',
-        assigneeId: workerMembershipId,
-        requiresApproval: true,
-      });
+    const created = await owner.agent.post('/api/tasks').send({
+      title: 'Solo shift sign-off',
+      assigneeId: workerMembershipId,
+      requiresApproval: true,
+    });
 
     const finished = await workerAgent
       .patch(`/api/tasks/${created.body.id}/status`)
@@ -485,15 +483,14 @@ describe('role-based access protection', () => {
     expect(asWorker.body.notes).toBeUndefined();
   });
 
-  it('keeps manager-only activity out of the worker feed', async () => {
+  it('keeps the whole activity feed away from workers', async () => {
     const asOwner = await owner.agent.get('/api/activity').query({ limit: 100 }).expect(200);
-    const asWorker = await workerAgent.get('/api/activity').query({ limit: 100 }).expect(200);
+    expect(asOwner.body.items.map((e: { type: string }) => e.type)).toContain('INVITE_CREATED');
 
-    const ownerTypes = asOwner.body.items.map((e: { type: string }) => e.type);
-    const workerTypes = asWorker.body.items.map((e: { type: string }) => e.type);
-
-    expect(ownerTypes).toContain('INVITE_CREATED');
-    expect(workerTypes).not.toContain('INVITE_CREATED');
+    // The feed carries manager-only events such as escalations and
+    // deactivations, so the route is closed to workers outright rather than
+    // filtered for them. The sidebar never offers it to a worker either.
+    await workerAgent.get('/api/activity').query({ limit: 100 }).expect(403);
   });
 
   it('never lets one company read another company’s records', async () => {
@@ -812,27 +809,43 @@ describe('company chat', () => {
 
     const companyRooms = await owner.agent.get('/api/chat/conversations');
     expect(companyRooms.status).toBe(200);
-    const companyRoom = companyRooms.body.items.find((item: { kind: string }) => item.kind === 'COMPANY');
+    const companyRoom = companyRooms.body.items.find(
+      (item: { kind: string }) => item.kind === 'COMPANY',
+    );
     expect(companyRoom).toBeTruthy();
 
     const companyMessage = await owner.agent
       .post(`/api/chat/conversations/${companyRoom.id}/messages`)
       .send({ body: 'Morning team' });
     expect(companyMessage.status).toBe(201);
-    expect((await worker.agent.get(`/api/chat/conversations/${companyRoom.id}/messages`)).body.items[0].body).toBe('Morning team');
+    expect(
+      (await worker.agent.get(`/api/chat/conversations/${companyRoom.id}/messages`)).body.items[0]
+        .body,
+    ).toBe('Morning team');
 
-    const recentCompanyChat = await worker.agent.get('/api/chat/company/messages').query({ sinceHours: 24 });
+    const recentCompanyChat = await worker.agent
+      .get('/api/chat/company/messages')
+      .query({ sinceHours: 24 });
     expect(recentCompanyChat.status).toBe(200);
-    expect(recentCompanyChat.body.items[0]).toMatchObject({ body: 'Morning team', sender: { fullName: 'Ada Owner' } });
+    expect(recentCompanyChat.body.items[0]).toMatchObject({
+      body: 'Morning team',
+      sender: { fullName: 'Ada Owner' },
+    });
     expect(recentCompanyChat.body.items[0].createdAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
 
-    const direct = await owner.agent.post('/api/chat/conversations').send({ kind: 'DIRECT', memberId: workerId });
+    const direct = await owner.agent
+      .post('/api/chat/conversations')
+      .send({ kind: 'DIRECT', memberId: workerId });
     expect(direct.status).toBe(201);
     const directId = direct.body.conversation.id as string;
-    expect((await worker.agent.get(`/api/chat/conversations/${directId}/messages`)).status).toBe(200);
+    expect((await worker.agent.get(`/api/chat/conversations/${directId}/messages`)).status).toBe(
+      200,
+    );
 
     const outsider = await signUpOwner(app, { companyName: 'Other Chat Co' });
-    expect((await outsider.agent.get(`/api/chat/conversations/${directId}/messages`)).status).toBe(404);
+    expect((await outsider.agent.get(`/api/chat/conversations/${directId}/messages`)).status).toBe(
+      404,
+    );
   });
 });
 
@@ -1124,7 +1137,13 @@ describe('Google sign-in', () => {
 
 describe('notifications', () => {
   interface Inbox {
-    items: { id: string; type: string; title: string; readAt: string | null }[];
+    items: {
+      id: string;
+      type: string;
+      title: string;
+      taskId: string | null;
+      readAt: string | null;
+    }[];
     unread: number;
   }
 
@@ -1194,8 +1213,14 @@ describe('notifications', () => {
       .send({ status: 'DONE' })
       .expect(200);
 
+    // Exactly one, and that is the point of the test. The owner raised this
+    // task, so they are told about it as its creator, and the leadership
+    // fan-out then skips them on purpose rather than sending a second
+    // notification about the very same event.
     const box = await inbox(owner);
-    expect(types(box).filter((type) => type === 'TASK_COMPLETED')).toHaveLength(1);
+    const aboutThisTask = box.items.filter((item) => item.taskId === task.body.id);
+    expect(aboutThisTask).toHaveLength(1);
+    expect(aboutThisTask[0].type).toBe('TASK_STATUS_CHANGED');
   });
 
   it('never writes a notification to a placeholder, who has no way to read it', async () => {
@@ -1307,7 +1332,10 @@ describe('task list filters', () => {
     // not the creator, and it sits on no team they are in.
     await owner.agent
       .post('/api/tasks')
-      .send({ title: 'Confidential payroll reconciliation', assigneeId: owner.session.membership.id })
+      .send({
+        title: 'Confidential payroll reconciliation',
+        assigneeId: owner.session.membership.id,
+      })
       .expect(201);
 
     const unfiltered = await worker.agent.get('/api/tasks').expect(200);
@@ -1321,9 +1349,12 @@ describe('task list filters', () => {
   it('honours includeDone=false instead of treating the string as true', async () => {
     const owner = await signUpOwner(app, { companyName: `Done ${Date.now().toString(36)}` });
 
-    const created = await owner.agent.post('/api/tasks').send({ title: 'Finished job' }).expect(201);
+    const created = await owner.agent
+      .post('/api/tasks')
+      .send({ title: 'Finished job' })
+      .expect(201);
     await owner.agent
-      .patch(`/api/tasks/${created.body.task.id}`)
+      .patch(`/api/tasks/${created.body.id}/status`)
       .send({ status: 'DONE' })
       .expect(200);
 
@@ -1342,11 +1373,10 @@ describe('task list filters', () => {
   it('keeps an explicit status filter when done tasks are excluded', async () => {
     const owner = await signUpOwner(app, { companyName: `Status ${Date.now().toString(36)}` });
 
-    await owner.agent.post('/api/tasks').send({ title: 'Blocked job' }).expect(201);
-    const blocked = await owner.agent.get('/api/tasks').expect(200);
+    const blocked = await owner.agent.post('/api/tasks').send({ title: 'Blocked job' }).expect(201);
     await owner.agent
-      .patch(`/api/tasks/${blocked.body.items[0].id}`)
-      .send({ status: 'BLOCKED' })
+      .patch(`/api/tasks/${blocked.body.id}/status`)
+      .send({ status: 'BLOCKED', blockedReason: 'Waiting on a part' })
       .expect(200);
     await owner.agent.post('/api/tasks').send({ title: 'Untouched job' }).expect(201);
 

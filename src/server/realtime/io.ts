@@ -44,9 +44,9 @@ export function initRealtime(httpServer: HttpServer): SocketServer {
   io = new SocketServer(httpServer, {
     path: '/socket.io',
     serveClient: false,
-    cors: env.isProduction
-      ? { origin: env.allowedOrigins, credentials: true }
-      : { origin: env.allowedOrigins, credentials: true },
+    // `env.allowedOrigins` already differs between production and development,
+    // so the branch this used to have selected between two identical objects.
+    cors: { origin: env.allowedOrigins, credentials: true },
   });
 
   io.use(async (socket: Socket, next) => {

@@ -42,8 +42,14 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
     setUnread(session?.unreadNotifications ?? 0);
   }, [session?.unreadNotifications]);
 
+  // The socket belongs to one membership, and nothing else about the session
+  // changes it. Depending on the whole `session` object rebuilt the connection
+  // on every `refresh()` — a fresh object identity each time — and live events
+  // went missing for the length of each needless reconnect.
+  const membershipId = session?.membership.id ?? null;
+
   useEffect(() => {
-    if (!session) {
+    if (!membershipId) {
       socketRef.current?.disconnect();
       socketRef.current = null;
       setConnected(false);
@@ -83,7 +89,7 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [session?.membership.id, session]);
+  }, [membershipId]);
 
   const on = useCallback((event: string, handler: Handler) => {
     const handlers = handlersRef.current.get(event) ?? new Set<Handler>();

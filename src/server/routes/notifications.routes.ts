@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { asyncHandler } from '../http/errors';
-import { parsedQuery, validateBody, validateQuery } from '../http/validate';
+import { booleanQuery, parsedQuery, validateBody, validateQuery } from '../http/validate';
 import { currentAuth, requireAuth } from '../middleware/authenticate';
 import { prisma } from '../prisma';
 import { emitToMember } from '../realtime/io';
@@ -41,7 +41,7 @@ notificationsRouter.get(
   '/',
   validateQuery(
     z.object({
-      unreadOnly: z.coerce.boolean().default(false),
+      unreadOnly: booleanQuery(false),
       limit: z.coerce.number().int().min(1).max(100).default(40),
     }),
   ),
