@@ -19,7 +19,7 @@ import type { KnowledgeDocumentDetail } from '../../shared/types';
 
 export const knowledgeRouter = Router();
 
-knowledgeRouter.use(requireAuth);
+knowledgeRouter.use(requireAuth, requireRole('OWNER', 'MANAGER'));
 
 const summaryInclude = {
   owner: { include: { user: { select: { fullName: true, avatarUrl: true } } } },

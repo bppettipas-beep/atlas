@@ -265,7 +265,7 @@ export function TaskDetailPanel({ taskId, onClose, onChanged, people = [] }: Tas
               </section>
             )}
 
-            {data.document && (
+            {isLeadership && data.document && (
               <section>
                 <h3 className="edge-sm mb-2">How we do this</h3>
                 <Link

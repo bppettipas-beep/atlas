@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { asyncHandler } from '../http/errors';
 import { parsedQuery, validateQuery } from '../http/validate';
-import { currentAuth, requireAuth } from '../middleware/authenticate';
+import { currentAuth, requireAuth, requireRole } from '../middleware/authenticate';
 import { prisma } from '../prisma';
 import { isLeadership } from '../services/permissions';
 import { activityInclude, serializeActivity } from '../services/serializers';
@@ -10,7 +10,7 @@ import { ACTIVITY_TYPES } from '../../shared/types';
 
 export const activityRouter = Router();
 
-activityRouter.use(requireAuth);
+activityRouter.use(requireAuth, requireRole('OWNER', 'MANAGER'));
 
 const querySchema = z.object({
   type: z

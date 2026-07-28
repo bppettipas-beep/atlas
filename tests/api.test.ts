@@ -9,6 +9,7 @@ import {
   uniqueEmail,
   type Client,
 } from './helpers';
+import type { SessionUserDto } from '../src/shared/types';
 
 let app: Express;
 let prisma: typeof import('../src/server/prisma').prisma;
@@ -401,6 +402,11 @@ describe('role-based access protection', () => {
     await workerAgent.get('/api/invites').expect(403);
     await workerAgent.post('/api/invites').send({ role: 'WORKER' }).expect(403);
     await workerAgent.get('/api/invites/direct/list').expect(403);
+  });
+
+  it('keeps activity and the knowledge base management-only', async () => {
+    await workerAgent.get('/api/activity').expect(403);
+    await workerAgent.get('/api/knowledge').expect(403);
   });
 
   it('stops a worker assigning work to somebody else', async () => {
@@ -1277,5 +1283,80 @@ describe('notifications', () => {
     expect(after.items).toHaveLength(1);
     expect(after.items[0].id).toBe(before.items[1].id);
     expect(after.unread).toBe(1);
+  });
+});
+
+/* ========================================================================== */
+/*  Task list filtering                                                       */
+/* ========================================================================== */
+
+describe('task list filters', () => {
+  /** An owner, plus a worker who can see nothing of their own. */
+  async function ownerAndStranger() {
+    const owner = await signUpOwner(app, { companyName: `Filters ${Date.now().toString(36)}` });
+    const code = await createInviteCode(owner);
+    const joined = await joinWithCode(app, code);
+    const worker: Client = { agent: joined.agent, session: joined.response.body as SessionUserDto };
+    return { owner, worker };
+  }
+
+  it('does not let a worker see other people\u2019s tasks by typing in the search box', async () => {
+    const { owner, worker } = await ownerAndStranger();
+
+    // A task that belongs to the owner alone. The worker is not the assignee,
+    // not the creator, and it sits on no team they are in.
+    await owner.agent
+      .post('/api/tasks')
+      .send({ title: 'Confidential payroll reconciliation', assigneeId: owner.session.membership.id })
+      .expect(201);
+
+    const unfiltered = await worker.agent.get('/api/tasks').expect(200);
+    expect(unfiltered.body.items).toHaveLength(0);
+
+    // The same request with a search term must not widen what they can see.
+    const searched = await worker.agent.get('/api/tasks').query({ search: 'payroll' }).expect(200);
+    expect(searched.body.items).toHaveLength(0);
+  });
+
+  it('honours includeDone=false instead of treating the string as true', async () => {
+    const owner = await signUpOwner(app, { companyName: `Done ${Date.now().toString(36)}` });
+
+    const created = await owner.agent.post('/api/tasks').send({ title: 'Finished job' }).expect(201);
+    await owner.agent
+      .patch(`/api/tasks/${created.body.task.id}`)
+      .send({ status: 'DONE' })
+      .expect(200);
+
+    const withDone = await owner.agent.get('/api/tasks').expect(200);
+    expect(withDone.body.items.map((t: { title: string }) => t.title)).toContain('Finished job');
+
+    const withoutDone = await owner.agent
+      .get('/api/tasks')
+      .query({ includeDone: false })
+      .expect(200);
+    expect(withoutDone.body.items.map((t: { title: string }) => t.title)).not.toContain(
+      'Finished job',
+    );
+  });
+
+  it('keeps an explicit status filter when done tasks are excluded', async () => {
+    const owner = await signUpOwner(app, { companyName: `Status ${Date.now().toString(36)}` });
+
+    await owner.agent.post('/api/tasks').send({ title: 'Blocked job' }).expect(201);
+    const blocked = await owner.agent.get('/api/tasks').expect(200);
+    await owner.agent
+      .patch(`/api/tasks/${blocked.body.items[0].id}`)
+      .send({ status: 'BLOCKED' })
+      .expect(200);
+    await owner.agent.post('/api/tasks').send({ title: 'Untouched job' }).expect(201);
+
+    const response = await owner.agent
+      .get('/api/tasks')
+      .query({ status: 'BLOCKED', includeDone: false })
+      .expect(200);
+
+    const titles = response.body.items.map((t: { title: string }) => t.title);
+    expect(titles).toContain('Blocked job');
+    expect(titles).not.toContain('Untouched job');
   });
 });

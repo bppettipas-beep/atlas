@@ -71,8 +71,9 @@ export function TaskComposer({
     [open],
   );
   const documents = useQuery<{ items: KnowledgeDocumentSummary[] }>(
-    (signal) => (open ? api.get('/knowledge', undefined, signal) : Promise.resolve({ items: [] })),
-    [open],
+    (signal) =>
+      open && isLeadership ? api.get('/knowledge', undefined, signal) : Promise.resolve({ items: [] }),
+    [open, isLeadership],
   );
 
   // Reset every time the composer opens so it never reuses stale input.

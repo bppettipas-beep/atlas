@@ -67,8 +67,6 @@ const WORKER_NAV: NavItem[] = [
   { to: '/app/organization', label: 'Company map', icon: TreeStructure },
   { to: '/app/people', label: 'People', icon: Users },
   { to: '/app/chat', label: 'Chat', icon: Chat },
-  { to: '/app/knowledge', label: 'Knowledge base', icon: BookOpen },
-  { to: '/app/activity', label: 'Activity', icon: Activity },
 ];
 
 export function AppShell() {

@@ -93,9 +93,30 @@ export function App() {
                 <Route path="chat" element={<ChatPage />} />
                 <Route path="work" element={<WorkPage />} />
                 <Route path="schedule" element={<SchedulePage />} />
-                <Route path="knowledge" element={<KnowledgePage />} />
-                <Route path="knowledge/:id" element={<KnowledgeDocPage />} />
-                <Route path="activity" element={<ActivityPage />} />
+                <Route
+                  path="knowledge"
+                  element={
+                    <RequireLeadership>
+                      <KnowledgePage />
+                    </RequireLeadership>
+                  }
+                />
+                <Route
+                  path="knowledge/:id"
+                  element={
+                    <RequireLeadership>
+                      <KnowledgeDocPage />
+                    </RequireLeadership>
+                  }
+                />
+                <Route
+                  path="activity"
+                  element={
+                    <RequireLeadership>
+                      <ActivityPage />
+                    </RequireLeadership>
+                  }
+                />
                 <Route path="profile" element={<ProfilePage />} />
                 <Route path="account" element={<AccountPage />} />
                 <Route
