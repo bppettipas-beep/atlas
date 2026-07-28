@@ -457,6 +457,36 @@ export interface HomeSummaryDto {
   openInvites: number;
 }
 
+export interface CompanyMetricsDto {
+  activeTasks: number;
+  createdThisWeek: number;
+  completedThisWeek: number;
+  completionRate: number;
+  scheduledToday: number;
+  dueToday: number;
+  overdue: number;
+  blocked: number;
+  unassigned: number;
+  messagesLast24Hours: number;
+  workload: {
+    membershipId: string;
+    fullName: string;
+    avatarUrl: string | null;
+    activeTasks: number;
+  }[];
+}
+
+export interface DailyBriefingDto {
+  generatedAt: string;
+  headline: string;
+  priorities: {
+    tone: 'alert' | 'pending' | 'mark';
+    text: string;
+    href: string;
+  }[];
+  highlights: string[];
+}
+
 export interface MyDayDto {
   greetingName: string;
   today: string;

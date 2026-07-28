@@ -38,6 +38,8 @@ import { useRealtimeEvent } from '@/providers/RealtimeProvider';
 import type {
   ActivityEventDto,
   AnnouncementDto,
+  CompanyMetricsDto,
+  DailyBriefingDto,
   HomeSummaryDto,
   InviteCodeDto,
   TaskSummary,
@@ -68,8 +70,19 @@ export function HomePage() {
     [isLeadership],
   );
   const activity = useQuery<{ items: ActivityEventDto[] }>(
-    (signal) => api.get('/activity', { limit: 10 }, signal),
-    [],
+    (signal) =>
+      isLeadership ? api.get('/activity', { limit: 10 }, signal) : Promise.resolve({ items: [] }),
+    [isLeadership],
+  );
+  const metrics = useQuery<CompanyMetricsDto | null>(
+    (signal) =>
+      isLeadership ? api.get('/companies/current/metrics', undefined, signal) : Promise.resolve(null),
+    [isLeadership],
+  );
+  const briefing = useQuery<DailyBriefingDto | null>(
+    (signal) =>
+      isLeadership ? api.get('/companies/current/briefing', undefined, signal) : Promise.resolve(null),
+    [isLeadership],
   );
   const announcements = useQuery<{ items: AnnouncementDto[] }>(
     (signal) => api.get('/companies/current/announcements', undefined, signal),
@@ -85,8 +98,18 @@ export function HomePage() {
     summary.refetch();
     overdue.refetch();
     unassigned.refetch();
+    metrics.refetch();
+    briefing.refetch();
   });
-  useRealtimeEvent('activity:new', () => activity.refetch());
+  useRealtimeEvent('activity:new', () => {
+    activity.refetch();
+    metrics.refetch();
+    briefing.refetch();
+  });
+  useRealtimeEvent('chat:message', () => {
+    metrics.refetch();
+    briefing.refetch();
+  });
   useRealtimeEvent('announcement:new', () => announcements.refetch());
   useRealtimeEvent('people:updated', () => summary.refetch());
 
@@ -211,6 +234,76 @@ export function HomePage() {
           </div>
         )}
 
+        {isLeadership && (briefing.data || metrics.data) && (
+          <div className="grid gap-5 xl:grid-cols-5">
+            {briefing.data && (
+              <Sheet className="border-mark/30 bg-mark/[0.035] p-4 xl:col-span-3">
+                <div className="flex items-start gap-3">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center border border-mark/30 bg-paper p-1.5">
+                    <img src="/brand/atlasy-symbol.png" alt="" aria-hidden className="h-full w-full object-contain" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <RuledHead title="Atlasy’s daily briefing" description="A live read of the company right now." />
+                    <p className="mt-3 text-[14px] font-medium text-ink">{briefing.data.headline}</p>
+                    {briefing.data.priorities.length > 0 ? (
+                      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                        {briefing.data.priorities.map((priority) => (
+                          <button
+                            key={priority.text}
+                            type="button"
+                            onClick={() => navigate(priority.href)}
+                            className={cn(
+                              'rounded-sm border px-3 py-2 text-left text-[13px] transition-colors hover:bg-paper',
+                              priority.tone === 'alert' && 'border-alert/25 text-alert',
+                              priority.tone === 'pending' && 'border-pending/30 text-pending',
+                              priority.tone === 'mark' && 'border-mark/30 text-mark',
+                            )}
+                          >
+                            {priority.text}
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="mt-2 text-[13px] text-ink-2">No overdue, blocked, or unassigned work is waiting.</p>
+                    )}
+                    <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-3">
+                      {briefing.data.highlights.map((highlight) => (
+                        <span key={highlight}>{highlight}</span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </Sheet>
+            )}
+
+            {metrics.data && (
+              <Sheet className="p-4 xl:col-span-2">
+                <RuledHead title="Company metrics" description="This week, at a glance." />
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <Figure label="Completion" value={`${metrics.data.completionRate}%`} tone="done" hint="Done vs. active" />
+                  <Figure label="Created" value={metrics.data.createdThisWeek} hint="Since Monday" />
+                  <Figure label="Scheduled" value={metrics.data.scheduledToday} tone="mark" hint="Today" />
+                  <Figure label="Chat activity" value={metrics.data.messagesLast24Hours} hint="Last 24 hours" />
+                </div>
+                {metrics.data.workload.length > 0 && (
+                  <div className="mt-4 border-t border-rule pt-3">
+                    <p className="edge-sm">Most assigned work</p>
+                    <div className="mt-2 space-y-1.5">
+                      {metrics.data.workload.slice(0, 3).map((person) => (
+                        <div key={person.membershipId} className="flex items-center gap-2 text-[13px]">
+                          <Avatar name={person.fullName} src={person.avatarUrl} size="xs" />
+                          <span className="min-w-0 flex-1 truncate text-ink-2">{person.fullName}</span>
+                          <span className="tabular-nums text-ink-3">{person.activeTasks}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </Sheet>
+            )}
+          </div>
+        )}
+
         <div className="grid gap-5 lg:grid-cols-3">
           {/* ---------------------------- main column ------------------------ */}
           <div className="space-y-5 lg:col-span-2">
@@ -295,7 +388,8 @@ export function HomePage() {
               </section>
             )}
 
-            <section className="space-y-3">
+            {isLeadership && (
+              <section className="space-y-3">
               <RuledHead
                 title="Recent activity"
                 description="What has changed inside the company."
@@ -338,7 +432,8 @@ export function HomePage() {
                   ))}
                 </Sheet>
               )}
-            </section>
+              </section>
+            )}
           </div>
 
           {/* ----------------------------- side column ----------------------- */}

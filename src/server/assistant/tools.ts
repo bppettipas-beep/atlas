@@ -351,6 +351,22 @@ export const TOOLS: ToolDefinition[] = [
     path: '/api/organization/graph',
     parameters: { type: 'object', properties: {} },
   },
+  {
+    name: 'daily_briefing',
+    description:
+      'A management-only daily briefing with the company’s urgent work, schedule load and company-chat activity. Use for requests such as “give me the daily briefing” or “what needs attention today.”',
+    method: 'GET',
+    path: '/api/companies/current/briefing',
+    parameters: { type: 'object', properties: {} },
+  },
+  {
+    name: 'company_metrics',
+    description:
+      'Management-only operational metrics: active, overdue, blocked, unassigned, scheduled and completed work, chat activity, and the busiest people. Use for detailed company performance questions.',
+    method: 'GET',
+    path: '/api/companies/current/metrics',
+    parameters: { type: 'object', properties: {} },
+  },
 ];
 
 const BY_NAME = new Map(TOOLS.map((tool) => [tool.name, tool]));

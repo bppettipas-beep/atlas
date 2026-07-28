@@ -9,7 +9,7 @@ import { recordActivity } from '../services/activity';
 import { notify } from '../services/notifications';
 import { serializeAnnouncement, serializeCompany } from '../services/serializers';
 import { endOfDay, startOfDay, startOfWeek } from '../lib/dates';
-import type { HomeSummaryDto, TaskStatus } from '../../shared/types';
+import type { CompanyMetricsDto, DailyBriefingDto, HomeSummaryDto, TaskStatus } from '../../shared/types';
 
 export const companiesRouter = Router();
 
@@ -32,6 +32,77 @@ const companyUpdateSchema = z.object({
   timezone: z.string().trim().max(80).optional(),
   logoUrl: z.string().trim().max(500).nullable().optional(),
 });
+
+async function companyMetrics(companyId: string, now = new Date()): Promise<CompanyMetricsDto> {
+  const weekStart = startOfWeek(now);
+  const dayStart = startOfDay(now);
+  const dayEnd = endOfDay(now);
+  const activeWhere = { companyId, archivedAt: null, status: { not: 'DONE' as const } };
+  const [
+    activeTasks,
+    createdThisWeek,
+    completedThisWeek,
+    scheduledToday,
+    dueToday,
+    overdue,
+    blocked,
+    unassigned,
+    messagesLast24Hours,
+    workloadCounts,
+  ] = await Promise.all([
+    prisma.task.count({ where: activeWhere }),
+    prisma.task.count({ where: { companyId, archivedAt: null, createdAt: { gte: weekStart } } }),
+    prisma.task.count({
+      where: { companyId, archivedAt: null, status: 'DONE', completedAt: { gte: weekStart } },
+    }),
+    prisma.task.count({ where: { ...activeWhere, startAt: { gte: dayStart, lte: dayEnd } } }),
+    prisma.task.count({ where: { ...activeWhere, dueAt: { gte: dayStart, lte: dayEnd } } }),
+    prisma.task.count({ where: { ...activeWhere, dueAt: { lt: now } } }),
+    prisma.task.count({ where: { companyId, archivedAt: null, status: 'BLOCKED' } }),
+    prisma.task.count({ where: { ...activeWhere, assigneeId: null } }),
+    prisma.chatMessage.count({
+      where: {
+        createdAt: { gte: new Date(now.getTime() - 24 * 60 * 60 * 1_000) },
+        conversation: { companyId, kind: 'COMPANY' },
+      },
+    }),
+    prisma.task.groupBy({
+      by: ['assigneeId'],
+      where: { ...activeWhere, assigneeId: { not: null } },
+      _count: { _all: true },
+      orderBy: { _count: { assigneeId: 'desc' } },
+      take: 5,
+    }),
+  ]);
+
+  const membershipIds = workloadCounts.flatMap((row) => (row.assigneeId ? [row.assigneeId] : []));
+  const people = await prisma.membership.findMany({
+    where: { id: { in: membershipIds }, companyId },
+    select: { id: true, user: { select: { fullName: true, avatarUrl: true } } },
+  });
+  const peopleById = new Map(people.map((person) => [person.id, person]));
+  const workload = workloadCounts.flatMap((row) => {
+    const person = row.assigneeId ? peopleById.get(row.assigneeId) : null;
+    return person
+      ? [{ membershipId: person.id, fullName: person.user.fullName, avatarUrl: person.user.avatarUrl, activeTasks: row._count._all }]
+      : [];
+  });
+
+  const completedOrActive = completedThisWeek + activeTasks;
+  return {
+    activeTasks,
+    createdThisWeek,
+    completedThisWeek,
+    completionRate: completedOrActive === 0 ? 0 : Math.round((completedThisWeek / completedOrActive) * 100),
+    scheduledToday,
+    dueToday,
+    overdue,
+    blocked,
+    unassigned,
+    messagesLast24Hours,
+    workload,
+  };
+}
 
 companiesRouter.patch(
   '/current',
@@ -135,6 +206,46 @@ companiesRouter.get(
       completedThisWeek,
       pendingAcknowledgments: Math.max(0, requiredDocs - myAcks),
       openInvites,
+    };
+    res.json(payload);
+  }),
+);
+
+/** Management-only operational metrics for the company dashboard and Atlasy. */
+companiesRouter.get(
+  '/current/metrics',
+  requireRole('OWNER', 'MANAGER'),
+  asyncHandler(async (req, res) => {
+    const auth = currentAuth(req);
+    res.json(await companyMetrics(auth.companyId));
+  }),
+);
+
+/** A concise, data-backed start-of-day brief. Atlasy can expand on this in chat. */
+companiesRouter.get(
+  '/current/briefing',
+  requireRole('OWNER', 'MANAGER'),
+  asyncHandler(async (req, res) => {
+    const auth = currentAuth(req);
+    const metrics = await companyMetrics(auth.companyId);
+    const priorities: DailyBriefingDto['priorities'] = [];
+    if (metrics.overdue > 0) priorities.push({ tone: 'alert', text: `${metrics.overdue} overdue task${metrics.overdue === 1 ? '' : 's'} need attention.`, href: '/app/work?scope=overdue' });
+    if (metrics.blocked > 0) priorities.push({ tone: 'alert', text: `${metrics.blocked} task${metrics.blocked === 1 ? ' is' : 's are'} blocked.`, href: '/app/work?scope=all' });
+    if (metrics.unassigned > 0) priorities.push({ tone: 'pending', text: `${metrics.unassigned} task${metrics.unassigned === 1 ? ' is' : 's are'} waiting for an owner.`, href: '/app/work?scope=unassigned' });
+    if (metrics.dueToday > 0) priorities.push({ tone: 'mark', text: `${metrics.dueToday} task${metrics.dueToday === 1 ? ' is' : 's are'} due today.`, href: '/app/work?scope=today' });
+
+    const payload: DailyBriefingDto = {
+      generatedAt: new Date().toISOString(),
+      headline:
+        priorities.length > 0
+          ? `There ${priorities.length === 1 ? 'is' : 'are'} ${priorities.length} thing${priorities.length === 1 ? '' : 's'} to focus on.`
+          : 'Everything is on track right now.',
+      priorities,
+      highlights: [
+        `${metrics.activeTasks} active task${metrics.activeTasks === 1 ? '' : 's'} across the company.`,
+        `${metrics.scheduledToday} scheduled for today and ${metrics.completedThisWeek} completed since Monday.`,
+        `${metrics.messagesLast24Hours} company-chat message${metrics.messagesLast24Hours === 1 ? '' : 's'} in the last 24 hours.`,
+      ],
     };
     res.json(payload);
   }),
