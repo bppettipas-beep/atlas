@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes, useLocation, useParams } from 'react-router-dom';
 import { AppShell } from '@/components/layout/AppShell';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { LoadingState, ToastProvider } from '@/components/ui';
 import { AccountPage } from '@/pages/AccountPage';
 import { ActivityPage } from '@/pages/ActivityPage';
@@ -64,61 +65,63 @@ function MarketingRoute() {
 
 export function App() {
   return (
-    <ToastProvider>
-      <AuthProvider>
-        <RealtimeProvider>
-          <Routes>
-            <Route path="/" element={<LandingPage />} />
-            <Route path="/explore/:section" element={<MarketingRoute />} />
-            <Route path="/start" element={<StartPage />} />
-            <Route path="/signin" element={<SignInPage />} />
-            <Route path="/signup/owner" element={<OwnerSignupPage />} />
-            <Route path="/join" element={<WorkerJoinPage />} />
+    <ErrorBoundary>
+      <ToastProvider>
+        <AuthProvider>
+          <RealtimeProvider>
+            <Routes>
+              <Route path="/" element={<LandingPage />} />
+              <Route path="/explore/:section" element={<MarketingRoute />} />
+              <Route path="/start" element={<StartPage />} />
+              <Route path="/signin" element={<SignInPage />} />
+              <Route path="/signup/owner" element={<OwnerSignupPage />} />
+              <Route path="/join" element={<WorkerJoinPage />} />
 
-            <Route
-              path="/app"
-              element={
-                <RequireAuth>
-                  <AppShell />
-                </RequireAuth>
-              }
-            >
-              <Route index element={<AppIndex />} />
-              <Route path="home" element={<HomePage />} />
-              <Route path="my-day" element={<MyDayPage />} />
-              <Route path="organization" element={<OrganizationMapPage />} />
-              <Route path="people" element={<PeoplePage />} />
-              <Route path="chat" element={<ChatPage />} />
-              <Route path="work" element={<WorkPage />} />
-              <Route path="schedule" element={<SchedulePage />} />
-              <Route path="knowledge" element={<KnowledgePage />} />
-              <Route path="knowledge/:id" element={<KnowledgeDocPage />} />
-              <Route path="activity" element={<ActivityPage />} />
-              <Route path="profile" element={<ProfilePage />} />
-              <Route path="account" element={<AccountPage />} />
               <Route
-                path="invitations"
+                path="/app"
                 element={
-                  <RequireLeadership>
-                    <InvitationsPage />
-                  </RequireLeadership>
+                  <RequireAuth>
+                    <AppShell />
+                  </RequireAuth>
                 }
-              />
-              <Route
-                path="settings"
-                element={
-                  <RequireLeadership>
-                    <CompanySettingsPage />
-                  </RequireLeadership>
-                }
-              />
+              >
+                <Route index element={<AppIndex />} />
+                <Route path="home" element={<HomePage />} />
+                <Route path="my-day" element={<MyDayPage />} />
+                <Route path="organization" element={<OrganizationMapPage />} />
+                <Route path="people" element={<PeoplePage />} />
+                <Route path="chat" element={<ChatPage />} />
+                <Route path="work" element={<WorkPage />} />
+                <Route path="schedule" element={<SchedulePage />} />
+                <Route path="knowledge" element={<KnowledgePage />} />
+                <Route path="knowledge/:id" element={<KnowledgeDocPage />} />
+                <Route path="activity" element={<ActivityPage />} />
+                <Route path="profile" element={<ProfilePage />} />
+                <Route path="account" element={<AccountPage />} />
+                <Route
+                  path="invitations"
+                  element={
+                    <RequireLeadership>
+                      <InvitationsPage />
+                    </RequireLeadership>
+                  }
+                />
+                <Route
+                  path="settings"
+                  element={
+                    <RequireLeadership>
+                      <CompanySettingsPage />
+                    </RequireLeadership>
+                  }
+                />
+                <Route path="*" element={<NotFoundPage />} />
+              </Route>
+
               <Route path="*" element={<NotFoundPage />} />
-            </Route>
-
-            <Route path="*" element={<NotFoundPage />} />
-          </Routes>
-        </RealtimeProvider>
-      </AuthProvider>
-    </ToastProvider>
+            </Routes>
+          </RealtimeProvider>
+        </AuthProvider>
+      </ToastProvider>
+    </ErrorBoundary>
   );
 }

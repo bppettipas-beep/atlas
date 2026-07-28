@@ -240,7 +240,13 @@ export function MarketingDetailPage() {
   const { session } = useAuth();
   const page = section ? PAGES[section as keyof typeof PAGES] : undefined;
 
-  useEffect(() => window.scrollTo(0, 0), [section]);
+  // The braces matter. With a concise body this returned whatever scrollTo
+  // returns — a Promise in current Chromium — and React takes an effect's
+  // return value to be its cleanup function. It then called that Promise on
+  // unmount, threw "destroy is not a function", and took the page down with it.
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [section]);
   if (!page) return <Navigate to="/" replace />;
   const Icon = page.icon;
 
