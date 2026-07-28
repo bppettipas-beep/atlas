@@ -274,6 +274,7 @@ export const TOOLS: ToolDefinition[] = [
   {
     name: 'remove_person',
     mutates: true,
+    internal: true,
     description:
       'Remove somebody from the company. Owners only. This is destructive and cannot be undone from here — always state the person’s full name and ask the user to confirm before calling it, and never call it in the same reply as the confirmation question.',
     method: 'DELETE',
@@ -282,6 +283,18 @@ export const TOOLS: ToolDefinition[] = [
       type: 'object',
       required: ['id'],
       properties: { id: str('Membership id of the person, from search_people.') },
+    },
+  },
+  {
+    name: 'prepare_person_removal',
+    description:
+      'Prepare removing one person after you have found their exact membership id. Call this instead of remove_person; Atlas will ask the user for confirmation and only then remove that exact person.',
+    method: 'GET',
+    path: '/api/people/:id',
+    parameters: {
+      type: 'object',
+      required: ['id'],
+      properties: { id: str('Exact membership id from search_people. Never invent this.') },
     },
   },
   {

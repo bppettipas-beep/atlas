@@ -23,6 +23,8 @@ const DELETE_CONFIRMATION_TTL_MS = 10 * 60 * 1000;
 
 /** A deliberate pause between identifying work and deleting it. */
 const pendingTaskDeletes = new Map<string, { taskId: string; title: string; expiresAt: number }>();
+/** People removal gets the same server-enforced pause as task deletion. */
+const pendingPersonRemovals = new Map<string, { membershipId: string; fullName: string; expiresAt: number }>();
 
 function isConfirmation(text: string) {
   return /^(?:yes|yep|yeah|confirm|confirmed|delete it|do it|remove it)[.!\s]*$/i.test(text.trim());
@@ -33,6 +35,14 @@ function deletionTitleFromHistory(history: ChatMessage[]) {
     .reverse()
     .find((message) => message.role === 'assistant' && message.content)?.content;
   const match = previous?.match(/^Delete [“"](.+?)[”"]\? Reply yes to confirm\.$/);
+  return match?.[1] ?? null;
+}
+
+function removalNameFromHistory(history: ChatMessage[]) {
+  const previous = [...history]
+    .reverse()
+    .find((message) => message.role === 'assistant' && message.content)?.content;
+  const match = previous?.match(/^Remove [â€œ"](.+?)[â€"] from the company\? Reply yes to confirm\.$/);
   return match?.[1] ?? null;
 }
 
@@ -97,6 +107,11 @@ function systemPrompt(context: {
     '- For one task, find the exact task first, then call prepare_task_deletion. Atlas will ask for confirmation and only delete after the user explicitly confirms that exact task in their next message. Never call delete_task directly.',
     '- For clearing every task, list the active tasks first and state the exact count. Ask: “This will remove all N active tasks. Do you want me to continue?” Only call clear_all_tasks when the very next user message clearly confirms all tasks. Never treat “yes” from an earlier or unrelated turn as confirmation.',
     '- If the request could mean a subset (done, unassigned, a team, or a date range), ask which set before deleting anything.',
+    '',
+    'Removing people:',
+    '- Removing a person takes away their access to this company. Treat this as destructive.',
+    '- Find the exact person first, then call prepare_person_removal. Atlas will ask for confirmation and only remove that exact person after the user explicitly confirms in their next message. Never call remove_person directly.',
+    '- If more than one person has the name, ask which one. Do not remove the user themselves.',
     '',
     'Scheduling work:',
     '- You can read schedules and availability, check conflicts, schedule an existing task, create a scheduled task, and report time off.',
@@ -263,6 +278,51 @@ export async function runAssistant(options: {
     };
   }
 
+  let pendingRemoval = pendingPersonRemovals.get(options.context.membershipId);
+  if (pendingRemoval && pendingRemoval.expiresAt <= Date.now()) {
+    pendingPersonRemovals.delete(options.context.membershipId);
+    pendingRemoval = undefined;
+  }
+  // Recover the exact prior confirmation across a restart or another server
+  // instance, so a valid confirmation cannot turn into a false success.
+  if (!pendingRemoval && latestUserMessage?.content && isConfirmation(latestUserMessage.content)) {
+    const fullName = removalNameFromHistory(options.history);
+    if (fullName) {
+      const lookup = await runTool('search_people', { search: fullName }, options.cookie);
+      const matches =
+        lookup.ok && typeof lookup.data === 'object' && lookup.data && 'items' in lookup.data
+          ? ((lookup.data as { items?: { id: string; fullName: string }[] }).items ?? []).filter(
+              (person) => person.fullName === fullName,
+            )
+          : [];
+      if (matches.length === 1) {
+        pendingRemoval = {
+          membershipId: matches[0].id,
+          fullName,
+          expiresAt: Date.now() + DELETE_CONFIRMATION_TTL_MS,
+        };
+      }
+    }
+  }
+  if (pendingRemoval && latestUserMessage?.content && isConfirmation(latestUserMessage.content)) {
+    pendingPersonRemovals.delete(options.context.membershipId);
+    const result = await runTool('remove_person', { id: pendingRemoval.membershipId }, options.cookie);
+    if (result.ok) {
+      return {
+        reply: `Removed â€œ${pendingRemoval.fullName}â€ from the company.`,
+        actions: [
+          { name: 'remove_person', ok: true, summary: `Removed â€œ${pendingRemoval.fullName}â€` },
+        ],
+      };
+    }
+    return {
+      reply: `I could not remove â€œ${pendingRemoval.fullName}â€ from the company.`,
+      actions: [
+        { name: 'remove_person', ok: false, summary: describe('remove_person', false, result.data) },
+      ],
+    };
+  }
+
   const messages: ChatMessage[] = [
     {
       role: 'system',
@@ -312,6 +372,21 @@ export async function runAssistant(options: {
           });
           return {
             reply: `Delete “${task.title}”? Reply yes to confirm.`,
+            actions: [],
+          };
+        }
+      }
+
+      if (call.function.name === 'prepare_person_removal' && result.ok) {
+        const person = result.data as { id?: string; fullName?: string };
+        if (person.id && person.fullName) {
+          pendingPersonRemovals.set(options.context.membershipId, {
+            membershipId: person.id,
+            fullName: person.fullName,
+            expiresAt: Date.now() + DELETE_CONFIRMATION_TTL_MS,
+          });
+          return {
+            reply: `Remove â€œ${person.fullName}â€ from the company? Reply yes to confirm.`,
             actions: [],
           };
         }
