@@ -61,7 +61,12 @@ export function formatTime(value: string | Date | null | undefined): string {
 export function relativeTime(value: string | Date | null | undefined): string {
   if (!value) return '';
   const date = typeof value === 'string' ? new Date(value) : value;
-  const diffMs = date.getTime() - Date.now();
+  const timestamp = date.getTime();
+  // A live payload can arrive before an optional timestamp has been fully
+  // serialised. Intl.RelativeTimeFormat throws for NaN, which used to turn one
+  // malformed chat timestamp into a crashed page.
+  if (!Number.isFinite(timestamp)) return '';
+  const diffMs = timestamp - Date.now();
   const abs = Math.abs(diffMs);
 
   const units: [Intl.RelativeTimeFormatUnit, number][] = [
