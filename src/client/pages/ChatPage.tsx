@@ -14,7 +14,7 @@ type MessagesResponse = { items: ChatMessageDto[] };
 function chatTime(value: string) {
   const date = new Date(value);
   if (!Number.isFinite(date.getTime())) return '';
-  return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  return date.toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 }
 
 function nameFor(conversation: ConversationDto, membershipId: string) {

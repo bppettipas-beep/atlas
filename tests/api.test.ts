@@ -815,6 +815,11 @@ describe('company chat', () => {
     expect(companyMessage.status).toBe(201);
     expect((await worker.agent.get(`/api/chat/conversations/${companyRoom.id}/messages`)).body.items[0].body).toBe('Morning team');
 
+    const recentCompanyChat = await worker.agent.get('/api/chat/company/messages').query({ sinceHours: 24 });
+    expect(recentCompanyChat.status).toBe(200);
+    expect(recentCompanyChat.body.items[0]).toMatchObject({ body: 'Morning team', sender: { fullName: 'Ada Owner' } });
+    expect(recentCompanyChat.body.items[0].createdAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+
     const direct = await owner.agent.post('/api/chat/conversations').send({ kind: 'DIRECT', memberId: workerId });
     expect(direct.status).toBe(201);
     const directId = direct.body.conversation.id as string;

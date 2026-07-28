@@ -47,6 +47,37 @@ async function readConversation(id: string, companyId: string, membershipId: str
   return row;
 }
 
+async function postCompanyMessage(companyId: string, membershipId: string, body: string) {
+  const room = await ensureCompanyRoom(companyId);
+  const created = await prisma.chatMessage.create({
+    data: { conversationId: room.id, senderId: membershipId, body },
+    include: { sender: { select: person } },
+  });
+  await prisma.conversation.update({ where: { id: room.id }, data: { updatedAt: new Date() } });
+  const payload = { conversationId: room.id, message: message(created) };
+  emitToCompany(companyId, 'chat:message', payload);
+  return payload;
+}
+
+chatRouter.get('/company/messages', asyncHandler(async (req, res) => {
+  const auth = currentAuth(req);
+  const room = await ensureCompanyRoom(auth.companyId);
+  const hours = Math.max(1, Math.min(168, Number(req.query.sinceHours) || 24));
+  const rows = await prisma.chatMessage.findMany({
+    where: { conversationId: room.id, createdAt: { gte: new Date(Date.now() - hours * 3_600_000) } },
+    include: { sender: { select: person } },
+    orderBy: { createdAt: 'asc' },
+    take: 500,
+  });
+  res.json({ items: rows.map(message) });
+}));
+
+chatRouter.post('/company/messages', validateBody(z.object({ body: z.string().trim().min(1).max(4_000) })), asyncHandler(async (req, res) => {
+  const auth = currentAuth(req);
+  const payload = await postCompanyMessage(auth.companyId, auth.membershipId, req.body.body);
+  res.status(201).json({ message: payload.message });
+}));
+
 chatRouter.get('/conversations', asyncHandler(async (req, res) => {
   const auth = currentAuth(req);
   await ensureCompanyRoom(auth.companyId);
@@ -97,14 +128,15 @@ chatRouter.get('/conversations/:id/messages', asyncHandler(async (req, res) => {
 chatRouter.post('/conversations/:id/messages', validateBody(z.object({ body: z.string().trim().min(1).max(4_000) })), asyncHandler(async (req, res) => {
   const auth = currentAuth(req);
   const room = await readConversation(req.params.id, auth.companyId, auth.membershipId);
+  if (room.kind === 'COMPANY') {
+    const payload = await postCompanyMessage(auth.companyId, auth.membershipId, req.body.body);
+    res.status(201).json({ message: payload.message });
+    return;
+  }
   const created = await prisma.chatMessage.create({ data: { conversationId: room.id, senderId: auth.membershipId, body: req.body.body }, include: { sender: { select: person } } });
   await prisma.conversation.update({ where: { id: room.id }, data: { updatedAt: new Date() } });
   const payload = { conversationId: room.id, message: message(created) };
-  if (room.kind === 'COMPANY') {
-    emitToCompany(auth.companyId, 'chat:message', payload);
-  } else {
-    const members = await prisma.conversationMember.findMany({ where: { conversationId: room.id }, select: { membershipId: true } });
-    for (const member of members) emitToMember(member.membershipId, 'chat:message', payload);
-  }
+  const members = await prisma.conversationMember.findMany({ where: { conversationId: room.id }, select: { membershipId: true } });
+  for (const member of members) emitToMember(member.membershipId, 'chat:message', payload);
   res.status(201).json({ message: payload.message });
 }));

@@ -124,6 +124,11 @@ function systemPrompt(context: {
     '- If they ask you to make an announcement without giving its message, ask what they want it to say. You may help draft it, but do not publish a draft until they explicitly ask you to post it.',
     '- When they provide a clear headline and message and ask to post or announce it, publish it. Do not invent details or make up an announcement on their behalf.',
     '',
+    'Company chat:',
+    '- You can read and summarize the company-wide chat, including messages from the last day. Private and group chats are never available to you.',
+    '- You can post a company-chat message as the signed-in person. If they have not supplied the exact words, help draft it first, then wait until they explicitly ask you to send it.',
+    '- Never post as another person or claim to have read a private conversation.',
+    '',
     'Rules you must not break:',
     '- Only colleagues can be searched. Customers, clients, sites and buildings are not in there, and a job named after a client — "clean Jenna\'s house" — is perfectly normal work. If a name is not a colleague, it is the customer, not the person doing the job: use it in the title and ask who should do the work.',
     '- Never invent an id, a person, a task, a date or a number. If a tool did not return it, you do not know it.',
@@ -219,6 +224,7 @@ function describe(name: string, ok: boolean, data: unknown): string {
   if (name === 'post_announcement' && typeof data === 'object' && data && 'title' in data) {
     return `Posted “${(data as { title: string }).title}”`;
   }
+  if (name === 'post_company_chat') return 'Message posted in company chat';
   return 'Looked it up';
 }
 

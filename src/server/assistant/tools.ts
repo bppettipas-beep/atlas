@@ -318,6 +318,32 @@ export const TOOLS: ToolDefinition[] = [
     },
   },
   {
+    name: 'read_company_chat',
+    description:
+      'Read messages in the company-wide chat room, with exact timestamps and sender names. This never includes private or group chats. Use it to answer or summarize what the company has discussed recently.',
+    method: 'GET',
+    path: '/api/chat/company/messages',
+    parameters: {
+      type: 'object',
+      properties: {
+        sinceHours: { type: 'integer', minimum: 1, maximum: 168, description: 'How far back to read; use 24 for the last day.' },
+      },
+    },
+  },
+  {
+    name: 'post_company_chat',
+    mutates: true,
+    description:
+      'Post one message in the company-wide chat as the signed-in person. Use only after they give the exact wording and explicitly ask you to send or post it. Never post as or impersonate another person.',
+    method: 'POST',
+    path: '/api/chat/company/messages',
+    parameters: {
+      type: 'object',
+      required: ['body'],
+      properties: { body: str('Exact message to post in company chat.') },
+    },
+  },
+  {
     name: 'company_overview',
     description:
       'Counts of people, teams, active tasks, overdue tasks and unassigned tasks. Good for "how are we doing" questions.',
