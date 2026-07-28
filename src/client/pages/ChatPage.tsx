@@ -5,6 +5,7 @@ import { Avatar, Button, EmptyState, ErrorState, Input, Modal, Textarea, useToas
 import { api, errorMessage } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/providers/AuthProvider';
+import { useRealtimeEvent } from '@/providers/RealtimeProvider';
 import type { ChatMessageDto, ConversationDto, PersonSummary } from '@shared/types';
 
 type ConversationResponse = { items: ConversationDto[] };
@@ -59,6 +60,17 @@ export function ChatPage() {
       .finally(() => setLoading(false));
     return () => controller.abort();
   }, [loadConversations]);
+
+  // A new message is a small, isolated refresh: it reloads chat data only and
+  // never remounts the route or touches the rest of the app shell.
+  useRealtimeEvent(['chat:message', 'chat:conversation'], () => {
+    void loadConversations().catch(() => undefined);
+    if (!selectedId) return;
+    void api
+      .get<MessagesResponse>(`/chat/conversations/${selectedId}/messages`)
+      .then((data) => setMessages(Array.isArray(data.items) ? data.items : []))
+      .catch(() => undefined);
+  });
 
   useEffect(() => {
     if (!selectedId) {
@@ -129,7 +141,7 @@ export function ChatPage() {
           </aside>
           <section className="flex min-h-0 flex-col">
             {!selected && !loading && <EmptyState icon={<Chat />} title="Choose a conversation" description="Start with the company chat or a private message." />}
-            {selected && <><div className="border-b border-rule px-4 py-3"><p className="text-[14px] font-medium text-ink">{nameFor(selected, session.membership.id)}</p><p className="mt-0.5 text-[11px] text-ink-3">{selected.kind === 'COMPANY' ? 'Everyone in the company' : `${selected.members.length} people`}</p></div><div className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-paper/30 p-4">{messagesLoading && <p className="text-[12px] text-ink-3">Loading messages…</p>}{messages.map((message) => { const mine = message.sender.id === session.membership.id; return <div key={message.id} className={cn('flex gap-2', mine && 'flex-row-reverse')}><Avatar name={message.sender.fullName} src={message.sender.avatarUrl} size="sm" /><div className={cn('max-w-[78%] px-3 py-2', mine ? 'bg-mark text-white' : 'border border-rule bg-sheet')}><p className={cn('mb-1 text-[10px]', mine ? 'text-white/70' : 'text-ink-3')}>{message.sender.fullName} · {chatTime(message.createdAt)}</p><p className="whitespace-pre-wrap text-[13px] leading-relaxed">{message.body}</p></div></div>; })}{!messagesLoading && messages.length === 0 && <p className="pt-16 text-center text-[13px] text-ink-3">No messages yet. Say hello.</p>}</div><div className="border-t border-rule p-3"><div className="flex gap-2"><Textarea value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void send(); } }} placeholder="Write a message" className="min-h-[42px] flex-1 resize-none py-2" /><Button size="icon" icon={<PaperPlane />} aria-label="Send" loading={sending} onClick={() => void send()} /></div></div></>}
+            {selected && <><div className="border-b border-rule px-4 py-3"><p className="text-[14px] font-medium text-ink">{nameFor(selected, session.membership.id)}</p><p className="mt-0.5 text-[11px] text-ink-3">{selected.kind === 'COMPANY' ? 'Everyone in the company' : `${selected.members.length} people`}</p></div><div className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-paper/30 p-4">{messagesLoading && <p className="text-[12px] text-ink-3">Loading messages…</p>}{messages.map((message) => { const mine = message.sender.id === session.membership.id; return <div key={message.id} className={cn('flex gap-2', mine && 'flex-row-reverse')}><Avatar name={message.sender.fullName} src={message.sender.avatarUrl} size="sm" /><div className={cn('max-w-[78%] px-3 py-2', mine ? 'bg-mark text-white' : 'border border-rule bg-sheet')}><p className={cn('mb-1 text-[10px]', mine ? 'text-white/70' : 'text-ink-3')}>{message.sender.fullName} · {chatTime(message.createdAt)}</p><p className="whitespace-pre-wrap text-[13px] leading-relaxed">{message.body}</p></div></div>; })}{!messagesLoading && messages.length === 0 && <p className="pt-16 text-center text-[13px] text-ink-3">No messages yet. Say hello.</p>}</div><div className="border-t border-rule p-3"><div className="flex gap-2"><Textarea value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void send(); } }} placeholder="Write a message" className="min-h-[42px] flex-1 resize-none py-2 text-[16px] sm:text-[13px]" /><Button size="icon" icon={<PaperPlane />} aria-label="Send" loading={sending} onClick={() => void send()} /></div></div></>}
           </section>
         </div>}
         <NewChatModal open={newChatOpen} onClose={() => setNewChatOpen(false)} people={people} onCreated={(conversation) => { setConversations((current) => [conversation, ...current.filter((item) => item.id !== conversation.id)]); setSelectedId(conversation.id); setNewChatOpen(false); }} />
@@ -155,5 +167,5 @@ function NewChatModal({ open, onClose, people, onCreated }: { open: boolean; onC
       setPicked([]); setTitle(''); onCreated(result.conversation);
     } catch (caught) { toast.error(errorMessage(caught)); } finally { setSaving(false); }
   };
-  return <Modal open={open} onClose={onClose} title="New message"><div className="space-y-4"><div className="flex gap-2"><Button variant={kind === 'DIRECT' ? 'primary' : 'default'} onClick={() => { setKind('DIRECT'); setPicked([]); }}>Private</Button><Button variant={kind === 'GROUP' ? 'primary' : 'default'} onClick={() => { setKind('GROUP'); setPicked([]); }}>Group</Button></div>{kind === 'GROUP' && <Input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Group name" />}{kind === 'GROUP' && <p className="edge">Choose at least two people</p>}<div className="max-h-72 divide-y divide-rule overflow-y-auto border border-rule">{choices.map((person) => <button type="button" key={person.id} onClick={() => kind === 'DIRECT' ? setPicked([person.id]) : toggle(person.id)} className={cn('flex w-full items-center gap-2.5 px-3 py-2.5 text-left hover:bg-paper', picked.includes(person.id) && 'bg-paper')}><Avatar name={person.fullName} src={person.avatarUrl} size="sm" /><span className="flex-1 text-[13px] text-ink">{person.fullName}</span>{picked.includes(person.id) && <span className="text-mark">✓</span>}</button>)}</div><div className="flex justify-end gap-2"><Button variant="default" onClick={onClose}>Cancel</Button><Button loading={saving} disabled={!picked.length || (kind === 'GROUP' && (!title.trim() || picked.length < 2))} onClick={() => void create()}>Start chat</Button></div></div></Modal>;
+  return <Modal open={open} onClose={onClose} title="New message"><div className="space-y-4"><div className="flex gap-2"><Button variant={kind === 'DIRECT' ? 'primary' : 'default'} onClick={() => { setKind('DIRECT'); setPicked([]); }}>Private</Button><Button variant={kind === 'GROUP' ? 'primary' : 'default'} onClick={() => { setKind('GROUP'); setPicked([]); }}>Group</Button></div>{kind === 'GROUP' && <Input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Group name" className="text-[16px] sm:text-[13px]" />}{kind === 'GROUP' && <p className="edge">Choose at least two people</p>}<div className="max-h-72 divide-y divide-rule overflow-y-auto border border-rule">{choices.map((person) => <button type="button" key={person.id} onClick={() => kind === 'DIRECT' ? setPicked([person.id]) : toggle(person.id)} className={cn('flex w-full items-center gap-2.5 px-3 py-2.5 text-left hover:bg-paper', picked.includes(person.id) && 'bg-paper')}><Avatar name={person.fullName} src={person.avatarUrl} size="sm" /><span className="flex-1 text-[13px] text-ink">{person.fullName}</span>{picked.includes(person.id) && <span className="text-mark">✓</span>}</button>)}</div><div className="flex justify-end gap-2"><Button variant="default" onClick={onClose}>Cancel</Button><Button loading={saving} disabled={!picked.length || (kind === 'GROUP' && (!title.trim() || picked.length < 2))} onClick={() => void create()}>Start chat</Button></div></div></Modal>;
 }

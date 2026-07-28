@@ -4,6 +4,7 @@ import { ApiError, asyncHandler } from '../http/errors';
 import { validateBody } from '../http/validate';
 import { currentAuth, requireAuth } from '../middleware/authenticate';
 import { prisma } from '../prisma';
+import { emitToCompany, emitToMember } from '../realtime/io';
 
 export const chatRouter = Router();
 chatRouter.use(requireAuth);
@@ -82,6 +83,7 @@ chatRouter.post('/conversations', validateBody(z.discriminatedUnion('kind', [
     data: { companyId: auth.companyId, kind: input.kind, title: input.kind === 'GROUP' ? input.title : null, creatorId: auth.membershipId, members: { create: memberIds.map((membershipId) => ({ membershipId })) } },
     include: conversationInclude,
   });
+  for (const membershipId of memberIds) emitToMember(membershipId, 'chat:conversation', { conversationId: row.id });
   res.status(201).json({ conversation: conversation(row) });
 }));
 
@@ -97,5 +99,12 @@ chatRouter.post('/conversations/:id/messages', validateBody(z.object({ body: z.s
   const room = await readConversation(req.params.id, auth.companyId, auth.membershipId);
   const created = await prisma.chatMessage.create({ data: { conversationId: room.id, senderId: auth.membershipId, body: req.body.body }, include: { sender: { select: person } } });
   await prisma.conversation.update({ where: { id: room.id }, data: { updatedAt: new Date() } });
-  res.status(201).json({ message: message(created) });
+  const payload = { conversationId: room.id, message: message(created) };
+  if (room.kind === 'COMPANY') {
+    emitToCompany(auth.companyId, 'chat:message', payload);
+  } else {
+    const members = await prisma.conversationMember.findMany({ where: { conversationId: room.id }, select: { membershipId: true } });
+    for (const member of members) emitToMember(member.membershipId, 'chat:message', payload);
+  }
+  res.status(201).json({ message: payload.message });
 }));
