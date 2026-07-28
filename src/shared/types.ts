@@ -397,6 +397,30 @@ export interface AnnouncementDto {
   author: { id: string; fullName: string; avatarUrl: string | null } | null;
 }
 
+export type ConversationKind = 'COMPANY' | 'DIRECT' | 'GROUP';
+
+export interface ChatMemberDto {
+  id: string;
+  fullName: string;
+  avatarUrl: string | null;
+}
+
+export interface ChatMessageDto {
+  id: string;
+  body: string;
+  createdAt: string;
+  sender: ChatMemberDto;
+}
+
+export interface ConversationDto {
+  id: string;
+  kind: ConversationKind;
+  title: string | null;
+  updatedAt: string;
+  members: ChatMemberDto[];
+  lastMessage: Omit<ChatMessageDto, 'id'> | null;
+}
+
 export interface SessionUserDto {
   user: {
     id: string;

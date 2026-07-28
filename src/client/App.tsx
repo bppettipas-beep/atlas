@@ -4,6 +4,7 @@ import { LoadingState, ToastProvider } from '@/components/ui';
 import { AccountPage } from '@/pages/AccountPage';
 import { ActivityPage } from '@/pages/ActivityPage';
 import { CompanySettingsPage } from '@/pages/CompanySettingsPage';
+import { ChatPage } from '@/pages/ChatPage';
 import { HomePage } from '@/pages/HomePage';
 import { InvitationsPage } from '@/pages/InvitationsPage';
 import { KnowledgeDocPage } from '@/pages/KnowledgeDocPage';
@@ -87,6 +88,7 @@ export function App() {
               <Route path="my-day" element={<MyDayPage />} />
               <Route path="organization" element={<OrganizationMapPage />} />
               <Route path="people" element={<PeoplePage />} />
+              <Route path="chat" element={<ChatPage />} />
               <Route path="work" element={<WorkPage />} />
               <Route path="schedule" element={<SchedulePage />} />
               <Route path="knowledge" element={<KnowledgePage />} />

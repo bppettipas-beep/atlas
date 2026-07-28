@@ -797,6 +797,34 @@ describe('Atlasy', () => {
   });
 });
 
+describe('company chat', () => {
+  it('provides a shared room and keeps direct messages between their members', async () => {
+    const owner = await signUpOwner(app, { companyName: 'Chat Test Co' });
+    const code = await createInviteCode(owner);
+    const worker = await joinWithCode(app, code, { fullName: 'Chat Worker' });
+    const workerId = (worker.response.body as { membership: { id: string } }).membership.id;
+
+    const companyRooms = await owner.agent.get('/api/chat/conversations');
+    expect(companyRooms.status).toBe(200);
+    const companyRoom = companyRooms.body.items.find((item: { kind: string }) => item.kind === 'COMPANY');
+    expect(companyRoom).toBeTruthy();
+
+    const companyMessage = await owner.agent
+      .post(`/api/chat/conversations/${companyRoom.id}/messages`)
+      .send({ body: 'Morning team' });
+    expect(companyMessage.status).toBe(201);
+    expect((await worker.agent.get(`/api/chat/conversations/${companyRoom.id}/messages`)).body.items[0].body).toBe('Morning team');
+
+    const direct = await owner.agent.post('/api/chat/conversations').send({ kind: 'DIRECT', memberId: workerId });
+    expect(direct.status).toBe(201);
+    const directId = direct.body.conversation.id as string;
+    expect((await worker.agent.get(`/api/chat/conversations/${directId}/messages`)).status).toBe(200);
+
+    const outsider = await signUpOwner(app, { companyName: 'Other Chat Co' });
+    expect((await outsider.agent.get(`/api/chat/conversations/${directId}/messages`)).status).toBe(404);
+  });
+});
+
 describe('people added by hand', () => {
   const addPerson = (client: Client, body: Record<string, unknown>) =>
     client.agent.post('/api/people').send(body);

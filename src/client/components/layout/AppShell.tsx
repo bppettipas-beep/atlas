@@ -8,6 +8,7 @@ import {
   Activity,
   BookOpen,
   Building,
+  Chat,
   Calendar,
   CaretUpDown,
   CheckSquare,
@@ -50,6 +51,7 @@ const OWNER_NAV: NavItem[] = [
   { to: '/app/home', label: 'Home', icon: House },
   { to: '/app/organization', label: 'Organization map', icon: TreeStructure },
   { to: '/app/people', label: 'People', icon: Users },
+  { to: '/app/chat', label: 'Chat', icon: Chat },
   { to: '/app/work', label: 'Work', icon: CheckSquare },
   { to: '/app/schedule', label: 'Schedule', icon: Calendar },
   { to: '/app/knowledge', label: 'Knowledge base', icon: BookOpen },
@@ -64,6 +66,7 @@ const WORKER_NAV: NavItem[] = [
   { to: '/app/schedule', label: 'Schedule', icon: Calendar },
   { to: '/app/organization', label: 'Company map', icon: TreeStructure },
   { to: '/app/people', label: 'People', icon: Users },
+  { to: '/app/chat', label: 'Chat', icon: Chat },
   { to: '/app/knowledge', label: 'Knowledge base', icon: BookOpen },
   { to: '/app/activity', label: 'Activity', icon: Activity },
 ];
