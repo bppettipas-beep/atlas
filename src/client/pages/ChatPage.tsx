@@ -12,7 +12,12 @@ import type { ChatMessageDto, ConversationDto, PersonSummary } from '@shared/typ
 function conversationName(conversation: ConversationDto, me: string) {
   if (conversation.kind === 'COMPANY') return 'Company chat';
   if (conversation.title) return conversation.title;
-  return conversation.members.filter((member) => member.id !== me).map((member) => member.fullName).join(', ');
+  const members = Array.isArray(conversation.members) ? conversation.members : [];
+  return members.filter((member) => member.id !== me).map((member) => member.fullName).join(', ') || 'Private chat';
+}
+
+function conversationMembers(conversation: ConversationDto) {
+  return Array.isArray(conversation.members) ? conversation.members : [];
 }
 
 export function ChatPage() {
@@ -53,10 +58,11 @@ function ChatWorkspace() {
   const bottom = useRef<HTMLDivElement>(null);
   const conversations = useQuery<{ items: ConversationDto[] }>((signal) => api.get('/chat/conversations', undefined, signal), []);
   const people = useQuery<{ items: PersonSummary[] }>((signal) => api.get('/people', undefined, signal), []);
+  const conversationItems = Array.isArray(conversations.data?.items) ? conversations.data.items : [];
 
   const selected = useMemo(
-    () => conversations.data?.items.find((conversation) => conversation.id === selectedId) ?? conversations.data?.items[0] ?? null,
-    [conversations.data, selectedId],
+    () => conversationItems.find((conversation) => conversation.id === selectedId) ?? conversationItems[0] ?? null,
+    [conversationItems, selectedId],
   );
   const messages = useQuery<{ items: ChatMessageDto[] }>(
     (signal) => (selected ? api.get(`/chat/conversations/${selected.id}/messages`, undefined, signal) : Promise.resolve({ items: [] })),
@@ -72,6 +78,7 @@ function ChatWorkspace() {
   // The route is guarded above, but this prevents a transient auth refresh
   // from turning an in-flight chat update into a render exception.
   if (!session) return null;
+  const messageItems = Array.isArray(messages.data?.items) ? messages.data.items : [];
 
   const send = async () => {
     if (!selected || !body.trim()) return;
@@ -103,13 +110,18 @@ function ChatWorkspace() {
           <aside className="border-b border-rule lg:border-b-0 lg:border-r">
             <div className="border-b border-rule px-4 py-3"><p className="edge">Conversations</p></div>
             <div className="flex max-h-[210px] overflow-x-auto lg:max-h-none lg:flex-col lg:overflow-y-auto">
-              {(conversations.data?.items ?? []).map((conversation) => {
+              {conversationItems.map((conversation) => {
                 const name = conversationName(conversation, session.membership.id);
-                const peer = conversation.members.find((member) => member.id !== session.membership.id);
+                const members = conversationMembers(conversation);
+                const peer = members.find((member) => member.id !== session.membership.id);
+                const last =
+                  conversation.lastMessage && typeof conversation.lastMessage === 'object'
+                    ? conversation.lastMessage
+                    : null;
                 return <button key={conversation.id} onClick={() => setSelectedId(conversation.id)} className={cn('min-w-[210px] border-b border-rule px-3 py-3 text-left transition-colors lg:min-w-0', selected?.id === conversation.id ? 'bg-paper' : 'hover:bg-paper/60')}>
                   <div className="flex items-center gap-2.5">
                     {conversation.kind === 'COMPANY' ? <span className="flex h-8 w-8 shrink-0 items-center justify-center bg-mark text-white"><Users /></span> : peer ? <Avatar name={peer.fullName} src={peer.avatarUrl} size="md" /> : <span className="flex h-8 w-8 items-center justify-center bg-paper"><Users /></span>}
-                    <div className="min-w-0 flex-1"><div className="flex items-center justify-between gap-2"><p className="truncate text-[13px] font-medium text-ink">{name}</p><span className="shrink-0 text-[10px] text-ink-3">{relativeTime(conversation.updatedAt)}</span></div><p className="mt-0.5 truncate text-[12px] text-ink-3">{conversation.lastMessage ? `${conversation.lastMessage.sender.fullName}: ${conversation.lastMessage.body}` : 'No messages yet'}</p></div>
+                    <div className="min-w-0 flex-1"><div className="flex items-center justify-between gap-2"><p className="truncate text-[13px] font-medium text-ink">{name}</p><span className="shrink-0 text-[10px] text-ink-3">{relativeTime(conversation.updatedAt)}</span></div><p className="mt-0.5 truncate text-[12px] text-ink-3">{last ? `${last.sender?.fullName ?? 'Someone'}: ${last.body ?? ''}` : 'No messages yet'}</p></div>
                   </div>
                 </button>;
               })}
@@ -120,14 +132,14 @@ function ChatWorkspace() {
             {conversations.error && <ErrorState message={conversations.error} onRetry={conversations.refetch} />}
             {!selected && !conversations.loading && <EmptyState icon={<Chat />} title="Start a conversation" description="Use the company chat or create a private message." action={<Button onClick={() => setComposeOpen(true)}>New message</Button>} />}
             {selected && <>
-              <div className="flex items-center gap-2 border-b border-rule px-4 py-3"><Chat className="text-ink-3" /><div><p className="text-[14px] font-medium text-ink">{conversationName(selected, session.membership.id)}</p><p className="text-[11px] text-ink-3">{selected.kind === 'COMPANY' ? 'Everyone in the company' : `${selected.members.length} people`}</p></div></div>
+              <div className="flex items-center gap-2 border-b border-rule px-4 py-3"><Chat className="text-ink-3" /><div><p className="text-[14px] font-medium text-ink">{conversationName(selected, session.membership.id)}</p><p className="text-[11px] text-ink-3">{selected.kind === 'COMPANY' ? 'Everyone in the company' : `${conversationMembers(selected).length} people`}</p></div></div>
               <div className="min-h-0 flex-1 space-y-4 overflow-y-auto bg-paper/30 p-4">
                 {messages.error && <ErrorState message={messages.error} onRetry={messages.refetch} />}
-                {(messages.data?.items ?? []).map((message) => {
+                {messageItems.map((message) => {
                   const mine = message.sender.id === session.membership.id;
                   return <div key={message.id} className={cn('flex max-w-[80%] gap-2', mine ? 'ml-auto flex-row-reverse' : '')}><Avatar name={message.sender.fullName} src={message.sender.avatarUrl} size="sm" /><div className={cn('min-w-0 px-3 py-2', mine ? 'bg-mark text-white' : 'border border-rule bg-sheet text-ink')}><p className={cn('mb-1 text-[10px]', mine ? 'text-white/70' : 'text-ink-3')}>{message.sender.fullName} · {relativeTime(message.createdAt)}</p><p className="whitespace-pre-wrap text-[13px] leading-relaxed">{message.body}</p></div></div>;
                 })}
-                {messages.data?.items.length === 0 && !messages.loading && <p className="pt-16 text-center text-[13px] text-ink-3">No messages yet. Say hello.</p>}
+                {messageItems.length === 0 && !messages.loading && <p className="pt-16 text-center text-[13px] text-ink-3">No messages yet. Say hello.</p>}
                 <div ref={bottom} />
               </div>
               <div className="border-t border-rule bg-sheet p-3"><div className="flex gap-2"><Textarea value={body} onChange={(event) => setBody(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void send(); } }} placeholder="Write a message…" className="min-h-[42px] flex-1 resize-none py-2" /><Button size="icon" icon={<PaperPlane />} aria-label="Send message" loading={sending} onClick={() => void send()} /></div><p className="mt-1 text-[10px] text-ink-3">Enter to send · Shift + Enter for a new line</p></div>
