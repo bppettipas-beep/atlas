@@ -30,6 +30,26 @@ function isConfirmation(text: string) {
   return /^(?:yes|yep|yeah|confirm|confirmed|delete it|do it|remove it)[.!\s]*$/i.test(text.trim());
 }
 
+/** Makes “Johns” and “John's” (plus casing and punctuation) compare as one title. */
+function comparableTaskTitle(value: string) {
+  return value
+    .normalize('NFKD')
+    .toLocaleLowerCase()
+    .replace(/[’'`]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+    .replace(/\s+/g, ' ');
+}
+
+function requestedTaskDeletion(text: string) {
+  const match = text
+    .trim()
+    .match(/^(?:please\s+)?(?:delete|remove)\s+(?:the\s+)?(?:task\s+)?(.+?)[.!\s]*$/i);
+  if (!match) return null;
+  const title = match[1].trim().replace(/^['“”"]|['“”"]$/g, '');
+  return title && !/^(?:all|every|everything|all tasks)$/i.test(title) ? title : null;
+}
+
 function deletionTitleFromHistory(history: ChatMessage[]) {
   const previous = [...history]
     .reverse()
@@ -104,6 +124,7 @@ function systemPrompt(context: {
     '',
     'Deleting work:',
     '- Deleting permanently removes active work from Atlas. Treat this as destructive.',
+    '- People say task titles naturally. Search active work before saying it is missing; apostrophes, capitalization and punctuation are not meaningful differences (for example, “clean johns house” matches “Clean John’s house”). If exactly one task is the obvious match, show its real title and ask for confirmation.',
     '- For one task, find the exact task first, then call prepare_task_deletion. Atlas will ask for confirmation and only delete after the user explicitly confirms that exact task in their next message. Never call delete_task directly.',
     '- For clearing every task, list the active tasks first and state the exact count. Ask: “This will remove all N active tasks. Do you want me to continue?” Only call clear_all_tasks when the very next user message clearly confirms all tasks. Never treat “yes” from an earlier or unrelated turn as confirmation.',
     '- If the request could mean a subset (done, unassigned, a team, or a date range), ask which set before deleting anything.',
@@ -286,6 +307,29 @@ export async function runAssistant(options: {
         { name: 'delete_task', ok: false, summary: describe('delete_task', false, result.data) },
       ],
     };
+  }
+
+  // Do not make title punctuation a reason to abandon a deletion request. This
+  // runs before the model so “delete clean johns house” reliably finds
+  // “Clean John's house”, while still requiring the confirmation below.
+  const requestedTitle = latestUserMessage?.content ? requestedTaskDeletion(latestUserMessage.content) : null;
+  if (requestedTitle) {
+    const lookup = await runTool('list_tasks', { includeDone: false, limit: 200 }, options.cookie);
+    const tasks =
+      lookup.ok && typeof lookup.data === 'object' && lookup.data && 'items' in lookup.data
+        ? ((lookup.data as { items?: { id: string; title: string }[] }).items ?? [])
+        : [];
+    const normalizedRequested = comparableTaskTitle(requestedTitle);
+    const matches = tasks.filter((task) => comparableTaskTitle(task.title) === normalizedRequested);
+    if (matches.length === 1) {
+      const task = matches[0];
+      pendingTaskDeletes.set(options.context.membershipId, {
+        taskId: task.id,
+        title: task.title,
+        expiresAt: Date.now() + DELETE_CONFIRMATION_TTL_MS,
+      });
+      return { reply: `Delete “${task.title}”? Reply yes to confirm.`, actions: [] };
+    }
   }
 
   let pendingRemoval = pendingPersonRemovals.get(options.context.membershipId);
