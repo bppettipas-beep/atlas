@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Component, useEffect, useMemo, useRef, useState, type ErrorInfo, type ReactNode } from 'react';
 import { Chat, PaperPlane, Plus, Users } from '@/components/icons';
 import { PageBody, PageTransition } from '@/components/layout/AppShell';
 import { Avatar, Button, EmptyState, ErrorState, Input, Modal, Textarea, useToast } from '@/components/ui';
@@ -16,6 +16,34 @@ function conversationName(conversation: ConversationDto, me: string) {
 }
 
 export function ChatPage() {
+  return <ChatErrorBoundary><ChatWorkspace /></ChatErrorBoundary>;
+}
+
+/**
+ * A live message must never be able to take down the whole application. This
+ * is intentionally local to chat: a bad message payload can be recovered by
+ * remounting this workspace without disrupting the rest of Atlas.
+ */
+class ChatErrorBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error('Chat workspace failed to render:', error, info);
+  }
+
+  render() {
+    if (this.state.failed) {
+      return <PageTransition><PageBody><EmptyState icon={<Chat />} title="Chat needs a quick refresh" description="Your message may have sent, but this conversation did not reload cleanly." action={<Button onClick={() => this.setState({ failed: false })}>Reload chat</Button>} /></PageBody></PageTransition>;
+    }
+    return this.props.children;
+  }
+}
+
+function ChatWorkspace() {
   const { session } = useAuth();
   const toast = useToast();
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -40,6 +68,10 @@ export function ChatPage() {
     conversations.refetch();
     messages.refetch();
   });
+
+  // The route is guarded above, but this prevents a transient auth refresh
+  // from turning an in-flight chat update into a render exception.
+  if (!session) return null;
 
   const send = async () => {
     if (!selected || !body.trim()) return;
@@ -72,8 +104,8 @@ export function ChatPage() {
             <div className="border-b border-rule px-4 py-3"><p className="edge">Conversations</p></div>
             <div className="flex max-h-[210px] overflow-x-auto lg:max-h-none lg:flex-col lg:overflow-y-auto">
               {(conversations.data?.items ?? []).map((conversation) => {
-                const name = conversationName(conversation, session!.membership.id);
-                const peer = conversation.members.find((member) => member.id !== session!.membership.id);
+                const name = conversationName(conversation, session.membership.id);
+                const peer = conversation.members.find((member) => member.id !== session.membership.id);
                 return <button key={conversation.id} onClick={() => setSelectedId(conversation.id)} className={cn('min-w-[210px] border-b border-rule px-3 py-3 text-left transition-colors lg:min-w-0', selected?.id === conversation.id ? 'bg-paper' : 'hover:bg-paper/60')}>
                   <div className="flex items-center gap-2.5">
                     {conversation.kind === 'COMPANY' ? <span className="flex h-8 w-8 shrink-0 items-center justify-center bg-mark text-white"><Users /></span> : peer ? <Avatar name={peer.fullName} src={peer.avatarUrl} size="md" /> : <span className="flex h-8 w-8 items-center justify-center bg-paper"><Users /></span>}
@@ -88,11 +120,11 @@ export function ChatPage() {
             {conversations.error && <ErrorState message={conversations.error} onRetry={conversations.refetch} />}
             {!selected && !conversations.loading && <EmptyState icon={<Chat />} title="Start a conversation" description="Use the company chat or create a private message." action={<Button onClick={() => setComposeOpen(true)}>New message</Button>} />}
             {selected && <>
-              <div className="flex items-center gap-2 border-b border-rule px-4 py-3"><Chat className="text-ink-3" /><div><p className="text-[14px] font-medium text-ink">{conversationName(selected, session!.membership.id)}</p><p className="text-[11px] text-ink-3">{selected.kind === 'COMPANY' ? 'Everyone in the company' : `${selected.members.length} people`}</p></div></div>
+              <div className="flex items-center gap-2 border-b border-rule px-4 py-3"><Chat className="text-ink-3" /><div><p className="text-[14px] font-medium text-ink">{conversationName(selected, session.membership.id)}</p><p className="text-[11px] text-ink-3">{selected.kind === 'COMPANY' ? 'Everyone in the company' : `${selected.members.length} people`}</p></div></div>
               <div className="min-h-0 flex-1 space-y-4 overflow-y-auto bg-paper/30 p-4">
                 {messages.error && <ErrorState message={messages.error} onRetry={messages.refetch} />}
                 {(messages.data?.items ?? []).map((message) => {
-                  const mine = message.sender.id === session!.membership.id;
+                  const mine = message.sender.id === session.membership.id;
                   return <div key={message.id} className={cn('flex max-w-[80%] gap-2', mine ? 'ml-auto flex-row-reverse' : '')}><Avatar name={message.sender.fullName} src={message.sender.avatarUrl} size="sm" /><div className={cn('min-w-0 px-3 py-2', mine ? 'bg-mark text-white' : 'border border-rule bg-sheet text-ink')}><p className={cn('mb-1 text-[10px]', mine ? 'text-white/70' : 'text-ink-3')}>{message.sender.fullName} · {relativeTime(message.createdAt)}</p><p className="whitespace-pre-wrap text-[13px] leading-relaxed">{message.body}</p></div></div>;
                 })}
                 {messages.data?.items.length === 0 && !messages.loading && <p className="pt-16 text-center text-[13px] text-ink-3">No messages yet. Say hello.</p>}
