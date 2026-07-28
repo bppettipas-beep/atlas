@@ -172,7 +172,7 @@ export function AtlasyPanel({ open, onClose }: { open: boolean; onClose: () => v
           {/* ---------------------------- title block --------------------------- */}
           <header className="flex shrink-0 items-center justify-between border-b border-rule px-4 py-3">
             <span className="inline-flex items-center gap-2">
-              <span className="flex h-7 w-7 items-center justify-center border border-edge bg-paper p-1">
+              <span className="flex h-9 w-9 items-center justify-center border border-edge bg-paper p-1">
                 <AtlasyMark className="h-full w-full" />
               </span>
               <span className="title text-[14px] leading-none">Atlasy</span>
@@ -388,7 +388,7 @@ export function AtlasyButton({ onClick, open }: { onClick: () => void; open: boo
           : 'border-edge bg-sheet text-ink hover:border-edgeStrong hover:bg-paper',
       )}
     >
-      <AtlasyMark className={cn('h-4 w-4', open && 'brightness-0 invert')} />
+      <AtlasyMark className={cn('h-5 w-5', open && 'brightness-0 invert')} />
       Atlasy
     </button>
   );
