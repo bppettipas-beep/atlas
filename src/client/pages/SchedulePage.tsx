@@ -1,6 +1,7 @@
 import { ArrowLeft, ArrowRight, Calendar, Plus, Warning } from '@/components/icons';
 import { PageTransition } from '@/components/layout/AppShell';
 import { ScheduleGrid, type ScheduleColumn } from '@/components/schedule/ScheduleGrid';
+import { ScheduleMonth } from '@/components/schedule/ScheduleMonth';
 import { TaskComposer } from '@/components/tasks/TaskComposer';
 import { TaskDetailPanel } from '@/components/tasks/TaskDetailPanel';
 import {
@@ -28,7 +29,8 @@ import type {
   TaskDetail,
 } from '@shared/types';
 
-type View = 'day' | 'week' | 'mine';
+type View = 'day' | 'week' | 'month';
+type ScheduleScope = 'company' | 'mine';
 type Draft = { column: ScheduleColumn; start: Date; end: Date };
 
 function startOfDay(value: Date) {
@@ -49,6 +51,18 @@ function startOfWeek(value: Date) {
   return date;
 }
 
+function startOfMonth(value: Date) {
+  const date = startOfDay(value);
+  date.setDate(1);
+  return date;
+}
+
+function addMonths(value: Date, months: number) {
+  const date = new Date(value);
+  date.setMonth(date.getMonth() + months);
+  return date;
+}
+
 function localDate(value: Date) {
   const offset = value.getTimezoneOffset() * 60_000;
   return new Date(value.getTime() - offset).toISOString().slice(0, 10);
@@ -57,6 +71,8 @@ function localDate(value: Date) {
 function labelRange(from: Date, to: Date, view: View) {
   if (view === 'day')
     return from.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
+  if (view === 'month')
+    return from.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
   const end = addDays(to, -1);
   return `${from.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} – ${end.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`;
 }
@@ -66,8 +82,11 @@ export function SchedulePage() {
   const { session, isLeadership } = useAuth();
   const toast = useToast();
   const [params, setParams] = useSearchParams();
-  const initialView = (params.get('view') as View | null) ?? (isLeadership ? 'day' : 'mine');
+  const initialView = (params.get('view') as View | null) ?? 'day';
   const [view, setView] = useState<View>(initialView);
+  const [scope, setScope] = useState<ScheduleScope>(
+    (params.get('scope') as ScheduleScope | null) ?? (isLeadership ? 'company' : 'mine'),
+  );
   const [anchor, setAnchor] = useState(() => {
     const requested = params.get('date');
     return requested ? startOfDay(new Date(`${requested}T12:00:00`)) : startOfDay(new Date());
@@ -92,8 +111,8 @@ export function SchedulePage() {
     return () => query.removeEventListener('change', update);
   }, []);
 
-  const from = view === 'day' ? startOfDay(anchor) : startOfWeek(anchor);
-  const to = view === 'day' ? addDays(from, 1) : addDays(from, 7);
+  const from = view === 'day' ? startOfDay(anchor) : view === 'week' ? startOfWeek(anchor) : startOfMonth(anchor);
+  const to = view === 'day' ? addDays(from, 1) : view === 'week' ? addDays(from, 7) : addMonths(from, 1);
   const resourcesKey = resourceIds.join(',');
 
   useEffect(() => {
@@ -102,6 +121,7 @@ export function SchedulePage() {
       (current) => {
         const next = new URLSearchParams(current);
         next.set('view', view);
+        next.set('scope', scope);
         next.set('date', localDate(anchor));
         if (resourceIds.length) next.set('resources', resourcesKey);
         else next.delete('resources');
@@ -109,7 +129,7 @@ export function SchedulePage() {
       },
       { replace: true },
     );
-  }, [anchor, resourceIds, resourcesKey, setParams, view]);
+  }, [anchor, resourceIds, resourcesKey, scope, setParams, view]);
 
   const scheduleQuery = useQuery<ScheduleResponse>(
     (signal) =>
@@ -228,7 +248,13 @@ export function SchedulePage() {
   };
 
   const navigate = (direction: -1 | 1) =>
-    setAnchor((current) => addDays(current, direction * (view === 'day' ? 1 : 7)));
+    setAnchor((current) =>
+      view === 'day'
+        ? addDays(current, direction)
+        : view === 'week'
+          ? addDays(current, direction * 7)
+          : addMonths(current, direction),
+    );
   const setToday = () => setAnchor(startOfDay(new Date()));
   const taskPanelPeople = peopleQuery.data?.items ?? [];
 
@@ -237,9 +263,9 @@ export function SchedulePage() {
       <div className="flex h-full min-h-0 flex-col pl-14 pr-4 pt-4 sm:px-6 sm:py-5">
         <PageHeader
           eyebrow="Schedule"
-          title={view === 'mine' ? 'My schedule' : 'The day, at a glance'}
+          title={scope === 'mine' ? 'My schedule' : 'The day, at a glance'}
           description={
-            view === 'mine'
+            scope === 'mine'
               ? 'Your scheduled work and availability for the coming week.'
               : 'Scheduled work is the same work tracked in Atlas — move it here and the task updates everywhere.'
           }
@@ -275,15 +301,12 @@ export function SchedulePage() {
             {[
               { value: 'day' as const, label: 'Day' },
               { value: 'week' as const, label: 'Week' },
-              { value: 'mine' as const, label: 'Mine' },
+              { value: 'month' as const, label: 'Month' },
             ].map((option) => (
               <button
                 key={option.value}
                 type="button"
-                onClick={() => {
-                  setView(option.value);
-                  if (option.value === 'mine' && session) setResourceIds([session.membership.id]);
-                }}
+                onClick={() => setView(option.value)}
                 className={cn(
                   'rounded-sm px-3 py-1.5 text-[12px] font-medium transition-colors',
                   view === option.value
@@ -314,13 +337,43 @@ export function SchedulePage() {
               onClick={() => navigate(1)}
             />
             <span className="ml-2 text-[13px] font-medium text-ink">
-              {labelRange(from, to, view === 'mine' ? 'week' : view)}
+              {labelRange(from, to, view)}
             </span>
+          </div>
+          <div className="flex rounded-sm border border-edge bg-paper p-0.5">
+            {isLeadership && (
+              <button
+                type="button"
+                onClick={() => {
+                  setScope('company');
+                  setResourceIds([]);
+                }}
+                className={cn(
+                  'rounded-sm px-3 py-1.5 text-[12px] font-medium transition-colors',
+                  scope === 'company' ? 'bg-ink text-white shadow-sm' : 'text-ink-3 hover:text-ink',
+                )}
+              >
+                Company
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                setScope('mine');
+                if (session) setResourceIds([session.membership.id]);
+              }}
+              className={cn(
+                'rounded-sm px-3 py-1.5 text-[12px] font-medium transition-colors',
+                scope === 'mine' ? 'bg-ink text-white shadow-sm' : 'text-ink-3 hover:text-ink',
+              )}
+            >
+              Mine
+            </button>
           </div>
           <span className="ml-auto hidden text-edge text-ink-3 md:block">
             Drag work to move · drag open time to add
           </span>
-          {isLeadership && (
+          {isLeadership && scope === 'company' && view !== 'month' && (
             <Select
               id="schedule-resource"
               aria-label="Schedule resources"
@@ -397,36 +450,49 @@ export function SchedulePage() {
         )}
         {scheduleQuery.data && columns.length > 0 && (
           <div className="grid min-h-0 flex-1 gap-3 xl:grid-cols-[minmax(0,1fr)_230px]">
-            <ScheduleGrid
-              columns={columns}
-              blocks={blocks}
-              availability={scheduleQuery.data.availability}
-              dayStartHour={6}
-              dayEndHour={21}
-              editable={canSchedule}
-              selectedTaskId={selectedTaskId}
-              onOpenTask={(id) => {
-                setSelectedTaskId(id);
-                setParams(
-                  (current) => {
-                    const next = new URLSearchParams(current);
-                    next.set('task', id);
-                    return next;
-                  },
-                  { replace: true },
-                );
-              }}
-              onCreate={(column, start, end) => setDraft({ column, start, end })}
-              onMove={move}
-            />
-            <ScheduleRail
-              resources={resources}
-              workload={scheduleQuery.data.workload}
-              blocks={blocks}
-              selectedResourceId={resourceIds[0] ?? null}
-              onSelect={(id) => setResourceIds(id ? [id] : [])}
-              onOpenTask={setSelectedTaskId}
-            />
+            {view === 'month' ? (
+              <ScheduleMonth
+                month={from}
+                blocks={blocks}
+                selectedTaskId={selectedTaskId}
+                onOpenTask={setSelectedTaskId}
+              />
+            ) : (
+              <>
+                <ScheduleGrid
+                  columns={columns}
+                  blocks={blocks}
+                  availability={scheduleQuery.data.availability}
+                  dayStartHour={0}
+                  dayEndHour={24}
+                  editable={canSchedule}
+                  selectedTaskId={selectedTaskId}
+                  onOpenTask={(id) => {
+                    setSelectedTaskId(id);
+                    setParams(
+                      (current) => {
+                        const next = new URLSearchParams(current);
+                        next.set('task', id);
+                        return next;
+                      },
+                      { replace: true },
+                    );
+                  }}
+                  onCreate={(column, start, end) => setDraft({ column, start, end })}
+                  onMove={move}
+                />
+                {scope === 'company' && (
+                  <ScheduleRail
+                    resources={resources}
+                    workload={scheduleQuery.data.workload}
+                    blocks={blocks}
+                    selectedResourceId={resourceIds[0] ?? null}
+                    onSelect={(id) => setResourceIds(id ? [id] : [])}
+                    onOpenTask={setSelectedTaskId}
+                  />
+                )}
+              </>
+            )}
           </div>
         )}
         {scheduleQuery.data?.hiddenCount ? (
