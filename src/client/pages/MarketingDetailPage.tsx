@@ -3,6 +3,7 @@ import {
   BookOpen,
   Building,
   Calendar,
+  Check,
   CheckSquare,
   ShieldCheck,
   TreeStructure,
@@ -20,6 +21,38 @@ const MARKETING_TABS = [
   ['pricing', 'Pricing'],
   ['getting-started', 'Start'],
 ] as const;
+
+const PRICING_PLANS = [
+  {
+    name: 'Starter',
+    price: '$19',
+    description: 'For a new business building its operating foundation.',
+    capacity: 'Up to 10 employees',
+    features: ['Everything included', 'Core work management', 'People and organization map'],
+  },
+  {
+    name: 'Growth',
+    price: '$49',
+    featured: true,
+    description: 'The full operating picture for a team finding its rhythm.',
+    capacity: 'Up to 50 employees',
+    features: ['Unlimited managers', 'Atlasy AI included', 'Scheduling and Knowledge Base', 'Organization Map and Reporting'],
+  },
+  {
+    name: 'Business',
+    price: '$99',
+    description: 'More control and insight for an established operation.',
+    capacity: 'Up to 150 employees',
+    features: ['Advanced permissions', 'Analytics', 'API access', 'Priority support'],
+  },
+  {
+    name: 'Enterprise',
+    price: 'Custom',
+    description: 'A tailored Atlas rollout for complex organizations.',
+    capacity: 'Built around your company',
+    features: ['Custom pricing', 'Tailored onboarding', 'Flexible company scale', 'Priority support'],
+  },
+];
 
 const PAGES = {
   problem: {
@@ -328,8 +361,12 @@ export function MarketingDetailPage() {
           </div>
         </div>
       </header>
-      <main className="mx-auto w-full max-w-[960px] px-5 py-14 sm:px-8 sm:py-20">
-        <div className="border-l-2 border-ink pl-5 sm:pl-7">
+      <main className={`mx-auto w-full px-5 py-14 sm:px-8 sm:py-20 ${section === 'pricing' ? 'max-w-[1180px]' : 'max-w-[960px]'}`}>
+        {section === 'pricing' ? (
+          <PricingContent signedIn={Boolean(session)} />
+        ) : (
+          <>
+            <div className="border-l-2 border-ink pl-5 sm:pl-7">
           <p className="edge">
             {page.index} · {page.label}
           </p>
@@ -339,7 +376,7 @@ export function MarketingDetailPage() {
           </h1>
           <p className="mt-7 max-w-[58ch] text-[16px] leading-relaxed text-ink-2">{page.intro}</p>
         </div>
-        <section className="mt-14 border-t border-edge">
+            <section className="mt-14 border-t border-edge">
           {page.points.map(([title, body], index) => (
             <article
               key={title}
@@ -354,8 +391,8 @@ export function MarketingDetailPage() {
               </div>
             </article>
           ))}
-        </section>
-        <section className="mt-16">
+            </section>
+            <section className="mt-16">
           <div className="max-w-[58ch]">
             <p className="edge">In practice</p>
             <h2 className="display mt-4 max-w-[18ch] text-[2rem] leading-[1.02] sm:text-[2.8rem]">
@@ -373,8 +410,8 @@ export function MarketingDetailPage() {
               </article>
             ))}
           </div>
-        </section>
-        <div className="mt-12 flex flex-wrap items-center gap-3">
+            </section>
+            <div className="mt-12 flex flex-wrap items-center gap-3">
           <Link
             to={session ? '/app' : '/start'}
             className="group inline-flex h-11 items-center gap-2 rounded-sm bg-ink px-5 text-[14px] font-medium text-white transition-colors hover:bg-ink-2"
@@ -388,8 +425,90 @@ export function MarketingDetailPage() {
           >
             Back to overview
           </Link>
-        </div>
+            </div>
+          </>
+        )}
       </main>
     </div>
+  );
+}
+
+function PricingContent({ signedIn }: { signedIn: boolean }) {
+  const actionHref = signedIn ? '/app' : '/start';
+  return (
+    <>
+      <section className="relative overflow-hidden border border-edge bg-sheet px-6 py-10 sm:px-10 sm:py-14">
+        <div className="pointer-events-none absolute -right-16 -top-20 h-64 w-64 rounded-full border-[28px] border-mark/15" />
+        <div className="relative max-w-[720px]">
+          <p className="edge text-mark">05 · Pricing</p>
+          <h1 className="display mt-5 max-w-[14ch] text-[2.8rem] leading-[0.95] sm:text-[4.5rem]">
+            Plans that grow with the way you work.
+          </h1>
+          <p className="mt-7 max-w-[58ch] text-[16px] leading-relaxed text-ink-2">
+            Start with the space your team needs today. Every plan is clear, monthly, and built around running a better business—not decoding an add-on list.
+          </p>
+        </div>
+      </section>
+
+      <section className="mt-8 grid gap-4 lg:grid-cols-4 lg:items-stretch">
+        {PRICING_PLANS.map((plan) => (
+          <article
+            key={plan.name}
+            className={`relative flex flex-col border p-6 sm:p-7 ${plan.featured ? 'border-ink bg-ink text-white shadow-[8px_8px_0_0_var(--color-mark)]' : 'border-edge bg-paper'}`}
+          >
+            {plan.featured && (
+              <span className="absolute -top-3 left-5 bg-mark px-3 py-1 font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-white">
+                Most popular
+              </span>
+            )}
+            <p className={`edge-sm ${plan.featured ? 'text-white/60' : 'text-ink-4'}`}>{plan.name}</p>
+            <div className="mt-5 flex items-baseline gap-1.5">
+              <span className="display text-[3.1rem] leading-none">{plan.price}</span>
+              <span className={`text-[13px] ${plan.featured ? 'text-white/65' : 'text-ink-3'}`}>{plan.price === 'Custom' ? 'pricing' : '/ month'}</span>
+            </div>
+            <p className={`mt-5 min-h-[3.2rem] text-[13.5px] leading-relaxed ${plan.featured ? 'text-white/75' : 'text-ink-3'}`}>{plan.description}</p>
+            <p className={`mt-6 border-y py-3 text-[13px] font-semibold ${plan.featured ? 'border-white/20 text-white' : 'border-edge text-ink'}`}>{plan.capacity}</p>
+            <ul className="mt-6 space-y-3">
+              {plan.features.map((feature) => (
+                <li key={feature} className={`flex items-start gap-2.5 text-[13px] leading-snug ${plan.featured ? 'text-white/85' : 'text-ink-2'}`}>
+                  <Check className={`mt-[2px] shrink-0 text-[13px] ${plan.featured ? 'text-mark' : 'text-ink'}`} />
+                  {feature}
+                </li>
+              ))}
+            </ul>
+            <Link to={actionHref} className={`mt-8 inline-flex h-10 items-center justify-center rounded-sm px-4 text-[13px] font-medium transition-colors ${plan.featured ? 'bg-white text-ink hover:bg-paper' : 'bg-ink text-white hover:bg-ink-2'}`}>
+              {signedIn ? 'Open Atlas' : `Choose ${plan.name}`}
+            </Link>
+          </article>
+        ))}
+      </section>
+
+      <section className="mt-16 grid gap-8 border-t border-edge pt-10 md:grid-cols-[0.75fr_1.25fr]">
+        <div>
+          <p className="edge">No maze of add-ons</p>
+          <h2 className="display mt-4 max-w-[12ch] text-[2rem] leading-[1.02] sm:text-[2.7rem]">Choose for the work ahead.</h2>
+        </div>
+        <div className="grid border-l border-t border-edge sm:grid-cols-2">
+          {[
+            ['Start simple', 'Starter gives a new company an affordable operating foundation.'],
+            ['Run the day', 'Growth brings together Atlasy, scheduling, reporting, and knowledge.'],
+            ['Add control', 'Business adds analytics, API access, and advanced permissions.'],
+            ['Build together', 'Enterprise is designed around your company, scale, and rollout needs.'],
+          ].map(([title, body]) => (
+            <div key={title} className="border-b border-r border-edge p-5 sm:p-6">
+              <h3 className="title text-[16px]">{title}</h3>
+              <p className="mt-2 text-[13px] leading-relaxed text-ink-3">{body}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <div className="mt-12 flex flex-wrap items-center justify-between gap-4 border-t border-edge pt-8">
+        <p className="max-w-[52ch] text-[14px] leading-relaxed text-ink-3">Every Atlas plan starts monthly. Move up when your team needs more room—without replacing the system your company already relies on.</p>
+        <Link to={actionHref} className="group inline-flex h-11 items-center gap-2 rounded-sm bg-ink px-5 text-[14px] font-medium text-white hover:bg-ink-2">
+          {signedIn ? 'Open your panel' : 'Get started'} <ArrowRight className="text-[14px] transition-transform group-hover:translate-x-1" />
+        </Link>
+      </div>
+    </>
   );
 }
