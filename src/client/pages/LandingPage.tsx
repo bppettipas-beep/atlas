@@ -175,26 +175,38 @@ const STEPS = [
 
 const PLANS = [
   {
-    name: 'Base',
-    price: '$200',
-    description: 'The essentials for getting your company organised.',
-    features: ['Organisation map', 'People, work and knowledge', 'Real-time updates'],
+    name: 'Starter',
+    price: '$19',
+    description: 'Perfect for startups getting their company organised.',
+    features: ['Up to 10 employees', 'Everything included', 'Perfect for startups'],
   },
   {
     name: 'Growth',
-    price: '$500',
-    description: 'More room for a growing team and its day-to-day work.',
+    price: '$49',
+    popular: true,
+    description: 'The complete operating picture for a growing team.',
     features: [
-      'Everything in Base',
-      'Manager workflows and approvals',
-      'Recurring work and activity history',
+      'Up to 50 employees',
+      'Unlimited managers',
+      'Atlasy AI included',
+      'Scheduling',
+      'Knowledge Base',
+      'Organization Map',
+      'Reporting',
     ],
   },
   {
-    name: 'Scale',
-    price: '$1,000',
-    description: 'A complete operating system for a larger operation.',
-    features: ['Everything in Growth', 'Multi-company support', 'Priority onboarding support'],
+    name: 'Business',
+    price: '$99',
+    description: 'Extra control and insight for larger operations.',
+    features: ['Up to 150 employees', 'Advanced permissions', 'Analytics', 'API', 'Priority support'],
+  },
+  {
+    name: 'Enterprise',
+    price: 'Custom',
+    priceSuffix: 'pricing',
+    description: 'A tailored Atlas rollout for complex organizations.',
+    features: ['Custom pricing', 'Tailored onboarding', 'Flexible company scale', 'Priority support'],
   },
 ];
 
@@ -451,16 +463,23 @@ export function LandingPage() {
             </p>
           </div>
 
-          <div className="mt-12 grid border-l border-t border-edge md:grid-cols-3">
+          <div className="mt-12 grid border-l border-t border-edge md:grid-cols-2 xl:grid-cols-4">
             {PLANS.map((plan) => (
               <div
                 key={plan.name}
                 className="flex flex-col border-b border-r border-edge p-6 sm:p-8"
               >
-                <p className="edge-sm text-ink-4">{plan.name}</p>
+                <div className="flex items-center justify-between gap-2">
+                  <p className="edge-sm text-ink-4">{plan.name}</p>
+                  {plan.popular && (
+                    <span className="rounded-sm bg-mark px-2 py-1 text-edge font-semibold text-white">
+                      Most popular
+                    </span>
+                  )}
+                </div>
                 <div className="mt-5 flex items-baseline gap-1.5">
                   <span className="display text-[2.6rem] leading-none">{plan.price}</span>
-                  <span className="text-[13px] text-ink-3">/ month</span>
+                  <span className="text-[13px] text-ink-3">{plan.priceSuffix ?? '/ month'}</span>
                 </div>
                 <p className="mt-5 min-h-[3rem] text-[13.5px] leading-relaxed text-ink-3">
                   {plan.description}

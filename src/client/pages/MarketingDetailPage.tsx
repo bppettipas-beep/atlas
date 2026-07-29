@@ -198,6 +198,26 @@ const PAGES = {
         'The price reflects the level of operational support, not a maze of add-ons that makes planning difficult.',
       ],
     ],
+    // Pricing copy lives here as data so the page stays easy to update.
+    updatedIntro:
+      'Choose the Atlas plan that fits your company today, then grow into the next level when your operation needs more room and control.',
+    updatedPoints: [
+      ['Starter — $19 / month', 'Up to 10 employees, everything included, and perfect for startups.'],
+      [
+        'Growth — $49 / month',
+        'Up to 50 employees, unlimited managers, Atlasy AI, Scheduling, Knowledge Base, Organization Map, and Reporting.',
+      ],
+      [
+        'Business — $99 / month',
+        'Up to 150 employees, advanced permissions, analytics, API access, and priority support.',
+      ],
+      ['Enterprise — custom pricing', 'A tailored plan, onboarding approach, and company scale for complex organizations.'],
+    ],
+    updatedInPractice: [
+      ['Start with the plan you need', 'Starter gives a new company a clear, affordable starting point, while Growth adds the operational tools most teams need every day.'],
+      ['Grow without replacing the system', 'Business and Enterprise add deeper control, analytics, integration options, and support as the operation becomes more complex.'],
+      ['Know what you are paying for', 'Choose the employee capacity and operational support your company needs, without a maze of add-ons.'],
+    ],
     icon: Calendar,
   },
   'getting-started': {
@@ -233,7 +253,13 @@ const PAGES = {
     ],
     icon: BookOpen,
   },
-} as const;
+};
+
+Object.assign(PAGES.pricing, {
+  intro: PAGES.pricing.updatedIntro,
+  points: PAGES.pricing.updatedPoints,
+  inPractice: PAGES.pricing.updatedInPractice,
+});
 
 export function MarketingDetailPage() {
   const { section } = useParams();
