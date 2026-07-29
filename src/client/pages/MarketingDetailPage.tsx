@@ -344,7 +344,7 @@ export function MarketingDetailPage() {
                   {page.points.map(([title, body], index) => (
                     <li
                       key={title}
-                      className="grid items-baseline gap-x-8 gap-y-2 border-b border-rule py-7 last:border-b-0 sm:grid-cols-[4.5rem_minmax(0,20ch)_1fr]"
+                      className="grid items-baseline gap-x-8 gap-y-2 border-b border-rule py-7 last:border-b-0 sm:grid-cols-[4.5rem_minmax(0,14rem)_1fr]"
                     >
                       <span className="font-mono text-[1.6rem] font-light leading-none text-ink-3 sm:text-[2rem]">
                         {String(index + 1).padStart(2, '0')}
