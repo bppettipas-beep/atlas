@@ -156,6 +156,9 @@ export async function runRecurringTemplates(): Promise<number> {
         templateId: template.id,
         requiresApproval: template.requiresApproval,
         requiresProofPhoto: template.requiresProofPhoto,
+        subtasks: {
+          create: template.checklistItems.map((title, position) => ({ title, position })),
+        },
       },
     });
 

@@ -693,6 +693,7 @@ model TaskTemplate {
   name               String
   titleTemplate      String
   description        String?
+  checklistItems     String[]            @default([])
   priority           TaskPriority        @default(MEDIUM)
   frequency          RecurrenceFrequency @default(WEEKLY)
   interval           Int                 @default(1)

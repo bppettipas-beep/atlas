@@ -29,6 +29,7 @@ interface TemplateRow {
   id: string;
   name: string;
   titleTemplate: string;
+  checklistItems: string[];
   frequency: 'DAILY' | 'WEEKLY' | 'MONTHLY';
   interval: number;
   weekdays: number[];
@@ -297,6 +298,9 @@ function RoutinesTab() {
                     {describe(template)}
                     {template.assigneeName && <span>· {template.assigneeName}</span>}
                     {template.teamName && <span>· {template.teamName}</span>}
+                    {template.checklistItems.length > 0 && (
+                      <span>· {template.checklistItems.length} checklist step{template.checklistItems.length === 1 ? '' : 's'}</span>
+                    )}
                   </p>
                 </div>
 
@@ -359,6 +363,7 @@ function RoutineModal({
     name: '',
     titleTemplate: '',
     description: '',
+    checklistItems: [] as string[],
     frequency: 'WEEKLY' as 'DAILY' | 'WEEKLY' | 'MONTHLY',
     interval: 1,
     weekdays: [1] as number[],
@@ -369,6 +374,7 @@ function RoutineModal({
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [checklistDraft, setChecklistDraft] = useState('');
 
   const create = async () => {
     setSaving(true);
@@ -449,6 +455,49 @@ function RoutineModal({
             value={form.description}
             onChange={(event) => setForm({ ...form, description: event.target.value })}
           />
+        </Field>
+
+        <Field label="Checklist" hint="These steps are added to every task this routine creates.">
+          <div className="space-y-2">
+            {form.checklistItems.map((item, index) => (
+              <div key={`${item}-${index}`} className="flex items-center gap-2 border border-rule bg-paper px-3 py-2 text-[13px] text-ink-2">
+                <span className="flex-1">{item}</span>
+                <button
+                  type="button"
+                  className="text-ink-3 hover:text-alert"
+                  aria-label={`Remove ${item}`}
+                  onClick={() => setForm({ ...form, checklistItems: form.checklistItems.filter((_, itemIndex) => itemIndex !== index) })}
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+            <div className="flex gap-2">
+              <Input
+                value={checklistDraft}
+                onChange={(event) => setChecklistDraft(event.target.value)}
+                placeholder="Add a checklist step"
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' && checklistDraft.trim()) {
+                    event.preventDefault();
+                    setForm({ ...form, checklistItems: [...form.checklistItems, checklistDraft.trim()] });
+                    setChecklistDraft('');
+                  }
+                }}
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                disabled={!checklistDraft.trim()}
+                onClick={() => {
+                  setForm({ ...form, checklistItems: [...form.checklistItems, checklistDraft.trim()] });
+                  setChecklistDraft('');
+                }}
+              >
+                Add
+              </Button>
+            </div>
+          </div>
         </Field>
 
         <div className="grid gap-4 sm:grid-cols-3">

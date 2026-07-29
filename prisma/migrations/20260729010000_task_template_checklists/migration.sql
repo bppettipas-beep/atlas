@@ -1,0 +1,2 @@
+ALTER TABLE "TaskTemplate"
+ADD COLUMN "checklistItems" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[];
