@@ -3,6 +3,7 @@ import { AppShell } from '@/components/layout/AppShell';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { LoadingState, ToastProvider } from '@/components/ui';
 import { AccountPage } from '@/pages/AccountPage';
+import { AdminPage } from '@/pages/AdminPage';
 import { ActivityPage } from '@/pages/ActivityPage';
 import { CompanySettingsPage } from '@/pages/CompanySettingsPage';
 import { ChatPage } from '@/pages/ChatPage';
@@ -41,6 +42,12 @@ function RequireAuth({ children }: { children: ReactNode }) {
 function RequireLeadership({ children }: { children: ReactNode }) {
   const { isLeadership } = useAuth();
   if (!isLeadership) return <Navigate to="/app" replace />;
+  return <>{children}</>;
+}
+
+function RequirePlatformAdmin({ children }: { children: ReactNode }) {
+  const { session } = useAuth();
+  if (!session?.user.isPlatformAdmin) return <Navigate to="/app" replace />;
   return <>{children}</>;
 }
 
@@ -119,6 +126,14 @@ export function App() {
                 />
                 <Route path="profile" element={<ProfilePage />} />
                 <Route path="account" element={<AccountPage />} />
+                <Route
+                  path="admin"
+                  element={
+                    <RequirePlatformAdmin>
+                      <AdminPage />
+                    </RequirePlatformAdmin>
+                  }
+                />
                 <Route
                   path="invitations"
                   element={

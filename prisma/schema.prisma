@@ -154,6 +154,18 @@ enum ConversationKind {
   GROUP
 }
 
+enum SubscriptionPlan {
+  STARTER
+  GROWTH
+  BUSINESS
+  ENTERPRISE
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  SUSPENDED
+}
+
 // ------------------------------- identity ----------------------------------
 
 model User {
@@ -177,6 +189,13 @@ model User {
   refreshTokens RefreshToken[]
 
   @@index([email])
+}
+
+/// A permanently reserved address. This keeps an account deletion from making
+/// the same login address available to a different person later.
+model DeletedEmail {
+  email     String   @id
+  deletedAt DateTime @default(now())
 }
 
 model RefreshToken {
@@ -205,6 +224,9 @@ model Company {
   location  String?
   timezone  String   @default("UTC")
   logoUrl   String?
+  subscriptionPlan   SubscriptionPlan   @default(STARTER)
+  subscriptionStatus SubscriptionStatus @default(ACTIVE)
+  subscriptionExpiresAt DateTime?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

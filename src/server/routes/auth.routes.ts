@@ -39,6 +39,7 @@ import { ensureNotificationPreference, notify, notifyLeadership } from '../servi
 import { ensureOrganizationNodes, broadcastOrganizationChange } from '../services/organization';
 import { serializeCompany } from '../services/serializers';
 import { emitToCompany } from '../realtime/io';
+import { isPlatformAdmin } from '../admin';
 import type { SessionUserDto } from '../../shared/types';
 import type { Request, Response } from 'express';
 
@@ -158,6 +159,17 @@ async function resolveNewAccount(
   };
 }
 
+/** A deleted email address remains permanently reserved and cannot be reused. */
+async function assertEmailAvailable(emailAddress: string) {
+  const deleted = await prisma.deletedEmail.findUnique({ where: { email: emailAddress } });
+  if (deleted) {
+    throw ApiError.conflict(
+      'An account previously used that email address and it cannot be registered again.',
+      'EMAIL_RETIRED',
+    );
+  }
+}
+
 async function issueSession(req: Request, res: Response, userId: string, membershipId: string) {
   const membership = await prisma.membership.findUniqueOrThrow({
     where: { id: membershipId },
@@ -228,6 +240,7 @@ export async function buildSessionPayload(
       // Booleans only — the hash itself must never leave the server.
       hasPassword: membership.user.passwordHash !== null,
       hasGoogle: membership.user.googleId !== null,
+      isPlatformAdmin: isPlatformAdmin(membership.user.email),
     },
     membership: {
       id: membership.id,
@@ -379,6 +392,7 @@ authRouter.post(
   asyncHandler(async (req, res) => {
     const input = req.body as z.infer<typeof ownerSignupSchema>;
     const account = await resolveNewAccount(req, input);
+    await assertEmailAvailable(account.email);
 
     const existing = await prisma.user.findUnique({ where: { email: account.email } });
     if (existing) {
@@ -514,6 +528,7 @@ authRouter.post(
   asyncHandler(async (req, res) => {
     const input = req.body as z.infer<typeof workerJoinSchema>;
     const account = await resolveNewAccount(req, input);
+    await assertEmailAvailable(account.email);
 
     const invite = await prisma.inviteCode.findUnique({
       where: { code: input.code },
@@ -812,6 +827,13 @@ authRouter.post(
     const auth = currentAuth(req);
     const input = req.body as { password?: string; confirmEmail?: string };
 
+    if (isPlatformAdmin(auth.email)) {
+      throw ApiError.forbidden(
+        'The platform administrator account cannot be deleted.',
+        'PLATFORM_ADMIN_PROTECTED',
+      );
+    }
+
     const user = await prisma.user.findUniqueOrThrow({
       where: { id: auth.userId },
       include: {
@@ -895,6 +917,13 @@ authRouter.post(
       for (const companyId of companiesToDelete) {
         await tx.company.delete({ where: { id: companyId } });
       }
+      // Permanently reserve the address before removing the account, so nobody
+      // can recreate a different account with this email later.
+      await tx.deletedEmail.upsert({
+        where: { email: user.email },
+        update: { deletedAt: new Date() },
+        create: { email: user.email },
+      });
       // Cascades memberships and refresh tokens; SetNull elsewhere.
       await tx.user.delete({ where: { id: user.id } });
     });

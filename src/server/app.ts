@@ -11,6 +11,7 @@ import { ensureUploadDir } from './lib/uploads';
 import { attachAuth, requireAuth } from './middleware/authenticate';
 import { prisma } from './prisma';
 import { activityRouter } from './routes/activity.routes';
+import { adminRouter } from './routes/admin.routes';
 import { authRouter } from './routes/auth.routes';
 import { companiesRouter } from './routes/companies.routes';
 import { chatRouter } from './routes/chat.routes';
@@ -137,6 +138,7 @@ export function createApp(): Express {
   // ---------------------------------- api ----------------------------------
   app.use('/api', attachAuth);
   app.use('/api/auth', authRouter);
+  app.use('/api/admin', adminRouter);
   app.use('/api/companies', companiesRouter);
   app.use('/api/chat', chatRouter);
   app.use('/api/invites', invitesRouter);

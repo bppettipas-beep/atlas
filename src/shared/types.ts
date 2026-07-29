@@ -431,6 +431,8 @@ export interface SessionUserDto {
     hasPassword: boolean;
     /** True once a Google account is linked, whether or not a password exists. */
     hasGoogle: boolean;
+    /** Atlas-wide administration; only issued by the server for the platform admin email. */
+    isPlatformAdmin: boolean;
   };
   membership: {
     id: string;

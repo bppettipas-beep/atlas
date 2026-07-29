@@ -17,6 +17,7 @@ import {
   House,
   List,
   SignOut,
+  ShieldCheck,
   SunHorizon,
   TreeStructure,
   User,
@@ -232,6 +233,17 @@ export function AppShell() {
               >
                 Settings
               </MenuItem>
+              {session.user.isPlatformAdmin && (
+                <MenuItem
+                  icon={<ShieldCheck />}
+                  onClick={() => {
+                    close();
+                    navigate('/app/admin');
+                  }}
+                >
+                  Platform admin
+                </MenuItem>
+              )}
 
               {session.memberships.length > 1 && (
                 <>
