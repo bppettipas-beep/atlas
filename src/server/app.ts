@@ -8,7 +8,7 @@ import helmet from 'helmet';
 import { env } from './env';
 import { errorHandler, notFoundHandler } from './http/errors';
 import { ensureUploadDir } from './lib/uploads';
-import { attachAuth } from './middleware/authenticate';
+import { attachAuth, requireAuth } from './middleware/authenticate';
 import { prisma } from './prisma';
 import { activityRouter } from './routes/activity.routes';
 import { authRouter } from './routes/auth.routes';
@@ -99,11 +99,12 @@ export function createApp(): Express {
         timestamp: new Date().toISOString(),
       });
     } catch (error) {
+      console.error('[atlas] Health check database failure:', error);
       res.status(503).json({
         status: 'degraded',
         service: 'atlas',
         database: 'unreachable',
-        message: error instanceof Error ? error.message : 'Unknown database error',
+        message: 'The database is temporarily unavailable.',
       });
     }
   });
@@ -112,6 +113,11 @@ export function createApp(): Express {
   ensureUploadDir();
   app.use(
     '/uploads',
+    // Files may contain internal business material. They are available to a
+    // signed-in Atlas session, never to an unauthenticated visitor who learns
+    // or guesses a storage key.
+    attachAuth,
+    requireAuth,
     express.static(env.uploadDir, {
       maxAge: '7d',
       index: false,
@@ -120,6 +126,10 @@ export function createApp(): Express {
         // Uploaded files are never executed as HTML.
         res.setHeader('Content-Disposition', 'inline');
         res.setHeader('X-Content-Type-Options', 'nosniff');
+        // A second containment layer for a malformed or legacy upload: even if
+        // a browser were to interpret it as HTML, it cannot execute script,
+        // submit forms, or inherit Atlas's application capabilities.
+        res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
       },
     }),
   );

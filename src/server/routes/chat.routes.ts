@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { z } from 'zod';
 import { ApiError, asyncHandler } from '../http/errors';
 import { validateBody } from '../http/validate';
@@ -8,6 +9,21 @@ import { emitToCompany, emitToMember } from '../realtime/io';
 
 export const chatRouter = Router();
 chatRouter.use(requireAuth);
+
+/** Limits automated spam without affecting a normal conversation. */
+const chatWriteLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 30,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  // Membership ids make the limit follow the signed-in account even if its IP
+  // changes. Use the library helper for the unauthenticated fallback so IPv6
+  // addresses are normalized safely.
+  keyGenerator: (req) => req.auth?.membershipId ?? ipKeyGenerator(req.ip ?? ''),
+  message: {
+    error: { code: 'RATE_LIMITED', message: 'You are sending messages too quickly. Please try again shortly.' },
+  },
+});
 
 const person = { id: true, user: { select: { fullName: true, avatarUrl: true } } } as const;
 const conversationInclude = {
@@ -72,7 +88,7 @@ chatRouter.get('/company/messages', asyncHandler(async (req, res) => {
   res.json({ items: rows.map(message) });
 }));
 
-chatRouter.post('/company/messages', validateBody(z.object({ body: z.string().trim().min(1).max(4_000) })), asyncHandler(async (req, res) => {
+chatRouter.post('/company/messages', chatWriteLimiter, validateBody(z.object({ body: z.string().trim().min(1).max(4_000) })), asyncHandler(async (req, res) => {
   const auth = currentAuth(req);
   const payload = await postCompanyMessage(auth.companyId, auth.membershipId, req.body.body);
   res.status(201).json({ message: payload.message });
@@ -125,7 +141,7 @@ chatRouter.get('/conversations/:id/messages', asyncHandler(async (req, res) => {
   res.json({ items: rows.map(message) });
 }));
 
-chatRouter.post('/conversations/:id/messages', validateBody(z.object({ body: z.string().trim().min(1).max(4_000) })), asyncHandler(async (req, res) => {
+chatRouter.post('/conversations/:id/messages', chatWriteLimiter, validateBody(z.object({ body: z.string().trim().min(1).max(4_000) })), asyncHandler(async (req, res) => {
   const auth = currentAuth(req);
   const room = await readConversation(req.params.id, auth.companyId, auth.membershipId);
   if (room.kind === 'COMPANY') {

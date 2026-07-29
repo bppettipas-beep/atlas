@@ -1,9 +1,30 @@
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import multer from 'multer';
 import { env } from '../env';
 import { ApiError } from '../http/errors';
-import { randomFileKey } from './ids';
+
+/**
+ * Never preserve an upload's user-provided extension. Express static derives
+ * the response Content-Type from the stored filename, so preserving `.html`
+ * would let a client claim an allowed MIME type and still publish active HTML
+ * from the Atlas origin. The server chooses a non-executable extension instead.
+ */
+const EXTENSION_BY_MIME: Record<string, string> = {
+  'image/png': '.png',
+  'image/jpeg': '.jpg',
+  'image/webp': '.webp',
+  'image/gif': '.gif',
+  'image/heic': '.heic',
+  'application/pdf': '.pdf',
+  'text/plain': '.txt',
+  'text/csv': '.csv',
+  'application/msword': '.doc',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx',
+  'application/vnd.ms-excel': '.xls',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': '.xlsx',
+};
 
 export function ensureUploadDir() {
   if (!fs.existsSync(env.uploadDir)) {
@@ -12,18 +33,7 @@ export function ensureUploadDir() {
 }
 
 const ALLOWED_MIME = new Set([
-  'image/png',
-  'image/jpeg',
-  'image/webp',
-  'image/gif',
-  'image/heic',
-  'application/pdf',
-  'text/plain',
-  'text/csv',
-  'application/msword',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  'application/vnd.ms-excel',
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  ...Object.keys(EXTENSION_BY_MIME),
 ]);
 
 const storage = multer.diskStorage({
@@ -32,7 +42,14 @@ const storage = multer.diskStorage({
     cb(null, env.uploadDir);
   },
   filename: (_req, file, cb) => {
-    cb(null, randomFileKey(file.originalname));
+    const extension = EXTENSION_BY_MIME[file.mimetype];
+    // fileFilter runs first, but keep this defensive fallback so a future
+    // change cannot accidentally restore an attacker-controlled extension.
+    if (!extension) {
+      cb(ApiError.badRequest('That file type is not allowed.', 'UNSUPPORTED_FILE_TYPE'), '');
+      return;
+    }
+    cb(null, `${Date.now().toString(36)}-${crypto.randomBytes(16).toString('hex')}${extension}`);
   },
 });
 
