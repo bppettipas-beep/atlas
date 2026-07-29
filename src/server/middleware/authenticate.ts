@@ -138,7 +138,7 @@ async function resolveAuth(req: Request, res: Response): Promise<AuthContext | n
         select: { id: true },
       });
       if (session) {
-        const context = await contextFromMembership(claims.mid);
+        const context = claims.mid ? await contextFromMembership(claims.mid) : null;
         if (context) return context;
       }
     }

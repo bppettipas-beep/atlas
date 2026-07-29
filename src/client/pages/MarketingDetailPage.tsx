@@ -11,6 +11,7 @@ import {
 import { Logo } from '@/components/Logo';
 import { LegalFooter } from '@/components/marketing/LegalFooter';
 import { PromoBanner } from '@/components/marketing/PromoBanner';
+import { MarketingAccountNav } from '@/components/marketing/MarketingAccountNav';
 import { useAuth } from '@/providers/AuthProvider';
 import { useEffect } from 'react';
 import { Link, Navigate, useParams } from 'react-router-dom';
@@ -327,7 +328,7 @@ Object.assign(PAGES.pricing, {
 
 export function MarketingDetailPage() {
   const { section } = useParams();
-  const { session } = useAuth();
+  const { session, account } = useAuth();
   const page = section ? PAGES[section as keyof typeof PAGES] : undefined;
 
   // The braces matter. With a concise body this returned whatever scrollTo
@@ -367,29 +368,7 @@ export function MarketingDetailPage() {
             ))}
           </nav>
           <div className="flex items-center gap-2">
-            {session ? (
-              <Link
-                to="/app"
-                className="inline-flex h-8 items-center rounded-sm bg-ink px-3.5 text-[13px] font-medium text-white transition-colors hover:bg-ink-2"
-              >
-                Open panel
-              </Link>
-            ) : (
-              <>
-                <Link
-                  to="/signin"
-                  className="px-2 py-1.5 text-[13px] font-medium text-ink-2 transition-colors hover:text-ink"
-                >
-                  Sign in
-                </Link>
-                <Link
-                  to="/start"
-                  className="inline-flex h-8 items-center rounded-sm bg-ink px-3.5 text-[13px] font-medium text-white transition-colors hover:bg-ink-2"
-                >
-                  Sign up
-                </Link>
-              </>
-            )}
+            <MarketingAccountNav />
           </div>
         </div>
       </header>
@@ -397,7 +376,7 @@ export function MarketingDetailPage() {
         className={`mx-auto w-full px-5 py-14 sm:px-8 sm:py-20 ${section === 'pricing' ? 'max-w-[1180px]' : 'max-w-[960px]'}`}
       >
         {section === 'pricing' ? (
-          <PricingContent signedIn={Boolean(session)} />
+          <PricingContent signedIn={Boolean(account)} />
         ) : (
           <>
             <div className="border-l-2 border-ink pl-5 sm:pl-7">
@@ -451,7 +430,7 @@ export function MarketingDetailPage() {
             </section>
             <div className="mt-12 flex flex-wrap items-center gap-3">
               <Link
-                to={session ? '/app' : '/start'}
+                to={session ? '/app' : account ? '/explore/pricing' : '/signup/owner'}
                 className="group inline-flex h-11 items-center gap-2 rounded-sm bg-ink px-5 text-[14px] font-medium text-white transition-colors hover:bg-ink-2"
               >
                 {session ? 'Open your panel' : 'Get started'}{' '}
@@ -475,7 +454,7 @@ export function MarketingDetailPage() {
 }
 
 function PricingContent({ signedIn }: { signedIn: boolean }) {
-  const actionHref = signedIn ? '/app' : '/start';
+  const actionHref = signedIn ? '/account-settings' : '/signup/owner';
   return (
     <>
       <section className="relative overflow-hidden border border-edge bg-sheet px-6 py-10 sm:px-10 sm:py-14">

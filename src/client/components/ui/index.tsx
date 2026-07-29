@@ -714,6 +714,7 @@ export function Menu({
   align = 'left',
   side = 'bottom',
   className,
+  openOnHover = false,
 }: {
   trigger: (props: { open: boolean; toggle: () => void }) => ReactNode;
   children: (props: { close: () => void }) => ReactNode;
@@ -725,6 +726,7 @@ export function Menu({
    */
   side?: 'top' | 'bottom';
   className?: string;
+  openOnHover?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -746,7 +748,12 @@ export function Menu({
   }, [open]);
 
   return (
-    <div ref={containerRef} className={cn('relative', className)}>
+    <div
+      ref={containerRef}
+      className={cn('relative', className)}
+      onMouseEnter={openOnHover ? () => setOpen(true) : undefined}
+      onMouseLeave={openOnHover ? () => setOpen(false) : undefined}
+    >
       {trigger({ open, toggle: () => setOpen((value) => !value) })}
       <AnimatePresence>
         {open && (

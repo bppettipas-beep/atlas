@@ -2,6 +2,7 @@ import { Navigate, Route, Routes, useLocation, useParams } from 'react-router-do
 import { AppShell } from '@/components/layout/AppShell';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { LoadingState, ToastProvider } from '@/components/ui';
+import { PromoPopup } from '@/components/marketing/PromoPopup';
 import { AuthProvider, useAuth } from '@/providers/AuthProvider';
 import { RealtimeProvider } from '@/providers/RealtimeProvider';
 import { lazy, Suspense, type ReactNode } from 'react';
@@ -44,6 +45,12 @@ const OrganizationMapPage = lazy(() =>
 );
 const OwnerSignupPage = lazy(() =>
   import('@/pages/OwnerSignupPage').then((m) => ({ default: m.OwnerSignupPage })),
+);
+const PanelSetupPage = lazy(() =>
+  import('@/pages/PanelSetupPage').then((m) => ({ default: m.PanelSetupPage })),
+);
+const PublicAccountPage = lazy(() =>
+  import('@/pages/PublicAccountPage').then((m) => ({ default: m.PublicAccountPage })),
 );
 const PeoplePage = lazy(() =>
   import('@/pages/PeoplePage').then((m) => ({ default: m.PeoplePage })),
@@ -117,6 +124,7 @@ export function App() {
       <ToastProvider>
         <AuthProvider>
           <RealtimeProvider>
+            <PromoPopup />
             <Suspense fallback={<LoadingState className="h-screen" label="Loading this sheet" />}>
               <Routes>
                 <Route path="/" element={<LandingPage />} />
@@ -125,6 +133,8 @@ export function App() {
                 <Route path="/start" element={<StartPage />} />
                 <Route path="/signin" element={<SignInPage />} />
                 <Route path="/signup/owner" element={<OwnerSignupPage />} />
+                <Route path="/setup-panel" element={<PanelSetupPage />} />
+                <Route path="/account-settings" element={<PublicAccountPage />} />
                 <Route path="/join" element={<WorkerJoinPage />} />
 
                 <Route

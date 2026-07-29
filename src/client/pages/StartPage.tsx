@@ -12,8 +12,8 @@ const PATHS = [
     icon: Building,
     title: 'I own or manage a business',
     description:
-      'Creates your company and makes you the owner. You will be asked for your company name and a few details.',
-    action: 'Set up my company',
+      'Creates only your Atlas account. You will choose a plan before setting up a business panel.',
+    action: 'Create my account',
   },
   {
     to: '/join',
@@ -34,10 +34,10 @@ const PATHS = [
  * they are is far kinder than a single form that half applies to everybody.
  */
 export function StartPage() {
-  const { session, loading } = useAuth();
+  const { account, loading } = useAuth();
 
   if (loading) return <LoadingState className="h-screen" label="Loading Atlas" />;
-  if (session) return <Navigate to="/app" replace />;
+  if (account) return <Navigate to="/" replace />;
 
   return (
     <AuthLayout

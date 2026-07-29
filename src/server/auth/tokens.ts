@@ -5,10 +5,10 @@ import { env } from '../env';
 
 export interface AccessTokenClaims {
   sub: string; // user id
-  mid: string; // membership id
-  cid: string; // company id
+  mid?: string; // membership id
+  cid?: string; // company id
   sid: string; // revocable refresh-session id
-  role: 'OWNER' | 'CO_OWNER' | 'MANAGER' | 'WORKER';
+  role?: 'OWNER' | 'CO_OWNER' | 'MANAGER' | 'WORKER';
 }
 
 const BCRYPT_ROUNDS = 12;
@@ -34,15 +34,22 @@ export function verifyAccessToken(token: string): AccessTokenClaims | null {
     const payload = jwt.verify(token, env.JWT_SECRET, { issuer: 'atlas' });
     if (typeof payload === 'string') return null;
     const { sub, mid, cid, sid, role } = payload as Record<string, unknown>;
+    if (typeof sub !== 'string' || typeof sid !== 'string') return null;
     if (
-      typeof sub !== 'string' ||
-      typeof mid !== 'string' ||
-      typeof cid !== 'string' ||
-      typeof sid !== 'string'
-    ) return null;
-    if (role !== 'OWNER' && role !== 'CO_OWNER' && role !== 'MANAGER' && role !== 'WORKER')
+      role !== undefined &&
+      role !== 'OWNER' &&
+      role !== 'CO_OWNER' &&
+      role !== 'MANAGER' &&
+      role !== 'WORKER'
+    )
       return null;
-    return { sub, mid, cid, sid, role };
+    if ((mid === undefined) !== (cid === undefined) || (mid === undefined) !== (role === undefined))
+      return null;
+    return {
+      sub,
+      sid,
+      ...(typeof mid === 'string' && typeof cid === 'string' && role ? { mid, cid, role } : {}),
+    };
   } catch {
     return null;
   }

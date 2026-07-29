@@ -6,7 +6,7 @@ import { useAuth } from '@/providers/AuthProvider';
 
 export const PROMO_CODE = 'ATLAS26';
 
-function CodeChip({ onCopy }: { onCopy?: () => void }) {
+export function CodeChip({ onCopy }: { onCopy?: () => void }) {
   const toast = useToast();
   const [copied, setCopied] = useState(false);
 
@@ -49,7 +49,7 @@ export function PromoBanner({
   variant: 'marketing' | 'app';
   className?: string;
 }) {
-  const { session, isOwner, isPaidPlan } = useAuth();
+  const { session, account, isOwner, isPaidPlan } = useAuth();
 
   if (variant === 'app') {
     if (!session || !isOwner || isPaidPlan) return null;
@@ -79,11 +79,14 @@ export function PromoBanner({
     >
       <Megaphone className="shrink-0 text-[13px] text-mark" />
       <span>
-        Sign up and use code <CodeChip /> for a full month of the Growth plan, completely free.
+        Create your account first. Choose a plan only when you are ready to build a panel.
       </span>
-      {!session && (
-        <Link to="/start" className="shrink-0 text-[12.5px] font-medium text-mark hover:underline">
-          Set up your company
+      {!account && (
+        <Link
+          to="/signup/owner"
+          className="shrink-0 text-[12.5px] font-medium text-mark hover:underline"
+        >
+          Create account
         </Link>
       )}
     </div>

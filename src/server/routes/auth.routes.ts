@@ -41,7 +41,7 @@ import { ensureOrganizationNodes, broadcastOrganizationChange } from '../service
 import { serializeCompany } from '../services/serializers';
 import { assertEmployeeCapacity } from '../services/subscriptions';
 import { emitToCompany } from '../realtime/io';
-import type { SessionUserDto } from '../../shared/types';
+import type { AccountSessionDto, SessionUserDto } from '../../shared/types';
 import type { Request, Response } from 'express';
 import { planHasFeature } from '../../shared/plans';
 
@@ -106,7 +106,6 @@ const credentials = {
 };
 
 const ownerSignupSchema = z.object({
-  ...credentials,
   companyName: z.string().trim().min(2, 'Company name is required').max(120),
   industry: z.string().trim().max(80).optional().or(z.literal('')),
   sizeRange: z.string().trim().max(40).optional().or(z.literal('')),
@@ -114,6 +113,8 @@ const ownerSignupSchema = z.object({
   timezone: z.string().trim().max(80).default('UTC'),
   logoUrl: z.string().trim().max(500).optional().or(z.literal('')),
 });
+
+const accountSignupSchema = z.object(credentials);
 
 const workerJoinSchema = z.object({
   ...credentials,
@@ -218,6 +219,67 @@ async function issueSession(req: Request, res: Response, userId: string, members
 
   setAuthCookies(res, accessToken, token, expiresAt);
   await prisma.user.update({ where: { id: userId }, data: { lastLoginAt: new Date() } });
+}
+
+async function issueAccountSession(req: Request, res: Response, userId: string) {
+  const { token, tokenHash } = createRefreshToken();
+  const expiresAt = refreshTokenExpiry();
+  const session = await prisma.refreshToken.create({
+    data: {
+      userId,
+      tokenHash,
+      expiresAt,
+      userAgent: req.get('user-agent') ?? null,
+      ipAddress: req.ip ?? null,
+    },
+  });
+  setAuthCookies(res, signAccessToken({ sub: userId, sid: session.id }), token, expiresAt);
+  await prisma.user.update({ where: { id: userId }, data: { lastLoginAt: new Date() } });
+}
+
+async function accountFromRequest(req: Request) {
+  const token = req.cookies?.[REFRESH_COOKIE];
+  if (typeof token !== 'string' || !token) return null;
+  const refresh = await prisma.refreshToken.findFirst({
+    where: {
+      tokenHash: hashRefreshToken(token),
+      revokedAt: null,
+      expiresAt: { gt: new Date() },
+    },
+    include: { user: true },
+  });
+  return refresh?.user ?? null;
+}
+
+async function buildAccountPayload(userId: string): Promise<AccountSessionDto> {
+  const user = await prisma.user.findUniqueOrThrow({
+    where: { id: userId },
+    include: {
+      memberships: {
+        where: { status: 'ACTIVE', deactivatedAt: null },
+        orderBy: { createdAt: 'asc' },
+        take: 1,
+      },
+    },
+  });
+  const subscriptionActive =
+    user.accountPlan !== null &&
+    user.accountSubscriptionStatus === 'ACTIVE' &&
+    (!user.accountSubscriptionExpiresAt ||
+      user.accountSubscriptionExpiresAt.getTime() > Date.now());
+  return {
+    user: {
+      id: user.id,
+      email: user.email,
+      fullName: user.fullName,
+      avatarUrl: user.avatarUrl,
+    },
+    plan: subscriptionActive ? user.accountPlan : null,
+    subscriptionActive,
+    subscriptionExpiresAt: user.accountSubscriptionExpiresAt?.toISOString() ?? null,
+    hasPanel: user.memberships.length > 0,
+    panelMembershipId: user.memberships[0]?.id ?? null,
+  };
 }
 
 export async function buildSessionPayload(
@@ -404,7 +466,9 @@ authRouter.get(
       });
 
       if (!membership) {
-        return fail('Your account is not active in any company. Ask an owner to invite you again.');
+        clearGoogleCookies(res);
+        await issueAccountSession(req, res, existing.id);
+        return res.redirect('/');
       }
 
       clearGoogleCookies(res);
@@ -438,20 +502,52 @@ authRouter.get(
 // --------------------------- owner sign-up ---------------------------------
 
 authRouter.post(
+  '/account-signup',
+  authLimiter,
+  validateBody(accountSignupSchema),
+  asyncHandler(async (req, res) => {
+    const input = req.body as z.infer<typeof accountSignupSchema>;
+    const account = await resolveNewAccount(req, input);
+    await assertEmailAvailable(account.email);
+    if (await prisma.user.findUnique({ where: { email: account.email } })) {
+      throw ApiError.conflict(
+        'An account already uses that email address. Sign in instead.',
+        'EMAIL_TAKEN',
+      );
+    }
+    const user = await prisma.user.create({ data: account });
+    clearGoogleCookies(res);
+    await issueAccountSession(req, res, user.id);
+    res.status(201).json(await buildAccountPayload(user.id));
+  }),
+);
+
+authRouter.post(
   '/owner-signup',
   authLimiter,
   validateBody(ownerSignupSchema),
   asyncHandler(async (req, res) => {
     const input = req.body as z.infer<typeof ownerSignupSchema>;
-    const account = await resolveNewAccount(req, input);
-    await assertEmailAvailable(account.email);
-
-    const existing = await prisma.user.findUnique({ where: { email: account.email } });
-    if (existing) {
-      throw ApiError.conflict(
-        'An account already uses that email address. Sign in instead.',
-        'EMAIL_TAKEN',
+    const signedIn = await accountFromRequest(req);
+    if (!signedIn) throw ApiError.unauthorized();
+    const paid =
+      signedIn.accountPlan &&
+      signedIn.accountSubscriptionStatus === 'ACTIVE' &&
+      (!signedIn.accountSubscriptionExpiresAt ||
+        signedIn.accountSubscriptionExpiresAt.getTime() > Date.now());
+    if (!paid) {
+      throw new ApiError(
+        402,
+        'SUBSCRIPTION_REQUIRED',
+        'Choose and pay for a plan before setting up your company panel.',
       );
+    }
+    if (
+      await prisma.membership.findFirst({
+        where: { userId: signedIn.id, status: 'ACTIVE', deactivatedAt: null },
+      })
+    ) {
+      throw ApiError.conflict('Your panel is already set up.', 'PANEL_ALREADY_EXISTS');
     }
 
     const slug = await uniqueSlug(input.companyName, async (candidate) =>
@@ -459,8 +555,6 @@ authRouter.post(
     );
 
     const { membershipId, companyId } = await prisma.$transaction(async (tx) => {
-      const user = await tx.user.create({ data: account });
-
       const company = await tx.company.create({
         data: {
           name: input.companyName,
@@ -470,13 +564,16 @@ authRouter.post(
           location: input.location || null,
           timezone: input.timezone || 'UTC',
           logoUrl: input.logoUrl || null,
+          subscriptionPlan: signedIn.accountPlan!,
+          subscriptionStatus: 'ACTIVE',
+          subscriptionExpiresAt: signedIn.accountSubscriptionExpiresAt,
         },
       });
       const ranks = await createCompanyRanks(tx, company.id);
 
       const membership = await tx.membership.create({
         data: {
-          userId: user.id,
+          userId: signedIn.id,
           companyId: company.id,
           rankId: ranks.get('owner')!.id,
           role: 'OWNER',
@@ -508,7 +605,7 @@ authRouter.post(
         data: { teamId: team.id, membershipId: membership.id, roleInTeam: 'Owner' },
       });
 
-      return { membershipId: membership.id, companyId: company.id, userId: user.id };
+      return { membershipId: membership.id, companyId: company.id };
     });
 
     await ensureOrganizationNodes(companyId);
@@ -516,7 +613,7 @@ authRouter.post(
     await recordActivity({
       companyId,
       type: 'MEMBER_JOINED',
-      summary: `${account.fullName} created ${input.companyName} on Atlas`,
+      summary: `${signedIn.fullName} created ${input.companyName} on Atlas`,
       actorId: membershipId,
       targetId: membershipId,
     });
@@ -795,10 +892,9 @@ authRouter.post(
 
     const membership = user.memberships[0];
     if (!membership) {
-      throw ApiError.forbidden(
-        'Your account is not active in any company. Ask an owner to invite you again.',
-        'NO_ACTIVE_MEMBERSHIP',
-      );
+      await issueAccountSession(req, res, user.id);
+      res.json(await buildAccountPayload(user.id));
+      return;
     }
 
     await issueSession(req, res, user.id, membership.id);
@@ -818,6 +914,20 @@ authRouter.post(
     }
     clearAuthCookies(res);
     res.json({ ok: true });
+  }),
+);
+
+authRouter.get(
+  '/account-session',
+  asyncHandler(async (req, res) => {
+    const user = await accountFromRequest(req);
+    if (!user) {
+      res.status(401).json({
+        error: { code: 'UNAUTHORIZED', message: 'You are not signed in.' },
+      });
+      return;
+    }
+    res.json(await buildAccountPayload(user.id));
   }),
 );
 

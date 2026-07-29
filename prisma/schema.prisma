@@ -194,11 +194,15 @@ model User {
   googleId        String? @unique
   isPlatformAdmin Boolean @default(false)
 
-  fullName    String
-  avatarUrl   String?
-  lastLoginAt DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  fullName                     String
+  avatarUrl                    String?
+  lastLoginAt                  DateTime?
+  /// A paid plan belongs to the account before its first company panel exists.
+  accountPlan                  SubscriptionPlan?
+  accountSubscriptionStatus    SubscriptionStatus?
+  accountSubscriptionExpiresAt DateTime?
+  createdAt                    DateTime            @default(now())
+  updatedAt                    DateTime            @updatedAt
 
   memberships   Membership[]
   refreshTokens RefreshToken[]

@@ -45,17 +45,31 @@ export async function signUpOwner(
     timezone: 'UTC',
   };
 
-  const response = await agent.post('/api/auth/owner-signup').send(payload);
-  if (response.status !== 201) {
-    throw new Error(`Owner sign-up failed (${response.status}): ${JSON.stringify(response.body)}`);
+  const account = await agent.post('/api/auth/account-signup').send({
+    fullName: payload.fullName,
+    email: payload.email,
+    password: payload.password,
+  });
+  if (account.status !== 201) {
+    throw new Error(`Account sign-up failed (${account.status}): ${JSON.stringify(account.body)}`);
   }
   const subscriptionPlan = overrides.subscriptionPlan ?? 'ENTERPRISE';
-  if (subscriptionPlan !== 'STARTER') {
-    await prisma.company.update({
-      where: { id: response.body.company.id },
-      data: { subscriptionPlan },
-    });
-    response.body.company.subscriptionPlan = subscriptionPlan;
+  await prisma.user.update({
+    where: { id: account.body.user.id },
+    data: {
+      accountPlan: subscriptionPlan,
+      accountSubscriptionStatus: 'ACTIVE',
+    },
+  });
+  const response = await agent.post('/api/auth/owner-signup').send({
+    companyName: payload.companyName,
+    industry: payload.industry,
+    sizeRange: payload.sizeRange,
+    location: payload.location,
+    timezone: payload.timezone,
+  });
+  if (response.status !== 201) {
+    throw new Error(`Owner sign-up failed (${response.status}): ${JSON.stringify(response.body)}`);
   }
   return { agent, session: response.body as SessionUserDto };
 }

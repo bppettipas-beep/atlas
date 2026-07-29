@@ -7,7 +7,7 @@ import { ApiError } from '@/lib/api';
 import { useAuth } from '@/providers/AuthProvider';
 
 export function SignInPage() {
-  const { session, loading, signIn } = useAuth();
+  const { account, loading, signIn } = useAuth();
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const googleEnabled = useGoogleEnabled();
@@ -19,7 +19,7 @@ export function SignInPage() {
   const [submitting, setSubmitting] = useState(false);
 
   if (loading) return <LoadingState className="h-screen" label="Loading" />;
-  if (session) return <Navigate to="/app" replace />;
+  if (account) return <Navigate to="/" replace />;
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -27,8 +27,8 @@ export function SignInPage() {
     setFieldErrors({});
     setSubmitting(true);
     try {
-      await signIn(email, password);
-      navigate('/app', { replace: true });
+      const next = await signIn(email, password);
+      navigate('company' in next ? '/app' : '/', { replace: true });
     } catch (caught) {
       if (caught instanceof ApiError) {
         setError(caught.message);
@@ -45,12 +45,12 @@ export function SignInPage() {
       sheet="Sign in"
       drawingNo="A-00"
       title="Welcome back."
-      description="Use the email address your company account was created with."
+      description="Use the email address your Atlas account was created with."
       footer={
         <>
           New here?{' '}
           <Link
-            to="/start"
+            to="/signup/owner"
             className="font-medium text-ink underline decoration-edge underline-offset-4 hover:decoration-ink"
           >
             Tell us who you are

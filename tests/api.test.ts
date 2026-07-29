@@ -31,6 +31,36 @@ afterAll(async () => {
 /* ========================================================================== */
 
 describe('owner sign-up', () => {
+  it('creates an account without a business and requires payment before panel setup', async () => {
+    const agent = request.agent(app);
+    const account = await agent
+      .post('/api/auth/account-signup')
+      .send({
+        fullName: 'Account Only',
+        email: uniqueEmail('account-only'),
+        password: STRONG_PASSWORD,
+      })
+      .expect(201);
+
+    expect(account.body).toMatchObject({ hasPanel: false, subscriptionActive: false });
+    await agent.get('/api/auth/account-session').expect(200);
+    await agent.get('/api/auth/session').expect(401);
+    await agent.post('/api/auth/owner-signup').send({ companyName: 'Too Early' }).expect(402);
+
+    await prisma.user.update({
+      where: { id: account.body.user.id },
+      data: { accountPlan: 'GROWTH', accountSubscriptionStatus: 'ACTIVE' },
+    });
+    const panel = await agent
+      .post('/api/auth/owner-signup')
+      .send({ companyName: 'Paid Company' })
+      .expect(201);
+    expect(panel.body.company).toMatchObject({
+      name: 'Paid Company',
+      subscriptionPlan: 'GROWTH',
+    });
+  });
+
   it('creates the user, the company, an owner membership and a Leadership team', async () => {
     const email = uniqueEmail('founder');
     const { session } = await signUpOwner(app, { email, companyName: 'Northwind Facilities' });
@@ -65,11 +95,10 @@ describe('owner sign-up', () => {
     const email = uniqueEmail('dupe');
     await signUpOwner(app, { email });
 
-    const response = await request(app).post('/api/auth/owner-signup').send({
+    const response = await request(app).post('/api/auth/account-signup').send({
       fullName: 'Someone Else',
       email,
       password: STRONG_PASSWORD,
-      companyName: 'Another Co',
     });
 
     expect(response.status).toBe(409);
@@ -79,12 +108,11 @@ describe('owner sign-up', () => {
 
   it('rejects a weak password and names the field', async () => {
     const response = await request(app)
-      .post('/api/auth/owner-signup')
+      .post('/api/auth/account-signup')
       .send({
         fullName: 'Short Password',
         email: uniqueEmail('weak'),
         password: 'short',
-        companyName: 'Weak Co',
       });
 
     expect(response.status).toBe(422);
@@ -1159,9 +1187,7 @@ describe('Google sign-in', () => {
   });
 
   it('rejects a sign-up that claims Google without a grant cookie', async () => {
-    const response = await request(app)
-      .post('/api/auth/owner-signup')
-      .send({ useGoogle: true, companyName: 'Grantless Co' });
+    const response = await request(app).post('/api/auth/account-signup').send({ useGoogle: true });
 
     expect(response.status).toBe(400);
     expect(response.body.error.code).toMatch(/GOOGLE_GRANT/);
@@ -1180,9 +1206,9 @@ describe('Google sign-in', () => {
     ).toString('base64url');
 
     const response = await request(app)
-      .post('/api/auth/owner-signup')
+      .post('/api/auth/account-signup')
       .set('Cookie', [`atlas_google_grant=${body}.not-a-real-signature`])
-      .send({ useGoogle: true, companyName: 'Forged Co' });
+      .send({ useGoogle: true });
 
     expect(response.status).toBe(400);
     expect(response.body.error.code).toBe('GOOGLE_GRANT_INVALID');

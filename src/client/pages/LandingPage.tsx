@@ -6,6 +6,7 @@ import { LegalFooter } from '@/components/marketing/LegalFooter';
 import { PromoBanner } from '@/components/marketing/PromoBanner';
 import { DRAFT_EASE, LoadingState } from '@/components/ui';
 import { useAuth } from '@/providers/AuthProvider';
+import { MarketingAccountNav } from '@/components/marketing/MarketingAccountNav';
 
 const MARKETING_TABS = [
   ['problem', 'Problem'],
@@ -22,20 +23,31 @@ const EXPLORE_CARDS = [
   ['03', 'Teams', 'Focused views and permissions for every role in the company.', 'roles'],
   ['04', 'Details', 'The practical touches that make daily operations actually stick.', 'details'],
   ['05', 'Pricing', 'Simple plans with the room and operational tools to grow.', 'pricing'],
-  ['06', 'Getting started', 'From a blank company to useful work in a few clear steps.', 'getting-started'],
+  [
+    '06',
+    'Getting started',
+    'From a blank company to useful work in a few clear steps.',
+    'getting-started',
+  ],
 ] as const;
 
 export function LandingPage() {
-  const { session, loading } = useAuth();
+  const { account, loading } = useAuth();
 
   if (loading) return <LoadingState className="h-screen" label="Loading Atlas" />;
-  const signedIn = Boolean(session);
-  const primaryHref = signedIn ? '/app' : '/start';
+  const signedIn = Boolean(account);
+  const primaryHref = account?.hasPanel
+    ? '/app'
+    : account?.subscriptionActive
+      ? '/setup-panel'
+      : signedIn
+        ? '/explore/pricing'
+        : '/signup/owner';
 
   return (
     <div className="min-h-full bg-paper">
       <PromoBanner variant="marketing" />
-      <header className="sticky top-0 z-30 border-b border-edge bg-paper/92 backdrop-blur-[3px]">
+      <header className="bg-paper/92 sticky top-0 z-30 border-b border-edge backdrop-blur-[3px]">
         <div className="mx-auto flex w-full max-w-[1120px] flex-wrap items-center justify-between gap-y-2 px-5 py-3 sm:px-10">
           <Logo markClassName="h-[25px] w-[25px]" wordClassName="text-[15px]" />
           <nav
@@ -53,23 +65,7 @@ export function LandingPage() {
             ))}
           </nav>
           <nav className="flex items-center gap-2 sm:gap-4" aria-label="Account">
-            {signedIn ? (
-              <Link
-                to="/app"
-                className="group inline-flex h-8 items-center gap-2 rounded-sm bg-ink px-3.5 text-[13px] font-medium text-white transition-colors hover:bg-ink-2"
-              >
-                Open panel <ArrowRight className="text-[13px] transition-transform group-hover:translate-x-0.5" />
-              </Link>
-            ) : (
-              <>
-                <Link to="/signin" className="px-2 py-1.5 text-[13px] font-medium text-ink-2 hover:text-ink">
-                  Sign in
-                </Link>
-                <Link to="/start" className="inline-flex h-8 items-center rounded-sm bg-ink px-3.5 text-[13px] font-medium text-white hover:bg-ink-2">
-                  Sign up
-                </Link>
-              </>
-            )}
+            <MarketingAccountNav />
           </nav>
         </div>
       </header>
@@ -97,12 +93,24 @@ export function LandingPage() {
               </p>
             </div>
             <div className="mt-11 flex flex-wrap items-center gap-3">
-              <Link to={primaryHref} className="group inline-flex h-11 items-center gap-2.5 rounded-sm bg-ink px-5 text-[14px] font-medium text-white transition-colors hover:bg-ink-2">
-                {signedIn ? 'Open your panel' : 'Set up your company'}
+              <Link
+                to={primaryHref}
+                className="group inline-flex h-11 items-center gap-2.5 rounded-sm bg-ink px-5 text-[14px] font-medium text-white transition-colors hover:bg-ink-2"
+              >
+                {account?.hasPanel
+                  ? 'Open your panel'
+                  : account?.subscriptionActive
+                    ? 'Set up your panel'
+                    : signedIn
+                      ? 'Choose a plan'
+                      : 'Create your account'}
                 <ArrowRight className="text-[14px] transition-transform group-hover:translate-x-1" />
               </Link>
               {!signedIn && (
-                <Link to="/join" className="inline-flex h-11 items-center rounded-sm border border-edge bg-sheet px-5 text-[14px] font-medium text-ink hover:border-edgeStrong hover:bg-paper">
+                <Link
+                  to="/join"
+                  className="inline-flex h-11 items-center rounded-sm border border-edge bg-sheet px-5 text-[14px] font-medium text-ink hover:border-edgeStrong hover:bg-paper"
+                >
                   I have an invitation code
                 </Link>
               )}
@@ -119,7 +127,8 @@ export function LandingPage() {
               </h2>
             </div>
             <p className="max-w-[38ch] text-[14px] leading-relaxed text-ink-3">
-              The overview stays intentionally light. Each section has its own page when you want the full story.
+              The overview stays intentionally light. Each section has its own page when you want
+              the full story.
             </p>
           </div>
 
@@ -134,7 +143,8 @@ export function LandingPage() {
                 <h3 className="title mt-auto pt-9 text-[19px]">{title}</h3>
                 <p className="mt-2 text-[13.5px] leading-relaxed text-ink-3">{body}</p>
                 <span className="mt-5 inline-flex items-center gap-1 text-[12px] font-medium text-ink-3 group-hover:text-ink">
-                  Explore <ArrowRight className="text-[12px] transition-transform group-hover:translate-x-0.5" />
+                  Explore{' '}
+                  <ArrowRight className="text-[12px] transition-transform group-hover:translate-x-0.5" />
                 </span>
               </Link>
             ))}
@@ -147,10 +157,15 @@ export function LandingPage() {
             Stop being the only person who knows.
           </h2>
           <p className="mx-auto mt-5 max-w-[46ch] text-[15px] leading-relaxed text-ink-2">
-            {signedIn ? 'Your company is already running. Pick up where you left off.' : 'Set up your company, invite your first worker, and let Atlas make the work visible.'}
+            {account?.hasPanel
+              ? 'Your company is already running. Pick up where you left off.'
+              : 'Create an account, choose a plan, then build your company panel.'}
           </p>
-          <Link to={primaryHref} className="group mt-9 inline-flex h-11 items-center gap-2.5 rounded-sm bg-ink px-5 text-[14px] font-medium text-white transition-colors hover:bg-ink-2">
-            {signedIn ? 'Open your panel' : 'Get started'}
+          <Link
+            to={primaryHref}
+            className="group mt-9 inline-flex h-11 items-center gap-2.5 rounded-sm bg-ink px-5 text-[14px] font-medium text-white transition-colors hover:bg-ink-2"
+          >
+            {account?.hasPanel ? 'Open your panel' : signedIn ? 'Choose a plan' : 'Get started'}
             <ArrowRight className="text-[14px] transition-transform group-hover:translate-x-1" />
           </Link>
         </section>

@@ -8,7 +8,13 @@
 export const COMPANY_ROLES = ['OWNER', 'CO_OWNER', 'MANAGER', 'WORKER'] as const;
 export type CompanyRole = (typeof COMPANY_ROLES)[number];
 
-export const MEMBERSHIP_STATUSES = ['INVITED', 'ACTIVE', 'SUSPENDED', 'DEACTIVATED', 'REMOVED'] as const;
+export const MEMBERSHIP_STATUSES = [
+  'INVITED',
+  'ACTIVE',
+  'SUSPENDED',
+  'DEACTIVATED',
+  'REMOVED',
+] as const;
 export type MembershipStatus = (typeof MEMBERSHIP_STATUSES)[number];
 
 export const AVAILABILITY_STATUSES = [
@@ -113,6 +119,20 @@ export interface CompanyDto {
   subscriptionStatus: 'ACTIVE' | 'SUSPENDED';
   subscriptionExpiresAt: string | null;
   promoCodeRedeemedAt: string | null;
+}
+
+export interface AccountSessionDto {
+  user: {
+    id: string;
+    email: string;
+    fullName: string;
+    avatarUrl: string | null;
+  };
+  plan: 'STARTER' | 'GROWTH' | 'BUSINESS' | 'ENTERPRISE' | null;
+  subscriptionActive: boolean;
+  subscriptionExpiresAt: string | null;
+  hasPanel: boolean;
+  panelMembershipId: string | null;
 }
 
 /**
@@ -451,7 +471,13 @@ export interface SessionUserDto {
   };
   company: CompanyDto;
   /** All companies this login belongs to, for the account switcher. */
-  memberships: { id: string; companyId: string; companyName: string; role: CompanyRole; rankName: string }[];
+  memberships: {
+    id: string;
+    companyId: string;
+    companyName: string;
+    role: CompanyRole;
+    rankName: string;
+  }[];
   unreadNotifications: number;
 }
 
