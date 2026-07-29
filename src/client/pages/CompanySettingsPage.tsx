@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Calendar, Clock, Plus, Trash } from '@/components/icons';
 import { PageBody, PageTransition } from '@/components/layout/AppShell';
-import { RolesTab } from '@/components/settings/RolesTab';
+import { RanksPermissionsTab } from '@/components/settings/RanksPermissionsTab';
 import {
   Button,
   Chip,
@@ -46,7 +46,7 @@ const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 export function CompanySettingsPage() {
   const session = useSession();
   const { isOwner, refresh } = useAuth();
-  const [tab, setTab] = useState<'company' | 'roles' | 'routines'>('company');
+  const [tab, setTab] = useState<'company' | 'ranks' | 'routines'>('company');
   const isLeadership = session.membership.role !== 'WORKER';
 
   return (
@@ -61,7 +61,7 @@ export function CompanySettingsPage() {
         <Tabs
           tabs={[
             { value: 'company', label: 'Company' },
-            { value: 'roles', label: 'Roles' },
+            { value: 'ranks', label: 'Ranks & Permissions' },
             { value: 'routines', label: 'Recurring work' },
           ]}
           value={tab}
@@ -69,7 +69,7 @@ export function CompanySettingsPage() {
         />
 
         {tab === 'company' && <CompanyTab canEdit={isOwner} onSaved={refresh} />}
-        {tab === 'roles' && <RolesTab canEdit={isLeadership} />}
+        {tab === 'ranks' && isLeadership && <RanksPermissionsTab />}
         {tab === 'routines' && <RoutinesTab />}
       </PageBody>
     </PageTransition>
