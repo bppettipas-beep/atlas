@@ -63,6 +63,7 @@ export function initRealtime(httpServer: HttpServer): SocketServer {
           id: true,
           companyId: true,
           userId: true,
+          company: { select: { subscriptionStatus: true } },
           rank: {
             select: {
               permissions: { where: { permissionKey: 'activity.view' }, select: { id: true } },
@@ -70,7 +71,7 @@ export function initRealtime(httpServer: HttpServer): SocketServer {
           },
         },
       });
-      if (!membership) {
+      if (!membership || membership.company.subscriptionStatus === 'SUSPENDED') {
         next(new Error('unauthorized'));
         return;
       }

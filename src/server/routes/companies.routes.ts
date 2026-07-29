@@ -10,7 +10,15 @@ import { recordActivity } from '../services/activity';
 import { notify } from '../services/notifications';
 import { serializeAnnouncement, serializeCompany } from '../services/serializers';
 import { endOfDay, startOfDay, startOfWeek } from '../lib/dates';
-import type { CompanyMetricsDto, DailyBriefingDto, HomeSummaryDto, TaskStatus } from '../../shared/types';
+import type {
+  CompanyMetricsDto,
+  DailyBriefingDto,
+  HomeSummaryDto,
+  TaskStatus,
+} from '../../shared/types';
+import { PLAN_ENTITLEMENTS } from '../../shared/plans';
+import { requireActiveSubscription, requirePlanFeature } from '../services/subscriptions';
+import { createApiKeySecret } from '../services/apiKeys';
 
 export const companiesRouter = Router();
 
@@ -22,6 +30,102 @@ companiesRouter.get(
     const auth = currentAuth(req);
     const company = await prisma.company.findUniqueOrThrow({ where: { id: auth.companyId } });
     res.json(serializeCompany(company));
+  }),
+);
+
+companiesRouter.get(
+  '/current/entitlements',
+  asyncHandler(async (req, res) => {
+    const auth = currentAuth(req);
+    const entitlements = PLAN_ENTITLEMENTS[auth.subscriptionPlan];
+    const activeEmployees = await prisma.membership.count({
+      where: { companyId: auth.companyId, status: 'ACTIVE', deactivatedAt: null },
+    });
+    res.json({
+      plan: auth.subscriptionPlan,
+      status: auth.subscriptionStatus,
+      expiresAt: auth.subscriptionExpiresAt?.toISOString() ?? null,
+      employeeLimit: entitlements.employeeLimit,
+      activeEmployees,
+      features: entitlements.features,
+      servicePerks: entitlements.servicePerks,
+    });
+  }),
+);
+
+companiesRouter.get(
+  '/current/api-keys',
+  requirePlanFeature('API_ACCESS'),
+  requirePermission(PERMISSIONS.COMPANY_MANAGE),
+  asyncHandler(async (req, res) => {
+    const auth = currentAuth(req);
+    const keys = await prisma.apiKey.findMany({
+      where: { companyId: auth.companyId, revokedAt: null },
+      orderBy: { createdAt: 'desc' },
+    });
+    res.json({
+      items: keys.map((key) => ({
+        id: key.id,
+        name: key.name,
+        prefix: key.prefix,
+        createdAt: key.createdAt.toISOString(),
+        lastUsedAt: key.lastUsedAt?.toISOString() ?? null,
+        expiresAt: key.expiresAt?.toISOString() ?? null,
+      })),
+    });
+  }),
+);
+
+companiesRouter.post(
+  '/current/api-keys',
+  requirePlanFeature('API_ACCESS'),
+  requirePermission(PERMISSIONS.COMPANY_MANAGE),
+  validateBody(
+    z.object({
+      name: z.string().trim().min(2).max(80),
+      expiresAt: z.coerce.date().nullable().optional(),
+    }),
+  ),
+  asyncHandler(async (req, res) => {
+    const auth = currentAuth(req);
+    const input = req.body as { name: string; expiresAt?: Date | null };
+    if (input.expiresAt && input.expiresAt.getTime() <= Date.now()) {
+      throw ApiError.badRequest('The API key expiry must be in the future.', 'BAD_EXPIRY');
+    }
+    const secret = createApiKeySecret();
+    const key = await prisma.apiKey.create({
+      data: {
+        companyId: auth.companyId,
+        membershipId: auth.membershipId,
+        name: input.name,
+        prefix: secret.prefix,
+        tokenHash: secret.hash,
+        expiresAt: input.expiresAt ?? null,
+      },
+    });
+    res.status(201).json({
+      id: key.id,
+      name: key.name,
+      prefix: key.prefix,
+      token: secret.token,
+      createdAt: key.createdAt.toISOString(),
+      expiresAt: key.expiresAt?.toISOString() ?? null,
+    });
+  }),
+);
+
+companiesRouter.delete(
+  '/current/api-keys/:id',
+  requirePlanFeature('API_ACCESS'),
+  requirePermission(PERMISSIONS.COMPANY_MANAGE),
+  asyncHandler(async (req, res) => {
+    const auth = currentAuth(req);
+    const changed = await prisma.apiKey.updateMany({
+      where: { id: req.params.id, companyId: auth.companyId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+    if (!changed.count) throw ApiError.notFound('That API key is already gone.');
+    res.json({ ok: true });
   }),
 );
 
@@ -85,7 +189,14 @@ async function companyMetrics(companyId: string, now = new Date()): Promise<Comp
   const workload = workloadCounts.flatMap((row) => {
     const person = row.assigneeId ? peopleById.get(row.assigneeId) : null;
     return person
-      ? [{ membershipId: person.id, fullName: person.user.fullName, avatarUrl: person.user.avatarUrl, activeTasks: row._count._all }]
+      ? [
+          {
+            membershipId: person.id,
+            fullName: person.user.fullName,
+            avatarUrl: person.user.avatarUrl,
+            activeTasks: row._count._all,
+          },
+        ]
       : [];
   });
 
@@ -94,7 +205,8 @@ async function companyMetrics(companyId: string, now = new Date()): Promise<Comp
     activeTasks,
     createdThisWeek,
     completedThisWeek,
-    completionRate: completedOrActive === 0 ? 0 : Math.round((completedThisWeek / completedOrActive) * 100),
+    completionRate:
+      completedOrActive === 0 ? 0 : Math.round((completedThisWeek / completedOrActive) * 100),
     scheduledToday,
     dueToday,
     overdue,
@@ -142,7 +254,10 @@ companiesRouter.post(
     const company = await prisma.company.findUniqueOrThrow({ where: { id: auth.companyId } });
 
     if (company.promoCodeRedeemedAt) {
-      throw ApiError.conflict('This company has already redeemed a promo code.', 'PROMO_ALREADY_USED');
+      throw ApiError.conflict(
+        'This company has already redeemed a promo code.',
+        'PROMO_ALREADY_USED',
+      );
     }
     if (company.subscriptionPlan !== 'STARTER') {
       throw ApiError.conflict(
@@ -179,6 +294,7 @@ companiesRouter.post(
 /** Numbers behind the Home dashboard. */
 companiesRouter.get(
   '/current/summary',
+  requireActiveSubscription,
   asyncHandler(async (req, res) => {
     const auth = currentAuth(req);
     const companyId = auth.companyId;
@@ -271,6 +387,7 @@ companiesRouter.get(
 /** Management-only operational metrics for the company dashboard and Atlasy. */
 companiesRouter.get(
   '/current/metrics',
+  requirePlanFeature('REPORTING'),
   requirePermission(PERMISSIONS.METRICS_VIEW),
   asyncHandler(async (req, res) => {
     const auth = currentAuth(req);
@@ -281,15 +398,36 @@ companiesRouter.get(
 /** A concise, data-backed start-of-day brief. Atlasy can expand on this in chat. */
 companiesRouter.get(
   '/current/briefing',
+  requirePlanFeature('ATLASY'),
   requirePermission(PERMISSIONS.ATLASY_BRIEFING),
   asyncHandler(async (req, res) => {
     const auth = currentAuth(req);
     const metrics = await companyMetrics(auth.companyId);
     const priorities: DailyBriefingDto['priorities'] = [];
-    if (metrics.overdue > 0) priorities.push({ tone: 'alert', text: `${metrics.overdue} overdue task${metrics.overdue === 1 ? '' : 's'} need attention.`, href: '/app/work?scope=overdue' });
-    if (metrics.blocked > 0) priorities.push({ tone: 'alert', text: `${metrics.blocked} task${metrics.blocked === 1 ? ' is' : 's are'} blocked.`, href: '/app/work?scope=all' });
-    if (metrics.unassigned > 0) priorities.push({ tone: 'pending', text: `${metrics.unassigned} task${metrics.unassigned === 1 ? ' is' : 's are'} waiting for an owner.`, href: '/app/work?scope=unassigned' });
-    if (metrics.dueToday > 0) priorities.push({ tone: 'mark', text: `${metrics.dueToday} task${metrics.dueToday === 1 ? ' is' : 's are'} due today.`, href: '/app/work?scope=today' });
+    if (metrics.overdue > 0)
+      priorities.push({
+        tone: 'alert',
+        text: `${metrics.overdue} overdue task${metrics.overdue === 1 ? '' : 's'} need attention.`,
+        href: '/app/work?scope=overdue',
+      });
+    if (metrics.blocked > 0)
+      priorities.push({
+        tone: 'alert',
+        text: `${metrics.blocked} task${metrics.blocked === 1 ? ' is' : 's are'} blocked.`,
+        href: '/app/work?scope=all',
+      });
+    if (metrics.unassigned > 0)
+      priorities.push({
+        tone: 'pending',
+        text: `${metrics.unassigned} task${metrics.unassigned === 1 ? ' is' : 's are'} waiting for an owner.`,
+        href: '/app/work?scope=unassigned',
+      });
+    if (metrics.dueToday > 0)
+      priorities.push({
+        tone: 'mark',
+        text: `${metrics.dueToday} task${metrics.dueToday === 1 ? ' is' : 's are'} due today.`,
+        href: '/app/work?scope=today',
+      });
 
     const payload: DailyBriefingDto = {
       generatedAt: new Date().toISOString(),
@@ -308,10 +446,50 @@ companiesRouter.get(
   }),
 );
 
+/** Business-level trend data used by dashboards and external API clients. */
+companiesRouter.get(
+  '/current/analytics',
+  requirePlanFeature('ANALYTICS'),
+  requirePermission(PERMISSIONS.METRICS_VIEW),
+  asyncHandler(async (req, res) => {
+    const auth = currentAuth(req);
+    const now = new Date();
+    const windows = Array.from({ length: 6 }, (_, index) => {
+      const to = new Date(now);
+      to.setDate(to.getDate() - index * 7);
+      const from = new Date(to);
+      from.setDate(from.getDate() - 7);
+      return { from, to };
+    }).reverse();
+    const points = await Promise.all(
+      windows.map(async ({ from, to }) => {
+        const [created, completed, blocked] = await Promise.all([
+          prisma.task.count({
+            where: { companyId: auth.companyId, createdAt: { gte: from, lt: to } },
+          }),
+          prisma.task.count({
+            where: { companyId: auth.companyId, completedAt: { gte: from, lt: to } },
+          }),
+          prisma.activityEvent.count({
+            where: {
+              companyId: auth.companyId,
+              type: 'TASK_BLOCKED',
+              createdAt: { gte: from, lt: to },
+            },
+          }),
+        ]);
+        return { from: from.toISOString(), to: to.toISOString(), created, completed, blocked };
+      }),
+    );
+    res.json({ generatedAt: now.toISOString(), points });
+  }),
+);
+
 // ---------------------------- announcements --------------------------------
 
 companiesRouter.get(
   '/current/announcements',
+  requireActiveSubscription,
   asyncHandler(async (req, res) => {
     const auth = currentAuth(req);
     const announcements = await prisma.announcement.findMany({
@@ -326,6 +504,7 @@ companiesRouter.get(
 
 companiesRouter.post(
   '/current/announcements',
+  requireActiveSubscription,
   requirePermission(PERMISSIONS.ORGANIZATION_MANAGE),
   validateBody(
     z.object({
@@ -374,6 +553,7 @@ companiesRouter.post(
 
 companiesRouter.delete(
   '/current/announcements/:id',
+  requireActiveSubscription,
   requirePermission(PERMISSIONS.ORGANIZATION_MANAGE),
   asyncHandler(async (req, res) => {
     const auth = currentAuth(req);

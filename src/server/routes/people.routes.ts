@@ -17,6 +17,7 @@ import { recordActivity } from '../services/activity';
 import { notify, notifyLeadership } from '../services/notifications';
 import { broadcastOrganizationChange, ensureOrganizationNodes } from '../services/organization';
 import { canManagePerson, canViewPrivateNotes, isLeadership } from '../services/permissions';
+import { assertEmployeeCapacity } from '../services/subscriptions';
 import {
   activityInclude,
   personInclude,
@@ -28,6 +29,7 @@ import {
   taskSummaryInclude,
 } from '../services/serializers';
 import type { MyDayDto, PersonDetail, PersonSummary } from '../../shared/types';
+import { planHasFeature } from '../../shared/plans';
 
 export const peopleRouter = Router();
 
@@ -116,21 +118,23 @@ peopleRouter.get(
         orderBy: [{ pinned: 'desc' }, { createdAt: 'desc' }],
         take: 5,
       }),
-      prisma.knowledgeDocument.findMany({
-        where: {
-          companyId: auth.companyId,
-          archivedAt: null,
-          status: 'PUBLISHED',
-          OR: [
-            { requiresAcknowledgment: true },
-            { people: { some: { membershipId: auth.membershipId } } },
-            teamIds.length ? { teamId: { in: teamIds } } : { id: '__none__' },
-          ],
-        },
-        include: { acknowledgments: { where: { membershipId: auth.membershipId } } },
-        orderBy: { updatedAt: 'desc' },
-        take: 8,
-      }),
+      planHasFeature(auth.subscriptionPlan, 'KNOWLEDGE')
+        ? prisma.knowledgeDocument.findMany({
+            where: {
+              companyId: auth.companyId,
+              archivedAt: null,
+              status: 'PUBLISHED',
+              OR: [
+                { requiresAcknowledgment: true },
+                { people: { some: { membershipId: auth.membershipId } } },
+                teamIds.length ? { teamId: { in: teamIds } } : { id: '__none__' },
+              ],
+            },
+            include: { acknowledgments: { where: { membershipId: auth.membershipId } } },
+            orderBy: { updatedAt: 'desc' },
+            take: 8,
+          })
+        : Promise.resolve([]),
     ]);
 
     const payload: MyDayDto = {
@@ -308,21 +312,25 @@ peopleRouter.get(
           completedAt: { gte: daysAgo(30) },
         },
       }),
-      prisma.activityEvent.findMany({
-        where: {
-          companyId: auth.companyId,
-          OR: [{ actorId: membership.id }, { targetId: membership.id }],
-          ...(isLeadership(auth) ? {} : { visibility: 'COMPANY' }),
-        },
-        include: activityInclude,
-        orderBy: { createdAt: 'desc' },
-        take: 20,
-      }),
-      prisma.knowledgeDocument.findMany({
-        where: { companyId: auth.companyId, archivedAt: null, ownerId: membership.id },
-        select: { id: true, title: true, category: true },
-        orderBy: { updatedAt: 'desc' },
-      }),
+      planHasFeature(auth.subscriptionPlan, 'REPORTING')
+        ? prisma.activityEvent.findMany({
+            where: {
+              companyId: auth.companyId,
+              OR: [{ actorId: membership.id }, { targetId: membership.id }],
+              ...(isLeadership(auth) ? {} : { visibility: 'COMPANY' }),
+            },
+            include: activityInclude,
+            orderBy: { createdAt: 'desc' },
+            take: 20,
+          })
+        : Promise.resolve([]),
+      planHasFeature(auth.subscriptionPlan, 'KNOWLEDGE')
+        ? prisma.knowledgeDocument.findMany({
+            where: { companyId: auth.companyId, archivedAt: null, ownerId: membership.id },
+            select: { id: true, title: true, category: true },
+            orderBy: { updatedAt: 'desc' },
+          })
+        : Promise.resolve([]),
       canViewPrivateNotes(auth)
         ? prisma.memberNote.findMany({
             where: { companyId: auth.companyId, subjectId: membership.id },
@@ -506,6 +514,8 @@ peopleRouter.post(
       });
       if (!team) throw ApiError.notFound('That team does not exist.');
     }
+
+    await assertEmployeeCapacity(auth.companyId);
 
     const membershipId = await prisma.$transaction(async (tx) => {
       const user = await tx.user.create({

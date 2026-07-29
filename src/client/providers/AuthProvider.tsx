@@ -9,6 +9,7 @@ import {
 } from 'react';
 import { api, ApiError } from '@/lib/api';
 import type { SessionUserDto } from '@shared/types';
+import { planHasFeature, type PlanFeature } from '@shared/plans';
 
 interface AuthContextValue {
   session: SessionUserDto | null;
@@ -24,6 +25,7 @@ interface AuthContextValue {
   isLeadership: boolean;
   /** True once the company is on any plan above the default Starter tier. */
   isPaidPlan: boolean;
+  hasPlanFeature: (feature: PlanFeature) => boolean;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -81,6 +83,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isManager: session?.membership.rank.key === 'manager',
       isLeadership: session?.membership.permissions.includes('activity.view') ?? false,
       isPaidPlan: session ? session.company.subscriptionPlan !== 'STARTER' : false,
+      hasPlanFeature: (feature) =>
+        session ? planHasFeature(session.company.subscriptionPlan, feature) : false,
     }),
     [session, loading, load, signIn, signOut, switchCompany],
   );

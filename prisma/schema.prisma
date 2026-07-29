@@ -185,13 +185,13 @@ enum SubscriptionStatus {
 model User {
   id String @id @default(cuid())
 
-  email        String  @unique
+  email           String  @unique
   /// Null for accounts that only ever sign in with Google. Such a user can set
   /// a password later, which adds a second way in rather than replacing Google.
-  passwordHash String?
+  passwordHash    String?
   /// Google's stable subject id. Preferred over email for matching, because a
   /// Google account can change its email address but never its subject.
-  googleId     String? @unique
+  googleId        String? @unique
   isPlatformAdmin Boolean @default(false)
 
   fullName    String
@@ -231,41 +231,42 @@ model RefreshToken {
 }
 
 model Company {
-  id        String   @id @default(cuid())
-  name      String
-  slug      String   @unique
-  industry  String?
-  sizeRange String?
-  location  String?
-  timezone  String   @default("UTC")
-  logoUrl   String?
-  subscriptionPlan   SubscriptionPlan   @default(STARTER)
-  subscriptionStatus SubscriptionStatus @default(ACTIVE)
+  id                    String             @id @default(cuid())
+  name                  String
+  slug                  String             @unique
+  industry              String?
+  sizeRange             String?
+  location              String?
+  timezone              String             @default("UTC")
+  logoUrl               String?
+  subscriptionPlan      SubscriptionPlan   @default(STARTER)
+  subscriptionStatus    SubscriptionStatus @default(ACTIVE)
   subscriptionExpiresAt DateTime?
   /// Set once a promo code has been redeemed, so the same company can't redeem twice.
-  promoCodeRedeemedAt DateTime?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  promoCodeRedeemedAt   DateTime?
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
 
-  memberships    Membership[]
-  roles          Role[]
-  ranks          Rank[]
+  memberships         Membership[]
+  roles               Role[]
+  ranks               Rank[]
   permissionAuditLogs PermissionAuditLog[]
-  teams          Team[]
-  inviteCodes    InviteCode[]
-  directInvites  DirectInvite[]
-  skills         Skill[]
-  orgNodes       OrganizationNode[]
-  relationships  OrganizationRelationship[]
-  tasks          Task[]
-  taskTemplates  TaskTemplate[]
-  documents      KnowledgeDocument[]
-  notifications  Notification[]
-  activityEvents ActivityEvent[]
-  announcements  Announcement[]
-  workingHours   WorkingHours[]
-  timeOff        TimeOff[]
-  conversations  Conversation[]
+  teams               Team[]
+  inviteCodes         InviteCode[]
+  directInvites       DirectInvite[]
+  skills              Skill[]
+  orgNodes            OrganizationNode[]
+  relationships       OrganizationRelationship[]
+  tasks               Task[]
+  taskTemplates       TaskTemplate[]
+  documents           KnowledgeDocument[]
+  notifications       Notification[]
+  activityEvents      ActivityEvent[]
+  announcements       Announcement[]
+  workingHours        WorkingHours[]
+  timeOff             TimeOff[]
+  conversations       Conversation[]
+  apiKeys             ApiKey[]
 }
 
 model Membership {
@@ -299,7 +300,7 @@ model Membership {
   directReports Membership[] @relation("ManagerReports")
 
   assignedRole Role? @relation(fields: [roleId], references: [id], onDelete: SetNull)
-  rank         Rank @relation(fields: [rankId], references: [id], onDelete: Restrict)
+  rank         Rank  @relation(fields: [rankId], references: [id], onDelete: Restrict)
 
   profile                EmployeeProfile?
   orgNode                OrganizationNode?
@@ -331,15 +332,16 @@ model Membership {
   documentPeople    KnowledgeDocumentPerson[]
   acknowledgments   KnowledgeAcknowledgment[]
 
-  notifications  Notification[]  @relation("NotificationRecipient")
-  actedEvents    ActivityEvent[] @relation("ActivityActor")
-  targetedEvents ActivityEvent[] @relation("ActivityTarget")
-  createdInvites InviteCode[]    @relation("InviteCreator")
-  announcements  Announcement[]
-  conversationMembers ConversationMember[]
-  sentMessages        ChatMessage[] @relation("MessageSender")
-  createdConversations Conversation[] @relation("ConversationCreator")
-  rankPermissionAuditEvents PermissionAuditLog[] @relation("PermissionAuditActor")
+  notifications                     Notification[]       @relation("NotificationRecipient")
+  actedEvents                       ActivityEvent[]      @relation("ActivityActor")
+  targetedEvents                    ActivityEvent[]      @relation("ActivityTarget")
+  createdInvites                    InviteCode[]         @relation("InviteCreator")
+  announcements                     Announcement[]
+  conversationMembers               ConversationMember[]
+  sentMessages                      ChatMessage[]        @relation("MessageSender")
+  apiKeys                           ApiKey[]
+  createdConversations              Conversation[]       @relation("ConversationCreator")
+  rankPermissionAuditEvents         PermissionAuditLog[] @relation("PermissionAuditActor")
   affectedRankPermissionAuditEvents PermissionAuditLog[] @relation("PermissionAuditMember")
 
   @@unique([userId, companyId])
@@ -350,23 +352,44 @@ model Membership {
   @@index([rankId])
 }
 
+/// Programmatic access for Business and Enterprise integrations. The secret is
+/// shown once; only its SHA-256 digest is stored.
+model ApiKey {
+  id           String    @id @default(cuid())
+  companyId    String
+  membershipId String
+  name         String
+  prefix       String
+  tokenHash    String    @unique
+  lastUsedAt   DateTime?
+  expiresAt    DateTime?
+  revokedAt    DateTime?
+  createdAt    DateTime  @default(now())
+
+  company    Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  membership Membership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, revokedAt])
+  @@index([membershipId])
+}
+
 /// A configurable software-authority rank. Its stable `key`, not its display
 /// name, identifies a system rank in authorization code and migrations.
 model Rank {
-  id          String  @id @default(cuid())
+  id          String   @id @default(cuid())
   companyId   String
   key         String
   name        String
   description String?
   position    Int
-  isSystem    Boolean @default(false)
-  isProtected Boolean @default(false)
+  isSystem    Boolean  @default(false)
+  isProtected Boolean  @default(false)
   createdById String?
   updatedById String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  company     Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company     Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
   permissions RankPermission[]
   memberships Membership[]
   auditEvents PermissionAuditLog[] @relation("PermissionAuditRank")
@@ -379,13 +402,13 @@ model Rank {
 /// Permission assignments are intentionally data rather than enum columns so
 /// permissions can evolve without turning editable labels into security keys.
 model RankPermission {
-  id            String          @id @default(cuid())
-  rankId        String
-  permissionKey String
-  scope         PermissionScope
-  selectedTeamIds String[]      @default([])
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
+  id              String          @id @default(cuid())
+  rankId          String
+  permissionKey   String
+  scope           PermissionScope
+  selectedTeamIds String[]        @default([])
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
 
   rank Rank @relation(fields: [rankId], references: [id], onDelete: Cascade)
 
@@ -395,16 +418,16 @@ model RankPermission {
 
 /// Immutable trail for sensitive rank, scope, and membership authority events.
 model PermissionAuditLog {
-  id                 String   @id @default(cuid())
-  companyId          String
-  actorId            String?
+  id                   String   @id @default(cuid())
+  companyId            String
+  actorId              String?
   affectedMembershipId String?
-  affectedRankId     String?
-  action             String
-  previousValue      Json?
-  nextValue          Json?
-  requestId          String?
-  createdAt          DateTime @default(now())
+  affectedRankId       String?
+  action               String
+  previousValue        Json?
+  nextValue            Json?
+  requestId            String?
+  createdAt            DateTime @default(now())
 
   company            Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
   actor              Membership? @relation("PermissionAuditActor", fields: [actorId], references: [id], onDelete: SetNull)
@@ -938,25 +961,25 @@ model Notification {
 }
 
 model NotificationPreference {
-  id               String   @id @default(cuid())
-  membershipId     String   @unique
-  taskAssigned     Boolean  @default(true)
-  mentions         Boolean  @default(true)
-  teamChanges      Boolean  @default(true)
-  knowledgeUpdates Boolean  @default(true)
-  dueDateChanges   Boolean  @default(true)
-  announcements    Boolean  @default(true)
-  taskComments     Boolean  @default(true)
+  id                 String   @id @default(cuid())
+  membershipId       String   @unique
+  taskAssigned       Boolean  @default(true)
+  mentions           Boolean  @default(true)
+  teamChanges        Boolean  @default(true)
+  knowledgeUpdates   Boolean  @default(true)
+  dueDateChanges     Boolean  @default(true)
+  announcements      Boolean  @default(true)
+  taskComments       Boolean  @default(true)
   // The owner's view of everything happening in the company they did not do
   // themselves. Only owners and managers are ever sent these, so the switch is
   // inert for a worker rather than needing a separate shape.
-  companyActivity  Boolean  @default(true)
+  companyActivity    Boolean  @default(true)
   // The master switch for the inbox copy. The switches above decide whether a
   // notification happens at all; this one only decides whether it also leaves
   // the building. On by default, because a notification nobody is in the app
   // to see is the whole reason email exists.
-  emailNotifications Boolean @default(true)
-  updatedAt        DateTime @updatedAt
+  emailNotifications Boolean  @default(true)
+  updatedAt          DateTime @updatedAt
 
   membership Membership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
 }
@@ -1016,9 +1039,9 @@ model Conversation {
   createdAt DateTime         @default(now())
   updatedAt DateTime         @updatedAt
 
-  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  creator Membership? @relation("ConversationCreator", fields: [creatorId], references: [id], onDelete: SetNull)
-  members ConversationMember[]
+  company  Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  creator  Membership?          @relation("ConversationCreator", fields: [creatorId], references: [id], onDelete: SetNull)
+  members  ConversationMember[]
   messages ChatMessage[]
 
   @@index([companyId, kind, updatedAt])
@@ -1027,7 +1050,7 @@ model Conversation {
 model ConversationMember {
   conversationId String
   membershipId   String
-  joinedAt       DateTime @default(now())
+  joinedAt       DateTime  @default(now())
   lastReadAt     DateTime?
 
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)

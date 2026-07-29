@@ -1,6 +1,8 @@
 import request from 'supertest';
 import type { Express } from 'express';
 import type { SessionUserDto } from '../src/shared/types';
+import type { SubscriptionPlanKey } from '../src/shared/plans';
+import { prisma } from '../src/server/prisma';
 
 /**
  * A signed-in client. `agent` keeps the auth cookies between requests, which is
@@ -23,7 +25,13 @@ export const STRONG_PASSWORD = 'CorrectHorseBattery9';
 
 export async function signUpOwner(
   app: Express,
-  overrides: Partial<{ fullName: string; email: string; password: string; companyName: string }> = {},
+  overrides: Partial<{
+    fullName: string;
+    email: string;
+    password: string;
+    companyName: string;
+    subscriptionPlan: SubscriptionPlanKey;
+  }> = {},
 ): Promise<Client> {
   const agent = request.agent(app);
   const payload = {
@@ -40,6 +48,14 @@ export async function signUpOwner(
   const response = await agent.post('/api/auth/owner-signup').send(payload);
   if (response.status !== 201) {
     throw new Error(`Owner sign-up failed (${response.status}): ${JSON.stringify(response.body)}`);
+  }
+  const subscriptionPlan = overrides.subscriptionPlan ?? 'ENTERPRISE';
+  if (subscriptionPlan !== 'STARTER') {
+    await prisma.company.update({
+      where: { id: response.body.company.id },
+      data: { subscriptionPlan },
+    });
+    response.body.company.subscriptionPlan = subscriptionPlan;
   }
   return { agent, session: response.body as SessionUserDto };
 }
@@ -67,7 +83,9 @@ export async function createInviteCode(
 ): Promise<string> {
   const response = await client.agent.post('/api/invites').send({ role: 'WORKER', ...overrides });
   if (response.status !== 201) {
-    throw new Error(`Invite creation failed (${response.status}): ${JSON.stringify(response.body)}`);
+    throw new Error(
+      `Invite creation failed (${response.status}): ${JSON.stringify(response.body)}`,
+    );
   }
   return response.body.code as string;
 }

@@ -42,6 +42,7 @@ interface NavItem {
   to: string;
   label: string;
   icon: typeof House;
+  feature?: import('@shared/plans').PlanFeature;
 }
 
 /**
@@ -55,9 +56,9 @@ const OWNER_NAV: NavItem[] = [
   { to: '/app/people', label: 'People', icon: Users },
   { to: '/app/chat', label: 'Chat', icon: Chat },
   { to: '/app/work', label: 'Work', icon: CheckSquare },
-  { to: '/app/schedule', label: 'Schedule', icon: Calendar },
-  { to: '/app/knowledge', label: 'Knowledge base', icon: BookOpen },
-  { to: '/app/activity', label: 'Activity', icon: Activity },
+  { to: '/app/schedule', label: 'Schedule', icon: Calendar, feature: 'SCHEDULING' },
+  { to: '/app/knowledge', label: 'Knowledge base', icon: BookOpen, feature: 'KNOWLEDGE' },
+  { to: '/app/activity', label: 'Activity', icon: Activity, feature: 'REPORTING' },
   { to: '/app/invitations', label: 'Invitations', icon: Envelope },
   { to: '/app/settings', label: 'Company settings', icon: Building },
 ];
@@ -65,14 +66,14 @@ const OWNER_NAV: NavItem[] = [
 const WORKER_NAV: NavItem[] = [
   { to: '/app/my-day', label: 'My day', icon: SunHorizon },
   { to: '/app/work', label: 'My work', icon: CheckSquare },
-  { to: '/app/schedule', label: 'Schedule', icon: Calendar },
+  { to: '/app/schedule', label: 'Schedule', icon: Calendar, feature: 'SCHEDULING' },
   { to: '/app/organization', label: 'Company map', icon: TreeStructure },
   { to: '/app/people', label: 'People', icon: Users },
   { to: '/app/chat', label: 'Chat', icon: Chat },
 ];
 
 export function AppShell() {
-  const { session, signOut, isLeadership, switchCompany } = useAuth();
+  const { session, signOut, isLeadership, switchCompany, hasPlanFeature } = useAuth();
   const { connected } = useRealtime();
   const navigate = useNavigate();
   const location = useLocation();
@@ -83,7 +84,9 @@ export function AppShell() {
 
   if (!session) return null;
 
-  const items = isLeadership ? OWNER_NAV : WORKER_NAV;
+  const items = (isLeadership ? OWNER_NAV : WORKER_NAV).filter(
+    (item) => !item.feature || hasPlanFeature(item.feature),
+  );
   // Schedule is a working board, not another document in the app. It earns the
   // whole canvas; navigation remains one click away as an overlay.
   const scheduleMode = location.pathname === '/app/schedule';
@@ -349,7 +352,9 @@ export function AppShell() {
             </p>
 
             <div className="flex-1" />
-            <AtlasyButton open={atlasyOpen} onClick={() => setAtlasyOpen((value) => !value)} />
+            {hasPlanFeature('ATLASY') && (
+              <AtlasyButton open={atlasyOpen} onClick={() => setAtlasyOpen((value) => !value)} />
+            )}
             <NotificationCenter />
           </header>
         )}
@@ -361,7 +366,9 @@ export function AppShell() {
         </main>
       </div>
 
-      <AtlasyPanel open={atlasyOpen} onClose={() => setAtlasyOpen(false)} />
+      {hasPlanFeature('ATLASY') && (
+        <AtlasyPanel open={atlasyOpen} onClose={() => setAtlasyOpen(false)} />
+      )}
     </div>
   );
 }

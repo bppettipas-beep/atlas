@@ -13,6 +13,7 @@ import type {
 } from '../../shared/types';
 import { env } from '../env';
 import { isOverdue } from '../lib/dates';
+import { effectivePlan } from './subscriptions';
 
 type Nullable<T> = T | null | undefined;
 
@@ -34,7 +35,7 @@ export function serializeCompany(company: any) {
     timezone: company.timezone,
     logoUrl: company.logoUrl ?? null,
     createdAt: company.createdAt.toISOString(),
-    subscriptionPlan: company.subscriptionPlan,
+    subscriptionPlan: effectivePlan(company),
     subscriptionStatus: company.subscriptionStatus,
     subscriptionExpiresAt: iso(company.subscriptionExpiresAt),
     promoCodeRedeemedAt: iso(company.promoCodeRedeemedAt),

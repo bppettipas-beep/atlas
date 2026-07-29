@@ -1,5 +1,10 @@
 import type { NextFunction, Request, Response } from 'express';
-import type { CompanyRole, MembershipStatus } from '@prisma/client';
+import type {
+  CompanyRole,
+  MembershipStatus,
+  SubscriptionPlan,
+  SubscriptionStatus,
+} from '@prisma/client';
 import { ACCESS_COOKIE, REFRESH_COOKIE, clearAuthCookies, setAuthCookies } from '../auth/cookies';
 import {
   createRefreshToken,
@@ -14,6 +19,8 @@ import {
   repairCompanyPermissionFoundation,
   requirePermission as assertPermission,
 } from '../services/authorization';
+import { resolveApiKey } from '../services/apiKeys';
+import { planHasFeature } from '../../shared/plans';
 
 export interface AuthContext {
   userId: string;
@@ -28,6 +35,9 @@ export interface AuthContext {
   role: CompanyRole;
   fullName: string;
   email: string;
+  subscriptionPlan: SubscriptionPlan;
+  subscriptionStatus: SubscriptionStatus;
+  subscriptionExpiresAt: Date | null;
 }
 
 declare module 'express-serve-static-core' {
@@ -49,6 +59,13 @@ async function contextFromMembership(
     where: { id: membershipId },
     include: {
       user: { select: { id: true, fullName: true, email: true } },
+      company: {
+        select: {
+          subscriptionPlan: true,
+          subscriptionStatus: true,
+          subscriptionExpiresAt: true,
+        },
+      },
       rank: {
         select: {
           id: true,
@@ -59,7 +76,8 @@ async function contextFromMembership(
       },
     },
   });
-  if (!membership || membership.status !== 'ACTIVE' || membership.deactivatedAt || !membership.rank) return null;
+  if (!membership || membership.status !== 'ACTIVE' || membership.deactivatedAt || !membership.rank)
+    return null;
   if (!repairAttempted && membership.rank.permissions.length === 0) {
     const repaired = await prisma.$transaction((tx) =>
       repairCompanyPermissionFoundation(tx, membership.companyId),
@@ -78,6 +96,13 @@ async function contextFromMembership(
     role: membership.role,
     fullName: membership.user.fullName,
     email: membership.user.email,
+    subscriptionPlan:
+      membership.company.subscriptionExpiresAt &&
+      membership.company.subscriptionExpiresAt.getTime() <= Date.now()
+        ? 'STARTER'
+        : membership.company.subscriptionPlan,
+    subscriptionStatus: membership.company.subscriptionStatus,
+    subscriptionExpiresAt: membership.company.subscriptionExpiresAt,
   };
 }
 
@@ -87,6 +112,18 @@ async function contextFromMembership(
  * sign-in screen mid-session.
  */
 async function resolveAuth(req: Request, res: Response): Promise<AuthContext | null> {
+  const authorization = req.get('authorization');
+  if (authorization?.startsWith('Bearer ')) {
+    const key = await resolveApiKey(authorization.slice('Bearer '.length).trim());
+    if (!key) return null;
+    const context = await contextFromMembership(key.membershipId);
+    return context?.companyId === key.companyId &&
+      context.subscriptionStatus === 'ACTIVE' &&
+      planHasFeature(context.subscriptionPlan, 'API_ACCESS')
+      ? context
+      : null;
+  }
+
   const accessToken = req.cookies?.[ACCESS_COOKIE];
   if (typeof accessToken === 'string' && accessToken.length > 0) {
     const claims = verifyAccessToken(accessToken);

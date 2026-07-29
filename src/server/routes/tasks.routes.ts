@@ -28,6 +28,8 @@ import {
   taskSummaryInclude,
 } from '../services/serializers';
 import type { TaskDetail } from '../../shared/types';
+import { planHasFeature } from '../../shared/plans';
+import { requirePlanFeature } from '../services/subscriptions';
 
 export const tasksRouter = Router();
 
@@ -132,19 +134,23 @@ async function visibilityFilter(auth: ReturnType<typeof currentAuth>) {
   if (grants.some((grant) => grant.scope === PermissionScope.COMPANY_WIDE)) return {};
 
   const actorTeamIds = grants.some((grant) => grant.scope === PermissionScope.TEAM)
-    ? await prisma.teamMembership.findMany({
-        where: { membershipId: auth.membershipId },
-        select: { teamId: true },
-      }).then((rows) => rows.map((row) => row.teamId))
+    ? await prisma.teamMembership
+        .findMany({
+          where: { membershipId: auth.membershipId },
+          select: { teamId: true },
+        })
+        .then((rows) => rows.map((row) => row.teamId))
     : [];
   const selectedTeamIds = grants
     .filter((grant) => grant.scope === PermissionScope.SELECTED_TEAMS)
     .flatMap((grant) => grant.selectedTeamIds);
   const managedIds = grants.some((grant) => grant.scope === PermissionScope.MANAGED_PEOPLE)
-    ? await prisma.membership.findMany({
-        where: { companyId: auth.companyId, managerId: auth.membershipId },
-        select: { id: true },
-      }).then((rows) => rows.map((row) => row.id))
+    ? await prisma.membership
+        .findMany({
+          where: { companyId: auth.companyId, managerId: auth.membershipId },
+          select: { id: true },
+        })
+        .then((rows) => rows.map((row) => row.id))
     : [];
   const teamIds = [...new Set([...actorTeamIds, ...selectedTeamIds])];
 
@@ -293,6 +299,29 @@ async function assertRelationsInCompany(
   }
 }
 
+function assertPlanTaskFields(
+  auth: ReturnType<typeof currentAuth>,
+  input: { startAt?: Date | null; endAt?: Date | null; documentId?: string | null },
+) {
+  if (
+    (input.startAt !== undefined || input.endAt !== undefined) &&
+    !planHasFeature(auth.subscriptionPlan, 'SCHEDULING')
+  ) {
+    throw new ApiError(
+      402,
+      'PLAN_UPGRADE_REQUIRED',
+      'Scheduling tasks is included in the Growth plan.',
+    );
+  }
+  if (input.documentId && !planHasFeature(auth.subscriptionPlan, 'KNOWLEDGE')) {
+    throw new ApiError(
+      402,
+      'PLAN_UPGRADE_REQUIRED',
+      'Linking knowledge documents is included in the Growth plan.',
+    );
+  }
+}
+
 tasksRouter.post(
   '/',
   requirePermission(PERMISSIONS.TASKS_CREATE),
@@ -301,26 +330,34 @@ tasksRouter.post(
     const auth = currentAuth(req);
     const input = req.body as z.infer<typeof createSchema>;
 
+    assertPlanTaskFields(auth, input);
     await assertRelationsInCompany(auth.companyId, input);
     const createGrants = await hasPermission(auth, PERMISSIONS.TASKS_CREATE);
-    const sharesTargetTeam = input.teamId && createGrants.some((grant) => grant.scope === PermissionScope.TEAM)
-      ? Boolean(await prisma.teamMembership.findFirst({
-          where: { teamId: input.teamId, membershipId: auth.membershipId },
-          select: { id: true },
-        }))
-      : false;
+    const sharesTargetTeam =
+      input.teamId && createGrants.some((grant) => grant.scope === PermissionScope.TEAM)
+        ? Boolean(
+            await prisma.teamMembership.findFirst({
+              where: { teamId: input.teamId, membershipId: auth.membershipId },
+              select: { id: true },
+            }),
+          )
+        : false;
     const canCreate =
       createGrants.some((grant) => grant.scope === PermissionScope.COMPANY_WIDE) ||
       (input.assigneeId === auth.membershipId &&
-        createGrants.some((grant) =>
-          grant.scope === PermissionScope.OWN || grant.scope === PermissionScope.ASSIGNED)) ||
+        createGrants.some(
+          (grant) =>
+            grant.scope === PermissionScope.OWN || grant.scope === PermissionScope.ASSIGNED,
+        )) ||
       (Boolean(input.assigneeId) &&
-        await canAccessMembership(auth, PERMISSIONS.TASKS_CREATE, input.assigneeId!)) ||
+        (await canAccessMembership(auth, PERMISSIONS.TASKS_CREATE, input.assigneeId!))) ||
       (Boolean(input.teamId) &&
-        createGrants.some((grant) =>
-          (grant.scope === PermissionScope.SELECTED_TEAMS &&
-            grant.selectedTeamIds.includes(input.teamId!)) ||
-          (grant.scope === PermissionScope.TEAM && sharesTargetTeam)));
+        createGrants.some(
+          (grant) =>
+            (grant.scope === PermissionScope.SELECTED_TEAMS &&
+              grant.selectedTeamIds.includes(input.teamId!)) ||
+            (grant.scope === PermissionScope.TEAM && sharesTargetTeam),
+        ));
     if (!canCreate) {
       throw ApiError.forbidden('Your task creation scope does not include that assignee or team.');
     }
@@ -417,6 +454,7 @@ tasksRouter.patch(
     }
 
     const input = req.body as z.infer<typeof updateSchema>;
+    assertPlanTaskFields(auth, input);
     if (!isLeadership(auth) && input.assigneeId && input.assigneeId !== auth.membershipId) {
       throw ApiError.forbidden('Only owners and managers can reassign work.');
     }
@@ -1013,6 +1051,7 @@ const templateSchema = z.object({
 
 tasksRouter.get(
   '/templates/list',
+  requirePlanFeature('SCHEDULING'),
   requirePermission(PERMISSIONS.TASKS_MANAGE),
   asyncHandler(async (req, res) => {
     const auth = currentAuth(req);
@@ -1051,6 +1090,7 @@ tasksRouter.get(
 
 tasksRouter.post(
   '/templates',
+  requirePlanFeature('SCHEDULING'),
   requirePermission(PERMISSIONS.TASKS_MANAGE),
   validateBody(templateSchema),
   asyncHandler(async (req, res) => {
@@ -1089,6 +1129,7 @@ tasksRouter.post(
 
 tasksRouter.patch(
   '/templates/:templateId',
+  requirePlanFeature('SCHEDULING'),
   requirePermission(PERMISSIONS.TASKS_MANAGE),
   validateBody(templateSchema.partial()),
   asyncHandler(async (req, res) => {
@@ -1116,6 +1157,7 @@ tasksRouter.patch(
 
 tasksRouter.delete(
   '/templates/:templateId',
+  requirePlanFeature('SCHEDULING'),
   requirePermission(PERMISSIONS.TASKS_DELETE),
   asyncHandler(async (req, res) => {
     const auth = currentAuth(req);

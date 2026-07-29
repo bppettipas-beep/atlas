@@ -5,6 +5,7 @@ import { LoadingState, ToastProvider } from '@/components/ui';
 import { AuthProvider, useAuth } from '@/providers/AuthProvider';
 import { RealtimeProvider } from '@/providers/RealtimeProvider';
 import { lazy, Suspense, type ReactNode } from 'react';
+import type { PlanFeature } from '@shared/plans';
 
 const AccountPage = lazy(() =>
   import('@/pages/AccountPage').then((m) => ({ default: m.AccountPage })),
@@ -85,6 +86,12 @@ function RequirePlatformAdmin({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
+function RequirePlanFeature({ feature, children }: { feature: PlanFeature; children: ReactNode }) {
+  const { hasPlanFeature } = useAuth();
+  if (!hasPlanFeature(feature)) return <Navigate to="/app/settings" replace />;
+  return <>{children}</>;
+}
+
 /**
  * Owners land on the organization map; workers land on My Day. The two roles
  * are asking different questions, so they get different front doors.
@@ -135,12 +142,21 @@ export function App() {
                   <Route path="people" element={<PeoplePage />} />
                   <Route path="chat" element={<ChatPage />} />
                   <Route path="work" element={<WorkPage />} />
-                  <Route path="schedule" element={<SchedulePage />} />
+                  <Route
+                    path="schedule"
+                    element={
+                      <RequirePlanFeature feature="SCHEDULING">
+                        <SchedulePage />
+                      </RequirePlanFeature>
+                    }
+                  />
                   <Route
                     path="knowledge"
                     element={
                       <RequireLeadership>
-                        <KnowledgePage />
+                        <RequirePlanFeature feature="KNOWLEDGE">
+                          <KnowledgePage />
+                        </RequirePlanFeature>
                       </RequireLeadership>
                     }
                   />
@@ -148,7 +164,9 @@ export function App() {
                     path="knowledge/:id"
                     element={
                       <RequireLeadership>
-                        <KnowledgeDocPage />
+                        <RequirePlanFeature feature="KNOWLEDGE">
+                          <KnowledgeDocPage />
+                        </RequirePlanFeature>
                       </RequireLeadership>
                     }
                   />
@@ -156,7 +174,9 @@ export function App() {
                     path="activity"
                     element={
                       <RequireLeadership>
-                        <ActivityPage />
+                        <RequirePlanFeature feature="REPORTING">
+                          <ActivityPage />
+                        </RequirePlanFeature>
                       </RequireLeadership>
                     }
                   />

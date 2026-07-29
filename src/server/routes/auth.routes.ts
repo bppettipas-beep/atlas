@@ -39,9 +39,11 @@ import { recordActivity } from '../services/activity';
 import { ensureNotificationPreference, notify, notifyLeadership } from '../services/notifications';
 import { ensureOrganizationNodes, broadcastOrganizationChange } from '../services/organization';
 import { serializeCompany } from '../services/serializers';
+import { assertEmployeeCapacity } from '../services/subscriptions';
 import { emitToCompany } from '../realtime/io';
 import type { SessionUserDto } from '../../shared/types';
 import type { Request, Response } from 'express';
+import { planHasFeature } from '../../shared/plans';
 
 export const authRouter = Router();
 
@@ -246,7 +248,14 @@ export async function buildSessionPayload(
     prisma.membership.findMany({
       where: { userId, status: 'ACTIVE', deactivatedAt: null },
       include: {
-        company: { select: { id: true, name: true } },
+        company: {
+          select: {
+            id: true,
+            name: true,
+            subscriptionPlan: true,
+            subscriptionExpiresAt: true,
+          },
+        },
         rank: { select: { name: true } },
       },
       orderBy: { createdAt: 'asc' },
@@ -280,13 +289,25 @@ export async function buildSessionPayload(
       availability: membership.profile?.availability ?? 'AVAILABLE',
     },
     company: serializeCompany(membership.company),
-    memberships: memberships.map((item) => ({
-      id: item.id,
-      companyId: item.companyId,
-      companyName: item.company.name,
-      role: item.role,
-      rankName: item.rank.name,
-    })),
+    memberships: memberships
+      .filter(
+        (item) =>
+          item.id === membership.id ||
+          planHasFeature(
+            item.company.subscriptionExpiresAt &&
+              item.company.subscriptionExpiresAt.getTime() <= Date.now()
+              ? 'STARTER'
+              : item.company.subscriptionPlan,
+            'MULTI_COMPANY',
+          ),
+      )
+      .map((item) => ({
+        id: item.id,
+        companyId: item.companyId,
+        companyName: item.company.name,
+        role: item.role,
+        rankName: item.rank.name,
+      })),
     unreadNotifications: unread,
   };
 }
@@ -605,6 +626,8 @@ authRouter.post(
       );
     }
 
+    await assertEmployeeCapacity(invite.companyId);
+
     const membershipId = await prisma.$transaction(async (tx) => {
       const user = await tx.user.create({ data: account });
 
@@ -826,6 +849,22 @@ authRouter.post(
       },
     });
     if (!target) throw ApiError.notFound('You are not a member of that company.');
+    const targetCompany = await prisma.company.findUniqueOrThrow({
+      where: { id: target.companyId },
+      select: { subscriptionPlan: true, subscriptionExpiresAt: true },
+    });
+    const targetPlan =
+      targetCompany.subscriptionExpiresAt &&
+      targetCompany.subscriptionExpiresAt.getTime() <= Date.now()
+        ? 'STARTER'
+        : targetCompany.subscriptionPlan;
+    if (!planHasFeature(targetPlan, 'MULTI_COMPANY')) {
+      throw new ApiError(
+        402,
+        'PLAN_UPGRADE_REQUIRED',
+        'Switching between companies is included in the Enterprise plan.',
+      );
+    }
 
     await issueSession(req, res, auth.userId, target.id);
     res.json(await buildSessionPayload(auth.userId, target.id));

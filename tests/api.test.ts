@@ -1603,6 +1603,142 @@ describe('schedule integrity', () => {
 });
 
 /* ========================================================================== */
+/*  Subscription plan enforcement                                             */
+/* ========================================================================== */
+
+describe('subscription plan enforcement', () => {
+  it('keeps Growth features off Starter and reports the exact entitlements', async () => {
+    const starter = await signUpOwner(app, { subscriptionPlan: 'STARTER' });
+
+    const entitlements = await starter.agent.get('/api/companies/current/entitlements').expect(200);
+    expect(entitlements.body).toMatchObject({
+      plan: 'STARTER',
+      employeeLimit: 10,
+      activeEmployees: 1,
+      features: [],
+    });
+
+    await starter.agent.get('/api/knowledge').expect(402);
+    await starter.agent
+      .get('/api/schedule')
+      .query({
+        from: '2030-01-01T00:00:00.000Z',
+        to: '2030-01-02T00:00:00.000Z',
+      })
+      .expect(402);
+    await starter.agent.get('/api/activity').expect(402);
+    await starter.agent.get('/api/ranks').expect(402);
+    await starter.agent
+      .post('/api/tasks')
+      .send({ title: 'Schedule bypass', startAt: '2030-01-01T09:00:00.000Z' })
+      .expect(402);
+    await starter.agent.get('/api/tasks/templates/list').expect(402);
+  });
+
+  it('unlocks the advertised Growth tools but not Business tools', async () => {
+    const growth = await signUpOwner(app, { subscriptionPlan: 'GROWTH' });
+    const entitlements = await growth.agent.get('/api/companies/current/entitlements').expect(200);
+    expect(entitlements.body.employeeLimit).toBe(50);
+
+    await growth.agent.get('/api/knowledge').expect(200);
+    await growth.agent
+      .get('/api/schedule')
+      .query({
+        from: '2030-01-01T00:00:00.000Z',
+        to: '2030-01-02T00:00:00.000Z',
+      })
+      .expect(200);
+    await growth.agent.get('/api/activity').expect(200);
+    await growth.agent.get('/api/companies/current/metrics').expect(200);
+    await growth.agent.get('/api/ranks').expect(402);
+    await growth.agent.get('/api/companies/current/analytics').expect(402);
+    await growth.agent.get('/api/companies/current/api-keys').expect(402);
+  });
+
+  it('provides Business analytics and revocable programmatic API access', async () => {
+    const business = await signUpOwner(app, { subscriptionPlan: 'BUSINESS' });
+    const entitlements = await business.agent
+      .get('/api/companies/current/entitlements')
+      .expect(200);
+    expect(entitlements.body.employeeLimit).toBe(150);
+
+    await business.agent.get('/api/ranks').expect(200);
+    await business.agent.get('/api/companies/current/analytics').expect(200);
+    const created = await business.agent
+      .post('/api/companies/current/api-keys')
+      .send({ name: 'Reporting integration' })
+      .expect(201);
+    expect(created.body.token).toMatch(/^atlas_live_/);
+
+    await request(app)
+      .get('/api/companies/current')
+      .set('Authorization', `Bearer ${created.body.token}`)
+      .expect(200);
+
+    await business.agent.delete(`/api/companies/current/api-keys/${created.body.id}`).expect(200);
+    await request(app)
+      .get('/api/companies/current')
+      .set('Authorization', `Bearer ${created.body.token}`)
+      .expect(401);
+  });
+
+  it('reserves multi-company switching and flexible capacity for Enterprise', async () => {
+    const primary = await signUpOwner(app);
+    const secondary = await signUpOwner(app);
+    await prisma.membership.update({
+      where: { id: secondary.session.membership.id },
+      data: { userId: primary.session.user.id },
+    });
+
+    const switched = await primary.agent
+      .post('/api/auth/switch-company')
+      .send({ membershipId: secondary.session.membership.id })
+      .expect(200);
+    expect(switched.body.company.id).toBe(secondary.session.company.id);
+
+    const entitlements = await primary.agent.get('/api/companies/current/entitlements').expect(200);
+    expect(entitlements.body).toMatchObject({
+      plan: 'ENTERPRISE',
+      employeeLimit: null,
+    });
+  });
+
+  it('enforces Starter’s ten-employee ceiling', async () => {
+    const starter = await signUpOwner(app, { subscriptionPlan: 'STARTER' });
+    for (let index = 0; index < 9; index += 1) {
+      await starter.agent
+        .post('/api/people')
+        .send({ fullName: `Starter Person ${index + 1}` })
+        .expect(201);
+    }
+    const rejected = await starter.agent
+      .post('/api/people')
+      .send({ fullName: 'One Too Many' })
+      .expect(409);
+    expect(rejected.body.error.code).toBe('EMPLOYEE_LIMIT_REACHED');
+  });
+
+  it('falls an expired paid plan back to Starter and blocks suspended operations', async () => {
+    const expired = await signUpOwner(app, { subscriptionPlan: 'GROWTH' });
+    await prisma.company.update({
+      where: { id: expired.session.company.id },
+      data: { subscriptionExpiresAt: new Date(Date.now() - 1_000) },
+    });
+    await expired.agent.get('/api/knowledge').expect(402);
+    const session = await expired.agent.get('/api/auth/session').expect(200);
+    expect(session.body.company.subscriptionPlan).toBe('STARTER');
+
+    const suspended = await signUpOwner(app);
+    await prisma.company.update({
+      where: { id: suspended.session.company.id },
+      data: { subscriptionStatus: 'SUSPENDED' },
+    });
+    await suspended.agent.get('/api/tasks').expect(402);
+    await suspended.agent.get('/api/companies/current').expect(200);
+  });
+});
+
+/* ========================================================================== */
 /*  Cross-tenant sweep — "paste user A's URL as user B"                       */
 /* ========================================================================== */
 

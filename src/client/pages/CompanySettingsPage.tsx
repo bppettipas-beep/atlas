@@ -24,6 +24,7 @@ import { useQuery } from '@/lib/useQuery';
 import { formatDate, formatDateTime } from '@/lib/utils';
 import { useAuth, useSession } from '@/providers/AuthProvider';
 import type { CompanyDto, PersonSummary, TeamDto } from '@shared/types';
+import { planHasFeature } from '@shared/plans';
 
 interface TemplateRow {
   id: string;
@@ -48,6 +49,16 @@ export function CompanySettingsPage() {
   const { isOwner, refresh } = useAuth();
   const [tab, setTab] = useState<'company' | 'ranks' | 'routines'>('company');
   const canManageRanks = session.membership.permissions.includes('ranks.manage');
+  const hasAdvancedPermissions = planHasFeature(
+    session.company.subscriptionPlan,
+    'ADVANCED_PERMISSIONS',
+  );
+  const hasScheduling = planHasFeature(session.company.subscriptionPlan, 'SCHEDULING');
+  const tabs = [
+    { value: 'company' as const, label: 'Company' },
+    ...(hasAdvancedPermissions ? [{ value: 'ranks' as const, label: 'Ranks & Permissions' }] : []),
+    ...(hasScheduling ? [{ value: 'routines' as const, label: 'Recurring work' }] : []),
+  ];
 
   return (
     <PageTransition>
@@ -58,19 +69,11 @@ export function CompanySettingsPage() {
           description="The facts about your business, and the work that happens on a schedule."
         />
 
-        <Tabs
-          tabs={[
-            { value: 'company', label: 'Company' },
-            { value: 'ranks', label: 'Ranks & Permissions' },
-            { value: 'routines', label: 'Recurring work' },
-          ]}
-          value={tab}
-          onChange={setTab}
-        />
+        <Tabs tabs={tabs} value={tab} onChange={setTab} />
 
         {tab === 'company' && <CompanyTab canEdit={isOwner} onSaved={refresh} />}
-        {tab === 'ranks' && canManageRanks && <RanksPermissionsTab />}
-        {tab === 'routines' && <RoutinesTab />}
+        {tab === 'ranks' && hasAdvancedPermissions && canManageRanks && <RanksPermissionsTab />}
+        {tab === 'routines' && hasScheduling && <RoutinesTab />}
       </PageBody>
     </PageTransition>
   );
@@ -261,7 +264,9 @@ function PlanSection({
       <RuledHead title="Plan" className="mb-5" />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <p className="text-[13px] font-medium text-ink">{PLAN_LABELS[company.subscriptionPlan]} plan</p>
+          <p className="text-[13px] font-medium text-ink">
+            {PLAN_LABELS[company.subscriptionPlan]} plan
+          </p>
           <p className="mt-1 text-[12px] text-ink-3">
             {company.subscriptionExpiresAt
               ? `Active through ${formatDate(company.subscriptionExpiresAt)}`
@@ -395,7 +400,10 @@ function RoutinesTab() {
                     {template.assigneeName && <span>· {template.assigneeName}</span>}
                     {template.teamName && <span>· {template.teamName}</span>}
                     {template.checklistItems.length > 0 && (
-                      <span>· {template.checklistItems.length} checklist step{template.checklistItems.length === 1 ? '' : 's'}</span>
+                      <span>
+                        · {template.checklistItems.length} checklist step
+                        {template.checklistItems.length === 1 ? '' : 's'}
+                      </span>
                     )}
                   </p>
                 </div>
@@ -556,13 +564,23 @@ function RoutineModal({
         <Field label="Checklist" hint="These steps are added to every task this routine creates.">
           <div className="space-y-2">
             {form.checklistItems.map((item, index) => (
-              <div key={`${item}-${index}`} className="flex items-center gap-2 border border-rule bg-paper px-3 py-2 text-[13px] text-ink-2">
+              <div
+                key={`${item}-${index}`}
+                className="flex items-center gap-2 border border-rule bg-paper px-3 py-2 text-[13px] text-ink-2"
+              >
                 <span className="flex-1">{item}</span>
                 <button
                   type="button"
                   className="text-ink-3 hover:text-alert"
                   aria-label={`Remove ${item}`}
-                  onClick={() => setForm({ ...form, checklistItems: form.checklistItems.filter((_, itemIndex) => itemIndex !== index) })}
+                  onClick={() =>
+                    setForm({
+                      ...form,
+                      checklistItems: form.checklistItems.filter(
+                        (_, itemIndex) => itemIndex !== index,
+                      ),
+                    })
+                  }
                 >
                   ×
                 </button>
@@ -576,7 +594,10 @@ function RoutineModal({
                 onKeyDown={(event) => {
                   if (event.key === 'Enter' && checklistDraft.trim()) {
                     event.preventDefault();
-                    setForm({ ...form, checklistItems: [...form.checklistItems, checklistDraft.trim()] });
+                    setForm({
+                      ...form,
+                      checklistItems: [...form.checklistItems, checklistDraft.trim()],
+                    });
                     setChecklistDraft('');
                   }
                 }}
@@ -586,7 +607,10 @@ function RoutineModal({
                 variant="ghost"
                 disabled={!checklistDraft.trim()}
                 onClick={() => {
-                  setForm({ ...form, checklistItems: [...form.checklistItems, checklistDraft.trim()] });
+                  setForm({
+                    ...form,
+                    checklistItems: [...form.checklistItems, checklistDraft.trim()],
+                  });
                   setChecklistDraft('');
                 }}
               >

@@ -27,6 +27,7 @@ import { scheduleRouter } from './routes/schedule.routes';
 import { tasksRouter } from './routes/tasks.routes';
 import { uploadsRouter } from './routes/uploads.routes';
 import { canViewTask } from './services/permissions';
+import { requireActiveSubscription, requirePlanFeature } from './services/subscriptions';
 
 export function createApp(): Express {
   const app = express();
@@ -145,8 +146,7 @@ export function createApp(): Express {
         }),
       ]);
       const mayReadAttachment =
-        attachment?.task.companyId === auth.companyId &&
-        await canViewTask(auth, attachment.task);
+        attachment?.task.companyId === auth.companyId && (await canViewTask(auth, attachment.task));
       if (!mayReadAttachment && !companyAsset && !personAsset) {
         res.status(404).end();
         return;
@@ -167,19 +167,19 @@ export function createApp(): Express {
   app.use('/api/auth', authRouter);
   app.use('/api/admin', adminRouter);
   app.use('/api/companies', companiesRouter);
-  app.use('/api/chat', chatRouter);
-  app.use('/api/invites', invitesRouter);
-  app.use('/api/people', peopleRouter);
-  app.use('/api/roles', rolesRouter);
-  app.use('/api/ranks', ranksRouter);
+  app.use('/api/chat', requireActiveSubscription, chatRouter);
+  app.use('/api/invites', requireActiveSubscription, invitesRouter);
+  app.use('/api/people', requireActiveSubscription, peopleRouter);
+  app.use('/api/roles', requireActiveSubscription, rolesRouter);
+  app.use('/api/ranks', requirePlanFeature('ADVANCED_PERMISSIONS'), ranksRouter);
   app.use('/api/assistant', assistantRouter);
-  app.use('/api/organization', organizationRouter);
-  app.use('/api/tasks', tasksRouter);
-  app.use('/api/schedule', scheduleRouter);
-  app.use('/api/knowledge', knowledgeRouter);
-  app.use('/api/notifications', notificationsRouter);
-  app.use('/api/activity', activityRouter);
-  app.use('/api/uploads', uploadsRouter);
+  app.use('/api/organization', requireActiveSubscription, organizationRouter);
+  app.use('/api/tasks', requireActiveSubscription, tasksRouter);
+  app.use('/api/schedule', requirePlanFeature('SCHEDULING'), scheduleRouter);
+  app.use('/api/knowledge', requirePlanFeature('KNOWLEDGE'), knowledgeRouter);
+  app.use('/api/notifications', requireActiveSubscription, notificationsRouter);
+  app.use('/api/activity', requirePlanFeature('REPORTING'), activityRouter);
+  app.use('/api/uploads', requireActiveSubscription, uploadsRouter);
   app.use('/api', notFoundHandler);
 
   // --------------------------- built React client --------------------------

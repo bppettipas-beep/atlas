@@ -8,6 +8,7 @@ import { validateBody } from '../http/validate';
 import { currentAuth, requireAuth, requirePermission } from '../middleware/authenticate';
 import { prisma } from '../prisma';
 import { PERMISSIONS } from '../services/authorization';
+import { requirePlanFeature } from '../services/subscriptions';
 
 export const assistantRouter = Router();
 
@@ -16,7 +17,7 @@ assistantRouter.get('/config', (_req, res) => {
   res.json({ enabled: env.assistantEnabled });
 });
 
-assistantRouter.use(requireAuth);
+assistantRouter.use(requireAuth, requirePlanFeature('ATLASY'));
 
 /**
  * Model calls cost the account holder money or quota, and a runaway loop in
@@ -53,7 +54,9 @@ assistantRouter.post(
   ),
   asyncHandler(async (req, res) => {
     const auth = currentAuth(req);
-    const { messages } = req.body as { messages: { role: 'user' | 'assistant'; content: string }[] };
+    const { messages } = req.body as {
+      messages: { role: 'user' | 'assistant'; content: string }[];
+    };
 
     // No provider configured. Answer in Atlasy's own voice rather than with a
     // red error box — from where the user is sitting, the assistant is simply
