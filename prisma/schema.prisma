@@ -33,8 +33,21 @@ enum CompanyRole {
 }
 
 enum MembershipStatus {
+  INVITED
   ACTIVE
   SUSPENDED
+  DEACTIVATED
+  REMOVED
+}
+
+enum PermissionScope {
+  OWN
+  ASSIGNED
+  TEAM
+  MANAGED_PEOPLE
+  SELECTED_TEAMS
+  COMPANY_WIDE
+  EXPLICITLY_SHARED
 }
 
 enum AvailabilityStatus {
@@ -232,6 +245,8 @@ model Company {
 
   memberships    Membership[]
   roles          Role[]
+  ranks          Rank[]
+  permissionAuditLogs PermissionAuditLog[]
   teams          Team[]
   inviteCodes    InviteCode[]
   directInvites  DirectInvite[]
@@ -253,10 +268,11 @@ model Membership {
   id            String           @id @default(cuid())
   userId        String
   companyId     String
-  /// Permission tier. Deliberately separate from `roleId` below: this decides
-  /// what somebody may *do*, and is enforced on every request.
+  /// Legacy permission tier. This is populated only while existing companies
+  /// are migrated to `rankId`, then removed by the rank-system migration.
   role          CompanyRole      @default(WORKER)
   status        MembershipStatus @default(ACTIVE)
+  rankId        String?
   jobTitle      String?
   /// The company's own named role — what somebody *is* on the org chart.
   /// Carries no permissions.
@@ -279,6 +295,7 @@ model Membership {
   directReports Membership[] @relation("ManagerReports")
 
   assignedRole Role? @relation(fields: [roleId], references: [id], onDelete: SetNull)
+  rank         Rank? @relation(fields: [rankId], references: [id], onDelete: Restrict)
 
   profile                EmployeeProfile?
   orgNode                OrganizationNode?
@@ -318,12 +335,81 @@ model Membership {
   conversationMembers ConversationMember[]
   sentMessages        ChatMessage[] @relation("MessageSender")
   createdConversations Conversation[] @relation("ConversationCreator")
+  rankPermissionAuditEvents PermissionAuditLog[] @relation("PermissionAuditActor")
+  affectedRankPermissionAuditEvents PermissionAuditLog[] @relation("PermissionAuditMember")
 
   @@unique([userId, companyId])
   @@index([companyId, role])
   @@index([companyId, status])
   @@index([managerId])
   @@index([roleId])
+  @@index([rankId])
+}
+
+/// A configurable software-authority rank. Its stable `key`, not its display
+/// name, identifies a system rank in authorization code and migrations.
+model Rank {
+  id          String  @id @default(cuid())
+  companyId   String
+  key         String
+  name        String
+  description String?
+  position    Int
+  isSystem    Boolean @default(false)
+  isProtected Boolean @default(false)
+  createdById String?
+  updatedById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  company     Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  permissions RankPermission[]
+  memberships Membership[]
+  auditEvents PermissionAuditLog[] @relation("PermissionAuditRank")
+
+  @@unique([companyId, key])
+  @@unique([companyId, name])
+  @@index([companyId, position])
+}
+
+/// Permission assignments are intentionally data rather than enum columns so
+/// permissions can evolve without turning editable labels into security keys.
+model RankPermission {
+  id            String          @id @default(cuid())
+  rankId        String
+  permissionKey String
+  scope         PermissionScope
+  selectedTeamIds String[]      @default([])
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  rank Rank @relation(fields: [rankId], references: [id], onDelete: Cascade)
+
+  @@unique([rankId, permissionKey, scope])
+  @@index([rankId, permissionKey])
+}
+
+/// Immutable trail for sensitive rank, scope, and membership authority events.
+model PermissionAuditLog {
+  id                 String   @id @default(cuid())
+  companyId          String
+  actorId            String?
+  affectedMembershipId String?
+  affectedRankId     String?
+  action             String
+  previousValue      Json?
+  nextValue          Json?
+  requestId          String?
+  createdAt          DateTime @default(now())
+
+  company            Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  actor              Membership? @relation("PermissionAuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+  affectedMembership Membership? @relation("PermissionAuditMember", fields: [affectedMembershipId], references: [id], onDelete: SetNull)
+  affectedRank       Rank?       @relation("PermissionAuditRank", fields: [affectedRankId], references: [id], onDelete: SetNull)
+
+  @@index([companyId, createdAt])
+  @@index([affectedMembershipId, createdAt])
+  @@index([affectedRankId, createdAt])
 }
 
 /// A company's own named role — "Lead Cleaning Technician", "Dispatcher".
