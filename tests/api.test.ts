@@ -1054,6 +1054,54 @@ describe('people added by hand', () => {
 });
 
 describe('deleting an account', () => {
+  it('allows an account without a plan or panel to access settings and delete itself', async () => {
+    const agent = request.agent(app);
+    const email = uniqueEmail('free-delete');
+    const created = await agent
+      .post('/api/auth/account-signup')
+      .send({ fullName: 'Free Account', email, password: STRONG_PASSWORD })
+      .expect(201);
+
+    expect(created.body).toMatchObject({
+      user: { email, hasPassword: true, hasGoogle: false },
+      plan: null,
+      hasPanel: false,
+    });
+    await agent.get('/api/auth/account-session').expect(200);
+    await agent
+      .post('/api/auth/account/delete')
+      .send({ password: STRONG_PASSWORD })
+      .expect(200, { ok: true, companiesDeleted: 0 });
+
+    expect(await prisma.user.findUnique({ where: { email } })).toBeNull();
+    await agent.get('/api/auth/account-session').expect(401);
+  });
+
+  it('releases a deleted email for a new account but rejects it while still in use', async () => {
+    const first = request.agent(app);
+    const email = uniqueEmail('reusable');
+    await first
+      .post('/api/auth/account-signup')
+      .send({ fullName: 'First Person', email, password: STRONG_PASSWORD })
+      .expect(201);
+
+    await request(app)
+      .post('/api/auth/account-signup')
+      .send({ fullName: 'Too Soon', email, password: STRONG_PASSWORD })
+      .expect(409);
+
+    await first
+      .post('/api/auth/account/delete')
+      .send({ password: STRONG_PASSWORD })
+      .expect(200);
+
+    const reused = await request(app)
+      .post('/api/auth/account-signup')
+      .send({ fullName: 'Second Person', email, password: STRONG_PASSWORD })
+      .expect(201);
+    expect(reused.body.user.email).toBe(email);
+  });
+
   it('refuses without the correct password', async () => {
     const owner = await signUpOwner(app);
     const response = await owner.agent

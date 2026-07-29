@@ -179,17 +179,6 @@ async function resolveNewAccount(
   };
 }
 
-/** A deleted email address remains permanently reserved and cannot be reused. */
-async function assertEmailAvailable(emailAddress: string) {
-  const deleted = await prisma.deletedEmail.findUnique({ where: { email: emailAddress } });
-  if (deleted) {
-    throw ApiError.conflict(
-      'An account previously used that email address and it cannot be registered again.',
-      'EMAIL_RETIRED',
-    );
-  }
-}
-
 async function issueSession(req: Request, res: Response, userId: string, membershipId: string) {
   const membership = await prisma.membership.findUniqueOrThrow({
     where: { id: membershipId },
@@ -273,6 +262,8 @@ async function buildAccountPayload(userId: string): Promise<AccountSessionDto> {
       email: user.email,
       fullName: user.fullName,
       avatarUrl: user.avatarUrl,
+      hasPassword: user.passwordHash !== null,
+      hasGoogle: user.googleId !== null,
     },
     plan: subscriptionActive ? user.accountPlan : null,
     subscriptionActive,
@@ -508,7 +499,6 @@ authRouter.post(
   asyncHandler(async (req, res) => {
     const input = req.body as z.infer<typeof accountSignupSchema>;
     const account = await resolveNewAccount(req, input);
-    await assertEmailAvailable(account.email);
     if (await prisma.user.findUnique({ where: { email: account.email } })) {
       throw ApiError.conflict(
         'An account already uses that email address. Sign in instead.',
@@ -679,7 +669,6 @@ authRouter.post(
   asyncHandler(async (req, res) => {
     const input = req.body as z.infer<typeof workerJoinSchema>;
     const account = await resolveNewAccount(req, input);
-    await assertEmailAvailable(account.email);
 
     const invite = await prisma.inviteCode.findUnique({
       where: { code: input.code },
@@ -999,7 +988,6 @@ authRouter.post(
 authRouter.post(
   '/account/delete',
   authLimiter,
-  requireAuth,
   validateBody(
     z.object({
       password: z.string().optional(),
@@ -1007,11 +995,14 @@ authRouter.post(
     }),
   ),
   asyncHandler(async (req, res) => {
-    const auth = currentAuth(req);
+    const signedInUser = await accountFromRequest(req);
+    if (!signedInUser) {
+      throw ApiError.unauthorized('You are not signed in.');
+    }
     const input = req.body as { password?: string; confirmEmail?: string };
 
     const user = await prisma.user.findUniqueOrThrow({
-      where: { id: auth.userId },
+      where: { id: signedInUser.id },
       include: {
         memberships: {
           where: { status: 'ACTIVE', deactivatedAt: null },
@@ -1099,13 +1090,6 @@ authRouter.post(
       for (const companyId of companiesToDelete) {
         await tx.company.delete({ where: { id: companyId } });
       }
-      // Permanently reserve the address before removing the account, so nobody
-      // can recreate a different account with this email later.
-      await tx.deletedEmail.upsert({
-        where: { email: user.email },
-        update: { deletedAt: new Date() },
-        create: { email: user.email },
-      });
       // Cascades memberships and refresh tokens; SetNull elsewhere.
       await tx.user.delete({ where: { id: user.id } });
     });

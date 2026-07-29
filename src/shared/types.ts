@@ -127,6 +127,8 @@ export interface AccountSessionDto {
     email: string;
     fullName: string;
     avatarUrl: string | null;
+    hasPassword: boolean;
+    hasGoogle: boolean;
   };
   plan: 'STARTER' | 'GROWTH' | 'BUSINESS' | 'ENTERPRISE' | null;
   subscriptionActive: boolean;

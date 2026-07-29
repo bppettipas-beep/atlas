@@ -482,16 +482,11 @@ peopleRouter.post(
 
     const email = input.email?.trim().toLowerCase() || null;
     if (email) {
-      const [taken, retired] = await Promise.all([
-        prisma.user.findUnique({ where: { email } }),
-        prisma.deletedEmail.findUnique({ where: { email } }),
-      ]);
-      if (taken || retired) {
+      const taken = await prisma.user.findUnique({ where: { email } });
+      if (taken) {
         throw ApiError.conflict(
-          retired
-            ? 'That email address belonged to a deleted account and cannot be used again.'
-            : 'Somebody already uses that email address. Leave it blank, or invite them properly with a code.',
-          retired ? 'EMAIL_RETIRED' : 'EMAIL_TAKEN',
+          'Somebody already uses that email address. Leave it blank, or invite them properly with a code.',
+          'EMAIL_TAKEN',
         );
       }
     }
