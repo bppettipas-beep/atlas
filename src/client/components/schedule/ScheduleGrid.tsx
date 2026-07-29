@@ -66,11 +66,11 @@ export interface ScheduleGridProps {
 }
 
 const STATUS_TONE: Record<string, string> = {
-  NOT_STARTED: 'border-l-ink-4',
-  IN_PROGRESS: 'border-l-mark',
-  BLOCKED: 'border-l-alert',
-  AWAITING_REVIEW: 'border-l-pending',
-  DONE: 'border-l-ink-4',
+  NOT_STARTED: 'border-l-ink-4 bg-sheet',
+  IN_PROGRESS: 'border-l-mark bg-mark/10',
+  BLOCKED: 'border-l-alert bg-alert-wash',
+  AWAITING_REVIEW: 'border-l-pending bg-pending/10',
+  DONE: 'border-l-ink-4 bg-paper-deep',
 };
 
 function minutesOf(date: Date) {
@@ -342,14 +342,15 @@ export function ScheduleGrid({
   const topFor = (minute: number) => ((minute - dayStartMinute) / 60) * hourHeight;
 
   return (
-    <div ref={gridRef} className="flex h-full min-h-0 flex-1 flex-col overflow-hidden rounded-sm border border-edge bg-sheet shadow-panel">
+    <div ref={gridRef} className="flex h-full min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-edge bg-sheet shadow-panel">
       {/* --------------------------- column heads --------------------------- */}
-      <div className="flex shrink-0 border-b border-rule bg-paper/80">
-        <div className="w-14 shrink-0 border-r border-rule" />
+      <div className="flex shrink-0 border-b border-rule bg-paper/95">
+        <div className="w-14 shrink-0 border-r border-rule bg-paper-deep/50" />
         {columns.map((column) => (
           <div
             key={column.key}
-            className="min-w-0 flex-1 border-r border-rule px-2.5 py-2.5 last:border-r-0"
+            className="min-w-0 flex-1 border-r border-t-2 border-rule px-2.5 py-2.5 last:border-r-0"
+            style={{ borderTopColor: column.color ?? 'transparent' }}
           >
             <div className="flex items-center gap-2">
               {column.kind === 'PERSON' && (
@@ -372,9 +373,9 @@ export function ScheduleGrid({
       </div>
 
       {/* ------------------------------ body -------------------------------- */}
-      <div ref={bodyRef} className="relative flex min-h-0 flex-1 overflow-hidden">
+      <div ref={bodyRef} className="relative flex min-h-0 flex-1 overflow-hidden bg-paper/35">
         {/* hour gutter */}
-        <div className="sticky left-0 z-10 w-14 shrink-0 border-r border-rule bg-sheet">
+        <div className="sticky left-0 z-10 w-14 shrink-0 border-r border-rule bg-sheet/95">
           <div style={{ height: bodyHeight }} className="relative">
             {hours.map((hour) => (
               <div
@@ -408,7 +409,7 @@ export function ScheduleGrid({
             <div
               key={column.key}
               data-schedule-column={column.key}
-              className="relative min-w-0 flex-1 border-r border-rule last:border-r-0"
+              className="relative min-w-0 flex-1 border-r border-rule bg-sheet/25 last:border-r-0"
               onPointerDown={(event) => startCreate(column, event)}
             >
               <div style={{ height: bodyHeight }} className="relative">
@@ -474,7 +475,7 @@ export function ScheduleGrid({
                 {/* the block being dragged out */}
                 {drag && drag.columnKey === column.key && (
                   <div
-                    className="pointer-events-none absolute inset-x-1 z-30 rounded-sm border border-mark bg-mark/10"
+                    className="pointer-events-none absolute inset-x-1 z-30 rounded-md border border-mark bg-mark/10 shadow-sm"
                     style={{
                       top: topFor(drag.startMinute),
                       height: Math.max(topFor(drag.endMinute) - topFor(drag.startMinute), 12),
@@ -505,7 +506,7 @@ export function ScheduleGrid({
                       }}
                       title={`${entry.block.title} · ${formatTime(entry.start)}–${formatTime(entry.end)}`}
                       className={cn(
-                        'group absolute z-10 overflow-hidden rounded-sm border border-l-[3px] border-rule bg-sheet px-2 py-1.5 text-left shadow-sm transition-[box-shadow,transform] hover:z-20 hover:-translate-y-px hover:shadow-lift',
+                        'group absolute z-10 overflow-hidden rounded-md border border-l-[4px] border-rule px-2.5 py-2 text-left shadow-sm transition-[box-shadow,transform] hover:z-20 hover:-translate-y-px hover:shadow-lift',
                         STATUS_TONE[entry.block.status] ?? 'border-l-ink-4',
                         entry.block.status === 'DONE' && 'opacity-55',
                         entry.block.conflictsWith.length > 0 && 'ring-danger/60 ring-1',

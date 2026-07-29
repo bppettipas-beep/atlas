@@ -18,11 +18,11 @@ function sameDay(a: Date, b: Date) {
 }
 
 const STATUS_TONE: Record<string, string> = {
-  NOT_STARTED: 'border-l-ink-4',
-  IN_PROGRESS: 'border-l-mark',
-  BLOCKED: 'border-l-alert',
-  AWAITING_REVIEW: 'border-l-pending',
-  DONE: 'border-l-ink-4 opacity-60',
+  NOT_STARTED: 'border-l-ink-4 bg-sheet',
+  IN_PROGRESS: 'border-l-mark bg-mark/10',
+  BLOCKED: 'border-l-alert bg-alert-wash',
+  AWAITING_REVIEW: 'border-l-pending bg-pending/10',
+  DONE: 'border-l-ink-4 bg-paper-deep opacity-60',
 };
 
 /** Compact month overview: task dates remain readable without a timeline scroll. */
@@ -43,9 +43,9 @@ export function ScheduleMonth({
   const days = Array.from({ length: 42 }, (_, index) => addDays(gridStart, index));
 
   return (
-    <div className="col-span-full grid min-h-0 grid-cols-7 overflow-hidden rounded-sm border border-edge bg-sheet shadow-panel">
+    <div className="col-span-full grid min-h-0 grid-cols-7 overflow-hidden rounded-md border border-edge bg-sheet shadow-panel">
       {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day) => (
-        <div key={day} className="border-b border-r border-rule bg-paper px-2 py-2 text-edge font-medium text-ink-3 last:border-r-0">
+        <div key={day} className="border-b border-r border-rule bg-paper px-2 py-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-ink-3 last:border-r-0">
           {day}
         </div>
       ))}
@@ -60,7 +60,7 @@ export function ScheduleMonth({
               !inMonth && 'bg-paper/50 text-ink-3',
             )}
           >
-            <span className={cn('mb-1 inline-flex h-5 min-w-5 items-center justify-center text-edge', sameDay(day, today) && 'bg-ink px-1 text-white')}>
+            <span className={cn('mb-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full text-edge', sameDay(day, today) && 'bg-mark px-1 font-semibold text-white shadow-sm')}>
               {day.getDate()}
             </span>
             <div className="space-y-1">
@@ -70,7 +70,7 @@ export function ScheduleMonth({
                   type="button"
                   onClick={() => onOpenTask(block.taskId)}
                   className={cn(
-                    'block w-full truncate border-l-2 bg-paper px-1.5 py-1 text-left text-[10px] font-medium text-ink transition-colors hover:bg-paper-deep sm:text-[11px]',
+                    'block w-full truncate rounded-r-sm border-l-[3px] px-1.5 py-1 text-left text-[10px] font-medium text-ink shadow-sm transition-[transform,box-shadow] hover:-translate-y-px hover:shadow-md sm:text-[11px]',
                     STATUS_TONE[block.status] ?? 'border-l-ink-4',
                     selectedTaskId === block.taskId && 'ring-1 ring-mark',
                   )}

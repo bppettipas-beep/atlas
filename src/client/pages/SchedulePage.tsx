@@ -260,7 +260,7 @@ export function SchedulePage() {
 
   return (
     <PageTransition>
-      <div className="flex h-full min-h-0 flex-col pl-14 pr-4 pt-4 sm:px-6 sm:py-5">
+      <div className="flex h-full min-h-0 flex-col bg-paper pl-14 pr-4 pt-4 sm:px-6 sm:py-5">
         <PageHeader
           eyebrow="Schedule"
           title={scope === 'mine' ? 'My schedule' : 'The day, at a glance'}
@@ -296,8 +296,8 @@ export function SchedulePage() {
             </Button>
           }
         />
-        <div className="mb-3 flex flex-wrap items-center gap-2 border-y border-rule py-2">
-          <div className="flex rounded-sm border border-edge bg-paper p-0.5">
+        <div className="mb-3 flex shrink-0 flex-wrap items-center gap-2 rounded-md border border-edge bg-sheet p-2 shadow-panel">
+          <div className="flex rounded-sm border border-edge bg-paper p-0.5 shadow-sm">
             {[
               { value: 'day' as const, label: 'Day' },
               { value: 'week' as const, label: 'Week' },
@@ -318,7 +318,7 @@ export function SchedulePage() {
               </button>
             ))}
           </div>
-          <div className="flex items-center gap-1 sm:ml-2">
+          <div className="flex items-center gap-1 rounded-sm bg-paper/70 px-1 sm:ml-1">
             <Button
               size="sm"
               variant="ghost"
@@ -336,11 +336,11 @@ export function SchedulePage() {
               aria-label="Next period"
               onClick={() => navigate(1)}
             />
-            <span className="ml-2 text-[13px] font-medium text-ink">
+            <span className="ml-1 whitespace-nowrap px-1.5 text-[13px] font-semibold text-ink">
               {labelRange(from, to, view)}
             </span>
           </div>
-          <div className="flex rounded-sm border border-edge bg-paper p-0.5">
+          <div className="flex rounded-sm border border-edge bg-paper p-0.5 shadow-sm">
             {isLeadership && (
               <button
                 type="button"
@@ -370,7 +370,7 @@ export function SchedulePage() {
               Mine
             </button>
           </div>
-          <span className="ml-auto hidden text-edge text-ink-3 md:block">
+          <span className="ml-auto hidden rounded-sm bg-paper px-2 py-1 text-edge text-ink-3 lg:block">
             Drag work to move · drag open time to add
           </span>
           {isLeadership && scope === 'company' && view !== 'month' && (
@@ -449,7 +449,7 @@ export function SchedulePage() {
           />
         )}
         {scheduleQuery.data && columns.length > 0 && (
-          <div className="grid min-h-0 flex-1 gap-3 xl:grid-cols-[minmax(0,1fr)_230px]">
+          <div className="grid min-h-0 flex-1 gap-3 xl:grid-cols-[minmax(0,1fr)_240px]">
             {view === 'month' ? (
               <ScheduleMonth
                 month={from}
@@ -557,10 +557,10 @@ function ScheduleRail({
     .slice(0, 4);
 
   return (
-    <aside className="hidden min-h-0 overflow-y-auto rounded-sm border border-rule bg-sheet xl:block">
-      <div className="border-b border-rule bg-paper px-3 py-3">
-        <p className="edge-sm">Crew board</p>
-        <p className="mt-1 text-[12px] leading-relaxed text-ink-3">
+    <aside className="hidden min-h-0 overflow-y-auto rounded-md border border-edge bg-sheet shadow-panel xl:block">
+      <div className="border-b border-ink-4 bg-ink px-3.5 py-3.5 text-white">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/65">Crew board</p>
+        <p className="mt-1 text-[12px] leading-relaxed text-white/85">
           Focus the board on one person.
         </p>
       </div>
@@ -569,8 +569,8 @@ function ScheduleRail({
           type="button"
           onClick={() => onSelect(null)}
           className={cn(
-            'flex w-full items-center gap-2 px-3 py-2.5 text-left transition-colors hover:bg-paper',
-            !selectedResourceId && 'bg-paper',
+            'flex w-full items-center gap-2 px-3.5 py-3 text-left transition-colors hover:bg-paper',
+            !selectedResourceId && 'bg-mark/10',
           )}
         >
           <span className="flex h-7 w-7 items-center justify-center border border-edge bg-sheet font-mono text-[10px] text-ink-3">
@@ -586,14 +586,19 @@ function ScheduleRail({
           .map((resource) => {
             const load = workloadById.get(resource.id);
             const overfull = load && load.scheduledMinutes > load.availableMinutes;
+            const loadPercent = load?.availableMinutes
+              ? Math.min(100, Math.round((load.scheduledMinutes / load.availableMinutes) * 100))
+              : load?.scheduledMinutes
+                ? 100
+                : 0;
             return (
               <button
                 key={resource.id}
                 type="button"
                 onClick={() => onSelect(resource.id)}
                 className={cn(
-                  'flex w-full items-center gap-2 px-3 py-2.5 text-left transition-colors hover:bg-paper',
-                  selectedResourceId === resource.id && 'bg-paper',
+                  'flex w-full items-center gap-2 px-3.5 py-3 text-left transition-colors hover:bg-paper',
+                  selectedResourceId === resource.id && 'bg-mark/10',
                 )}
               >
                 <Avatar name={resource.name} src={resource.avatarUrl} size="xs" />
@@ -605,6 +610,12 @@ function ScheduleRail({
                     {load
                       ? `${Math.round((load.scheduledMinutes / 60) * 10) / 10}h booked`
                       : 'No work booked'}
+                  </span>
+                  <span className="mt-1.5 block h-1 overflow-hidden rounded-full bg-paper-deep">
+                    <span
+                      className={cn('block h-full rounded-full', overfull ? 'bg-alert' : 'bg-mark')}
+                      style={{ width: `${loadPercent}%` }}
+                    />
                   </span>
                 </span>
                 {load?.conflictCount || load?.outsideAvailabilityCount ? (
