@@ -247,4 +247,5 @@ export const ACTIVITY_LABELS: Record<string, string> = {
   INVITE_USED: 'Invitation used',
   ANNOUNCEMENT_POSTED: 'Announcement posted',
   RELATIONSHIP_CHANGED: 'Connection changed',
+  SUBSCRIPTION_UPGRADED: 'Plan upgraded',
 };

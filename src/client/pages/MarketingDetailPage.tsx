@@ -10,6 +10,7 @@ import {
 } from '@/components/icons';
 import { Logo } from '@/components/Logo';
 import { LegalFooter } from '@/components/marketing/LegalFooter';
+import { PromoBanner } from '@/components/marketing/PromoBanner';
 import { useAuth } from '@/providers/AuthProvider';
 import { useEffect } from 'react';
 import { Link, Navigate, useParams } from 'react-router-dom';
@@ -312,6 +313,7 @@ export function MarketingDetailPage() {
 
   return (
     <div className="min-h-full bg-paper">
+      <PromoBanner variant="marketing" />
       <header className="border-b border-edge bg-paper">
         <div className="mx-auto flex w-full max-w-[1120px] flex-wrap items-center justify-between gap-y-2 px-5 py-3 sm:px-8">
           <Link to="/" aria-label="Atlas home">
@@ -453,6 +455,8 @@ function PricingContent({ signedIn }: { signedIn: boolean }) {
           </p>
         </div>
       </section>
+
+      <PromoBanner variant="marketing" className="mt-6 border border-mark/30 bg-mark/5" />
 
       <section className="mt-8 grid gap-4 lg:grid-cols-4 lg:items-stretch">
         {PRICING_PLANS.map((plan) => (

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import type { ReactNode } from 'react';
 import { ArrowLeft } from '@/components/icons';
 import { Logo } from '@/components/Logo';
+import { PromoBanner } from '@/components/marketing/PromoBanner';
 import { DRAFT_EASE } from '@/components/ui';
 
 /**
@@ -33,6 +34,7 @@ export function AuthLayout({
 }) {
   return (
     <div className="drafting-grid min-h-full">
+      <PromoBanner variant="marketing" />
       <div className="mx-auto flex min-h-screen w-full max-w-[520px] flex-col px-4 py-6 sm:px-6 sm:py-10">
         <header className="mb-6 flex items-center justify-between">
           <Link

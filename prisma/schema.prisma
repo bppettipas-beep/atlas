@@ -154,6 +154,7 @@ enum ActivityType {
   INVITE_USED
   ANNOUNCEMENT_POSTED
   RELATIONSHIP_CHANGED
+  SUBSCRIPTION_UPGRADED
 }
 
 enum ActivityVisibility {
@@ -241,6 +242,8 @@ model Company {
   subscriptionPlan   SubscriptionPlan   @default(STARTER)
   subscriptionStatus SubscriptionStatus @default(ACTIVE)
   subscriptionExpiresAt DateTime?
+  /// Set once a promo code has been redeemed, so the same company can't redeem twice.
+  promoCodeRedeemedAt DateTime?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

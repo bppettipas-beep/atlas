@@ -120,6 +120,62 @@ companiesRouter.patch(
   }),
 );
 
+const PROMO_CODE = 'ATLAS26';
+const PROMO_PLAN_DAYS = 30;
+
+const redeemPromoSchema = z.object({
+  code: z.string().trim().min(1).max(40),
+});
+
+companiesRouter.post(
+  '/current/redeem-promo',
+  requirePermission(PERMISSIONS.COMPANY_MANAGE),
+  validateBody(redeemPromoSchema),
+  asyncHandler(async (req, res) => {
+    const auth = currentAuth(req);
+    const input = req.body as z.infer<typeof redeemPromoSchema>;
+
+    if (input.code.trim().toUpperCase() !== PROMO_CODE) {
+      throw ApiError.badRequest('That code is not valid.', 'INVALID_PROMO_CODE');
+    }
+
+    const company = await prisma.company.findUniqueOrThrow({ where: { id: auth.companyId } });
+
+    if (company.promoCodeRedeemedAt) {
+      throw ApiError.conflict('This company has already redeemed a promo code.', 'PROMO_ALREADY_USED');
+    }
+    if (company.subscriptionPlan !== 'STARTER') {
+      throw ApiError.conflict(
+        'This company already has a paid plan, so this code does not apply.',
+        'ALREADY_PAID',
+      );
+    }
+
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + PROMO_PLAN_DAYS * 24 * 60 * 60 * 1_000);
+    const updated = await prisma.company.update({
+      where: { id: company.id },
+      data: {
+        subscriptionPlan: 'GROWTH',
+        subscriptionStatus: 'ACTIVE',
+        subscriptionExpiresAt: expiresAt,
+        promoCodeRedeemedAt: now,
+      },
+    });
+
+    await recordActivity({
+      companyId: auth.companyId,
+      type: 'SUBSCRIPTION_UPGRADED',
+      summary: `Redeemed code ${PROMO_CODE} for a free month of Growth`,
+      actorId: auth.membershipId,
+      visibility: 'MANAGERS',
+    });
+
+    emitToCompany(auth.companyId, 'company:updated', {});
+    res.json(serializeCompany(updated));
+  }),
+);
+
 /** Numbers behind the Home dashboard. */
 companiesRouter.get(
   '/current/summary',

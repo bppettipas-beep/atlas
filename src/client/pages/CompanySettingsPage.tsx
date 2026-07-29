@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Calendar, Clock, Plus, Trash } from '@/components/icons';
+import { Calendar, Clock, Megaphone, Plus, Trash } from '@/components/icons';
 import { PageBody, PageTransition } from '@/components/layout/AppShell';
 import { RanksPermissionsTab } from '@/components/settings/RanksPermissionsTab';
 import {
@@ -21,7 +21,7 @@ import {
 } from '@/components/ui';
 import { api, errorMessage } from '@/lib/api';
 import { useQuery } from '@/lib/useQuery';
-import { formatDateTime } from '@/lib/utils';
+import { formatDate, formatDateTime } from '@/lib/utils';
 import { useAuth, useSession } from '@/providers/AuthProvider';
 import type { CompanyDto, PersonSummary, TeamDto } from '@shared/types';
 
@@ -134,6 +134,17 @@ function CompanyTab({ canEdit, onSaved }: { canEdit: boolean; onSaved: () => voi
       {!canEdit && <Notice tone="info">Only the owner can change company details.</Notice>}
       {error && <InlineError message={error} />}
 
+      {query.data && (
+        <PlanSection
+          company={query.data}
+          canEdit={canEdit}
+          onRedeemed={() => {
+            query.refetch();
+            onSaved();
+          }}
+        />
+      )}
+
       <Sheet className="p-5">
         <RuledHead title="Details" className="mb-5" />
         <div className="space-y-4">
@@ -205,6 +216,91 @@ function CompanyTab({ canEdit, onSaved }: { canEdit: boolean; onSaved: () => voi
         )}
       </Sheet>
     </div>
+  );
+}
+
+const PLAN_LABELS: Record<CompanyDto['subscriptionPlan'], string> = {
+  STARTER: 'Starter',
+  GROWTH: 'Growth',
+  BUSINESS: 'Business',
+  ENTERPRISE: 'Enterprise',
+};
+
+function PlanSection({
+  company,
+  canEdit,
+  onRedeemed,
+}: {
+  company: CompanyDto;
+  canEdit: boolean;
+  onRedeemed: () => void;
+}) {
+  const toast = useToast();
+  const [code, setCode] = useState('');
+  const [redeeming, setRedeeming] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const isPaid = company.subscriptionPlan !== 'STARTER';
+
+  const redeem = async () => {
+    setRedeeming(true);
+    setError(null);
+    try {
+      await api.post('/companies/current/redeem-promo', { code });
+      setCode('');
+      onRedeemed();
+      toast.success('Code redeemed. Growth is free on this company for a month.');
+    } catch (caught) {
+      setError(errorMessage(caught));
+    } finally {
+      setRedeeming(false);
+    }
+  };
+
+  return (
+    <Sheet className="p-5">
+      <RuledHead title="Plan" className="mb-5" />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-[13px] font-medium text-ink">{PLAN_LABELS[company.subscriptionPlan]} plan</p>
+          <p className="mt-1 text-[12px] text-ink-3">
+            {company.subscriptionExpiresAt
+              ? `Active through ${formatDate(company.subscriptionExpiresAt)}`
+              : company.subscriptionPlan === 'STARTER'
+                ? 'The default plan — no payment on file.'
+                : 'Managed by Atlas.'}
+          </p>
+        </div>
+        <Chip className={isPaid ? 'border-done/35 text-done' : undefined}>
+          {company.subscriptionStatus === 'ACTIVE' ? 'Active' : 'Suspended'}
+        </Chip>
+      </div>
+
+      {canEdit && !isPaid && !company.promoCodeRedeemedAt && (
+        <div className="mt-5 border-t border-rule pt-4">
+          <div className="flex items-start gap-2 text-[12.5px] text-ink-2">
+            <Megaphone className="mt-[2px] shrink-0 text-[13px] text-mark" />
+            <span>Have a promo code? Redeem it here for a full free month of Growth.</span>
+          </div>
+          {error && <InlineError message={error} className="mt-3" />}
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Input
+              value={code}
+              onChange={(event) => setCode(event.target.value)}
+              placeholder="Promo code"
+              className="max-w-[200px] font-mono uppercase"
+            />
+            <Button
+              variant="primary"
+              loading={redeeming}
+              disabled={!code.trim()}
+              onClick={() => void redeem()}
+            >
+              Redeem
+            </Button>
+          </div>
+        </div>
+      )}
+    </Sheet>
   );
 }
 

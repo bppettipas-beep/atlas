@@ -91,6 +91,7 @@ export const ACTIVITY_TYPES = [
   'INVITE_USED',
   'ANNOUNCEMENT_POSTED',
   'RELATIONSHIP_CHANGED',
+  'SUBSCRIPTION_UPGRADED',
 ] as const;
 export type ActivityType = (typeof ACTIVITY_TYPES)[number];
 
@@ -108,6 +109,10 @@ export interface CompanyDto {
   timezone: string;
   logoUrl: string | null;
   createdAt: string;
+  subscriptionPlan: 'STARTER' | 'GROWTH' | 'BUSINESS' | 'ENTERPRISE';
+  subscriptionStatus: 'ACTIVE' | 'SUSPENDED';
+  subscriptionExpiresAt: string | null;
+  promoCodeRedeemedAt: string | null;
 }
 
 /**

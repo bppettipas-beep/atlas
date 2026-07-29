@@ -22,6 +22,8 @@ interface AuthContextValue {
   isOwner: boolean;
   isManager: boolean;
   isLeadership: boolean;
+  /** True once the company is on any plan above the default Starter tier. */
+  isPaidPlan: boolean;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -78,6 +80,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isOwner: session?.membership.permissions.includes('company.manage') ?? false,
       isManager: session?.membership.rank.key === 'manager',
       isLeadership: session?.membership.permissions.includes('activity.view') ?? false,
+      isPaidPlan: session ? session.company.subscriptionPlan !== 'STARTER' : false,
     }),
     [session, loading, load, signIn, signOut, switchCompany],
   );

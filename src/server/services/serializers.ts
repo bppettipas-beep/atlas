@@ -34,6 +34,10 @@ export function serializeCompany(company: any) {
     timezone: company.timezone,
     logoUrl: company.logoUrl ?? null,
     createdAt: company.createdAt.toISOString(),
+    subscriptionPlan: company.subscriptionPlan,
+    subscriptionStatus: company.subscriptionStatus,
+    subscriptionExpiresAt: iso(company.subscriptionExpiresAt),
+    promoCodeRedeemedAt: iso(company.promoCodeRedeemedAt),
   };
 }
 

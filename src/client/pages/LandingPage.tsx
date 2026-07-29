@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { ArrowRight } from '@/components/icons';
 import { Logo, LogoMark } from '@/components/Logo';
 import { LegalFooter } from '@/components/marketing/LegalFooter';
+import { PromoBanner } from '@/components/marketing/PromoBanner';
 import { DRAFT_EASE, LoadingState } from '@/components/ui';
 import { useAuth } from '@/providers/AuthProvider';
 
@@ -33,6 +34,7 @@ export function LandingPage() {
 
   return (
     <div className="min-h-full bg-paper">
+      <PromoBanner variant="marketing" />
       <header className="sticky top-0 z-30 border-b border-edge bg-paper/92 backdrop-blur-[3px]">
         <div className="mx-auto flex w-full max-w-[1120px] flex-wrap items-center justify-between gap-y-2 px-5 py-3 sm:px-10">
           <Logo markClassName="h-[25px] w-[25px]" wordClassName="text-[15px]" />

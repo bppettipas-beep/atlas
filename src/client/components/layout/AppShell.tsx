@@ -4,6 +4,7 @@ import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-do
 import { NotificationCenter } from './NotificationCenter';
 import { AtlasyButton, AtlasyPanel } from '@/components/assistant/AtlasyPanel';
 import { LogoMark } from '@/components/Logo';
+import { PromoBanner } from '@/components/marketing/PromoBanner';
 import {
   Activity,
   BookOpen,
@@ -352,6 +353,8 @@ export function AppShell() {
             <NotificationCenter />
           </header>
         )}
+
+        {!scheduleMode && <PromoBanner variant="app" />}
 
         <main className="min-h-0 flex-1 overflow-hidden">
           <Outlet />
