@@ -128,6 +128,37 @@ export async function createCompanyRanks(tx: Prisma.TransactionClient, companyId
   return ranks;
 }
 
+/**
+ * Repairs databases that applied the first rank migration before default
+ * grants were shipped. Owner can never legitimately have zero grants, so that
+ * state is an unambiguous migration marker and will not overwrite later edits.
+ */
+export async function repairCompanyPermissionFoundation(
+  tx: Prisma.TransactionClient,
+  companyId: string,
+): Promise<boolean> {
+  const ranks = await tx.rank.findMany({
+    where: { companyId, isSystem: true },
+    include: { _count: { select: { permissions: true } } },
+  });
+  const owner = ranks.find((rank) => rank.key === 'owner');
+  if (!owner || owner._count.permissions > 0) return false;
+
+  for (const rank of ranks) {
+    if (rank._count.permissions > 0 || !SYSTEM_RANKS.includes(rank.key as SystemRankKey)) continue;
+    const key = rank.key as SystemRankKey;
+    await tx.rankPermission.createMany({
+      data: defaultPermissionKeys(key).map((permissionKey) => ({
+        rankId: rank.id,
+        permissionKey,
+        scope: defaultScope(key, permissionKey),
+      })),
+      skipDuplicates: true,
+    });
+  }
+  return true;
+}
+
 export async function rankIdForLegacyRole(
   tx: Prisma.TransactionClient,
   companyId: string,

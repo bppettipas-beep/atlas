@@ -10,7 +10,10 @@ import {
 } from '../auth/tokens';
 import { ApiError } from '../http/errors';
 import { prisma } from '../prisma';
-import { requirePermission as assertPermission } from '../services/authorization';
+import {
+  repairCompanyPermissionFoundation,
+  requirePermission as assertPermission,
+} from '../services/authorization';
 
 export interface AuthContext {
   userId: string;
@@ -38,7 +41,10 @@ export function currentAuth(req: Request): AuthContext {
   return req.auth;
 }
 
-async function contextFromMembership(membershipId: string): Promise<AuthContext | null> {
+async function contextFromMembership(
+  membershipId: string,
+  repairAttempted = false,
+): Promise<AuthContext | null> {
   const membership = await prisma.membership.findUnique({
     where: { id: membershipId },
     include: {
@@ -54,6 +60,12 @@ async function contextFromMembership(membershipId: string): Promise<AuthContext 
     },
   });
   if (!membership || membership.status !== 'ACTIVE' || membership.deactivatedAt || !membership.rank) return null;
+  if (!repairAttempted && membership.rank.permissions.length === 0) {
+    const repaired = await prisma.$transaction((tx) =>
+      repairCompanyPermissionFoundation(tx, membership.companyId),
+    );
+    if (repaired) return contextFromMembership(membershipId, true);
+  }
   return {
     userId: membership.userId,
     membershipId: membership.id,

@@ -152,6 +152,22 @@ describe('ranks and permissions', () => {
     const worker = await joinWithCode(app, code);
     await worker.agent.get('/api/ranks').expect(403);
   });
+
+  it('repairs companies created before default rank grants shipped', async () => {
+    const owner = await signUpOwner(app);
+    const ranks = await prisma.rank.findMany({
+      where: { companyId: owner.session.company.id },
+      select: { id: true },
+    });
+    await prisma.rankPermission.deleteMany({
+      where: { rankId: { in: ranks.map((rank) => rank.id) } },
+    });
+
+    const session = await owner.agent.get('/api/auth/session');
+    expect(session.status).toBe(200);
+    expect(session.body.membership.permissions).toContain('ranks.manage');
+    await owner.agent.get('/api/ranks').expect(200);
+  });
 });
 
 /* ========================================================================== */
