@@ -13,6 +13,8 @@ import { LegalFooter } from '@/components/marketing/LegalFooter';
 import { PromoBanner } from '@/components/marketing/PromoBanner';
 import { MarketingAccountNav } from '@/components/marketing/MarketingAccountNav';
 import { useAuth } from '@/providers/AuthProvider';
+import { SUBSCRIPTION_PLANS, type SubscriptionPlanKey } from '@shared/plans';
+import type { AccountSessionDto } from '@shared/types';
 import { useEffect } from 'react';
 import { Link, Navigate, useParams } from 'react-router-dom';
 
@@ -27,6 +29,7 @@ const MARKETING_TABS = [
 
 const PRICING_PLANS = [
   {
+    key: 'STARTER',
     name: 'Starter',
     price: '$19',
     description: 'For a new business building its operating foundation.',
@@ -38,6 +41,7 @@ const PRICING_PLANS = [
     ],
   },
   {
+    key: 'GROWTH',
     name: 'Growth',
     price: '$49',
     featured: true,
@@ -51,6 +55,7 @@ const PRICING_PLANS = [
     ],
   },
   {
+    key: 'BUSINESS',
     name: 'Business',
     price: '$99',
     description: 'More control and insight for an established operation.',
@@ -58,6 +63,7 @@ const PRICING_PLANS = [
     features: ['Advanced permissions', 'Analytics', 'API access', 'Priority support'],
   },
   {
+    key: 'ENTERPRISE',
     name: 'Enterprise',
     price: 'Custom',
     description: 'A tailored Atlas rollout for complex organizations.',
@@ -376,7 +382,7 @@ export function MarketingDetailPage() {
         className={`mx-auto w-full px-5 py-14 sm:px-8 sm:py-20 ${section === 'pricing' ? 'max-w-[1180px]' : 'max-w-[960px]'}`}
       >
         {section === 'pricing' ? (
-          <PricingContent signedIn={Boolean(account)} />
+          <PricingContent account={account} />
         ) : (
           <>
             <div className="border-l-2 border-ink pl-5 sm:pl-7">
@@ -453,8 +459,11 @@ export function MarketingDetailPage() {
   );
 }
 
-function PricingContent({ signedIn }: { signedIn: boolean }) {
-  const actionHref = signedIn ? '/account-settings' : '/signup/owner';
+function PricingContent({ account }: { account: AccountSessionDto | null }) {
+  const currentPlanIndex = account?.plan ? SUBSCRIPTION_PLANS.indexOf(account.plan) : -1;
+  const footerActionHref = account ? '/account-settings' : '/signup/owner';
+  const footerActionLabel = account?.plan ? 'Manage plan' : 'Get started';
+
   return (
     <>
       <section className="relative overflow-hidden border border-edge bg-sheet px-6 py-10 sm:px-10 sm:py-14">
@@ -474,60 +483,90 @@ function PricingContent({ signedIn }: { signedIn: boolean }) {
       <PromoBanner variant="marketing" className="mt-6 border border-mark/30 bg-mark/5" />
 
       <section className="mt-8 grid gap-4 lg:grid-cols-4 lg:items-stretch">
-        {PRICING_PLANS.map((plan) => (
-          <article
-            key={plan.name}
-            className={`relative flex flex-col border p-6 sm:p-7 ${plan.featured ? 'border-ink bg-ink text-white shadow-[8px_8px_0_0_var(--color-mark)]' : 'border-edge bg-paper'}`}
-          >
-            {plan.featured && (
-              <span className="absolute -top-3 left-5 bg-mark px-3 py-1 font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-white">
-                Most popular
-              </span>
-            )}
-            <p className={`edge-sm ${plan.featured ? 'text-white/60' : 'text-ink-4'}`}>
-              {plan.name}
-            </p>
-            <div className="mt-5 flex items-baseline gap-1.5">
-              <span
-                className={`display text-[3.1rem] leading-none ${plan.featured ? 'text-white' : ''}`}
-              >
-                {plan.price}
-              </span>
-              <span className={`text-[13px] ${plan.featured ? 'text-white/65' : 'text-ink-3'}`}>
-                {plan.price === 'Custom' ? 'pricing' : '/ month'}
-              </span>
-            </div>
-            <p
-              className={`mt-5 min-h-[3.2rem] text-[13.5px] leading-relaxed ${plan.featured ? 'text-white/75' : 'text-ink-3'}`}
+        {PRICING_PLANS.map((plan) => {
+          const planIndex = SUBSCRIPTION_PLANS.indexOf(plan.key as SubscriptionPlanKey);
+          const unavailable = currentPlanIndex >= 0 && planIndex <= currentPlanIndex;
+          const isCurrent = currentPlanIndex === planIndex;
+          const actionLabel =
+            currentPlanIndex < 0
+              ? 'Subscribe'
+              : unavailable
+                ? isCurrent
+                  ? 'Current plan'
+                  : 'Included'
+                : 'Upgrade';
+          const actionHref = account
+            ? `/account-settings?plan=${plan.key}`
+            : `/signup/owner?plan=${plan.key}`;
+
+          return (
+            <article
+              key={plan.name}
+              className={`relative flex flex-col border p-6 sm:p-7 ${plan.featured ? 'border-ink bg-ink text-white shadow-[8px_8px_0_0_var(--color-mark)]' : 'border-edge bg-paper'}`}
             >
-              {plan.description}
-            </p>
-            <p
-              className={`mt-6 border-y py-3 text-[13px] font-semibold ${plan.featured ? 'border-white/20 text-white' : 'border-edge text-ink'}`}
-            >
-              {plan.capacity}
-            </p>
-            <ul className="mt-6 space-y-3">
-              {plan.features.map((feature) => (
-                <li
-                  key={feature}
-                  className={`flex items-start gap-2.5 text-[13px] leading-snug ${plan.featured ? 'text-white/85' : 'text-ink-2'}`}
+              {plan.featured && (
+                <span className="absolute -top-3 left-5 bg-mark px-3 py-1 font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-white">
+                  Most popular
+                </span>
+              )}
+              <p className={`edge-sm ${plan.featured ? 'text-white/60' : 'text-ink-4'}`}>
+                {plan.name}
+              </p>
+              <div className="mt-5 flex items-baseline gap-1.5">
+                <span
+                  className={`display text-[3.1rem] leading-none ${plan.featured ? 'text-white' : ''}`}
                 >
-                  <Check
-                    className={`mt-[2px] shrink-0 text-[13px] ${plan.featured ? 'text-mark' : 'text-ink'}`}
-                  />
-                  {feature}
-                </li>
-              ))}
-            </ul>
-            <Link
-              to={actionHref}
-              className={`mt-8 inline-flex h-10 items-center justify-center rounded-sm px-4 text-[13px] font-medium transition-colors ${plan.featured ? 'bg-white text-ink hover:bg-paper' : 'bg-ink text-white hover:bg-ink-2'}`}
-            >
-              {signedIn ? 'Open Atlas' : `Choose ${plan.name}`}
-            </Link>
-          </article>
-        ))}
+                  {plan.price}
+                </span>
+                <span className={`text-[13px] ${plan.featured ? 'text-white/65' : 'text-ink-3'}`}>
+                  {plan.price === 'Custom' ? 'pricing' : '/ month'}
+                </span>
+              </div>
+              <p
+                className={`mt-5 min-h-[3.2rem] text-[13.5px] leading-relaxed ${plan.featured ? 'text-white/75' : 'text-ink-3'}`}
+              >
+                {plan.description}
+              </p>
+              <p
+                className={`mt-6 border-y py-3 text-[13px] font-semibold ${plan.featured ? 'border-white/20 text-white' : 'border-edge text-ink'}`}
+              >
+                {plan.capacity}
+              </p>
+              <ul className="mt-6 space-y-3">
+                {plan.features.map((feature) => (
+                  <li
+                    key={feature}
+                    className={`flex items-start gap-2.5 text-[13px] leading-snug ${plan.featured ? 'text-white/85' : 'text-ink-2'}`}
+                  >
+                    <Check
+                      className={`mt-[2px] shrink-0 text-[13px] ${plan.featured ? 'text-mark' : 'text-ink'}`}
+                    />
+                    {feature}
+                  </li>
+                ))}
+              </ul>
+              {unavailable ? (
+                <span
+                  aria-disabled="true"
+                  className={`mt-8 inline-flex h-10 cursor-not-allowed items-center justify-center rounded-sm border px-4 text-[13px] font-medium ${
+                    plan.featured
+                      ? 'border-white/20 bg-white/10 text-white/55'
+                      : 'border-edge bg-paper-deep text-ink-4'
+                  }`}
+                >
+                  {actionLabel}
+                </span>
+              ) : (
+                <Link
+                  to={actionHref}
+                  className={`mt-8 inline-flex h-10 items-center justify-center rounded-sm px-4 text-[13px] font-medium transition-colors ${plan.featured ? 'bg-white text-ink hover:bg-paper' : 'bg-ink text-white hover:bg-ink-2'}`}
+                >
+                  {actionLabel}
+                </Link>
+              )}
+            </article>
+          );
+        })}
       </section>
 
       <section className="mt-16 grid gap-8 border-t border-edge pt-10 md:grid-cols-[0.75fr_1.25fr]">
@@ -561,10 +600,10 @@ function PricingContent({ signedIn }: { signedIn: boolean }) {
           the system your company already relies on.
         </p>
         <Link
-          to={actionHref}
+          to={footerActionHref}
           className="group inline-flex h-11 items-center gap-2 rounded-sm bg-ink px-5 text-[14px] font-medium text-white hover:bg-ink-2"
         >
-          {signedIn ? 'Open your panel' : 'Get started'}{' '}
+          {footerActionLabel}{' '}
           <ArrowRight className="text-[14px] transition-transform group-hover:translate-x-1" />
         </Link>
       </div>
