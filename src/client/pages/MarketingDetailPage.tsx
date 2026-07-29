@@ -1,3 +1,6 @@
+import { motion } from 'framer-motion';
+import { useEffect } from 'react';
+import { Link, Navigate, useParams } from 'react-router-dom';
 import {
   ArrowRight,
   BookOpen,
@@ -8,19 +11,9 @@ import {
   ShieldCheck,
   TreeStructure,
 } from '@/components/icons';
-import { Logo } from '@/components/Logo';
+import { MarketingFooter, MarketingHeader } from '@/components/marketing/MarketingChrome';
+import { DRAFT_EASE } from '@/components/ui';
 import { useAuth } from '@/providers/AuthProvider';
-import { useEffect } from 'react';
-import { Link, Navigate, useParams } from 'react-router-dom';
-
-const MARKETING_TABS = [
-  ['problem', 'Problem'],
-  ['product', 'Product'],
-  ['roles', 'Teams'],
-  ['details', 'Details'],
-  ['pricing', 'Pricing'],
-  ['getting-started', 'Start'],
-] as const;
 
 const PRICING_PLANS = [
   {
@@ -36,7 +29,12 @@ const PRICING_PLANS = [
     featured: true,
     description: 'The full operating picture for a team finding its rhythm.',
     capacity: 'Up to 50 employees',
-    features: ['Unlimited managers', 'Atlasy AI included', 'Scheduling and Knowledge Base', 'Organization Map and Reporting'],
+    features: [
+      'Unlimited managers',
+      'Atlasy AI included',
+      'Scheduling and Knowledge Base',
+      'Organization Map and Reporting',
+    ],
   },
   {
     name: 'Business',
@@ -50,17 +48,44 @@ const PRICING_PLANS = [
     price: 'Custom',
     description: 'A tailored Atlas rollout for complex organizations.',
     capacity: 'Built around your company',
-    features: ['Custom pricing', 'Tailored onboarding', 'Flexible company scale', 'Priority support'],
+    features: [
+      'Custom pricing',
+      'Tailored onboarding',
+      'Flexible company scale',
+      'Priority support',
+    ],
   },
 ];
+
+/** Answers to the things people actually ask, all of them true of the build. */
+const PRICING_FAQ = [
+  [
+    'Can one person work for more than one company?',
+    'Yes. An account can hold a membership in several companies and switch between them, with a separate role in each.',
+  ],
+  [
+    'Can we add someone who never uses a computer?',
+    'Yes. A person can be added by hand with no login at all. They can be assigned work, put on the map and given a manager exactly like anyone else.',
+  ],
+  [
+    'Can a worker see everything in the company?',
+    'No. Every rule is enforced by the server, not by hiding buttons. A worker sees their own work and their teams’; the activity feed and invitations are closed to them entirely.',
+  ],
+  [
+    'Where does our data actually live?',
+    'In PostgreSQL, as the single source of truth. No third-party backend sits in the middle, so the company record is one you can point at, back up and take with you.',
+  ],
+] as const;
 
 const PAGES = {
   problem: {
     index: '01',
+    sheet: 'ATL-01',
     label: 'The problem',
     title: 'Stop running the company from memory.',
     intro:
       'Atlas gives the work, the people, and the way work gets done a shared home. The goal is not more software. It is fewer blind spots.',
+    closer: 'Every gap above is somebody remembering to tell somebody else.',
     points: [
       ['See responsibility', 'Every person has a place, a role, a team, and clear ownership.'],
       [
@@ -90,10 +115,12 @@ const PAGES = {
   },
   product: {
     index: '02',
+    sheet: 'ATL-02',
     label: 'What Atlas does',
     title: 'The connected picture of your business.',
     intro:
       'Atlas is built around the questions small teams ask all day: who is responsible, what needs doing, when is it happening, and how should it be done?',
+    closer: 'Four surfaces, one record underneath them.',
     points: [
       [
         'Organisation map',
@@ -130,10 +157,12 @@ const PAGES = {
   },
   roles: {
     index: '03',
+    sheet: 'ATL-03',
     label: 'Two views, one company',
     title: 'The right amount of information for every role.',
     intro:
       'Owners and managers need the whole operating picture. Workers need a calm, focused view of the work in front of them. Atlas gives both groups a view designed for their job.',
+    closer: 'The same data, read from two different chairs.',
     points: [
       [
         'Owners and managers',
@@ -166,10 +195,12 @@ const PAGES = {
   },
   details: {
     index: '04',
+    sheet: 'ATL-04',
     label: 'Everything else',
     title: 'The details that make a system stick.',
     intro:
       'Good operations software earns trust in the small moments: a notification arriving at the right time, a photo staying with the job, or a recurring task appearing without anyone remembering it.',
+    closer: 'Small mechanics, compounding into a record you can trust.',
     points: [
       [
         'Live updates',
@@ -202,63 +233,24 @@ const PAGES = {
   },
   pricing: {
     index: '05',
+    sheet: 'ATL-05',
     label: 'Pricing',
-    title: 'A clear price for a clearer business.',
+    title: 'Plans that grow with the way you work.',
     intro:
-      'Choose the level that suits the way your company works today. Every plan starts with the core Atlas structure: people, work, knowledge, and real-time updates.',
-    points: [
-      ['Base — $200 / month', 'Organisation map, people, work, knowledge, and real-time updates.'],
-      [
-        'Growth — $500 / month',
-        'Everything in Base, plus manager workflows, approvals, recurring work, and activity history.',
-      ],
-      [
-        'Scale — $1,000 / month',
-        'Everything in Growth, multi-company support, and priority onboarding support.',
-      ],
-    ],
-    inPractice: [
-      [
-        'Start with the plan you need',
-        'Every plan begins with the shared operating picture: people, work, knowledge, and live updates in one place.',
-      ],
-      [
-        'Grow without replacing the system',
-        'As routines and management needs increase, the same company record can support approvals, recurring work, and richer coordination.',
-      ],
-      [
-        'Know what you are paying for',
-        'The price reflects the level of operational support, not a maze of add-ons that makes planning difficult.',
-      ],
-    ],
-    // Pricing copy lives here as data so the page stays easy to update.
-    updatedIntro:
       'Choose the Atlas plan that fits your company today, then grow into the next level when your operation needs more room and control.',
-    updatedPoints: [
-      ['Starter — $19 / month', 'Up to 10 employees, everything included, and perfect for startups.'],
-      [
-        'Growth — $49 / month',
-        'Up to 50 employees, unlimited managers, Atlasy AI, Scheduling, Knowledge Base, Organization Map, and Reporting.',
-      ],
-      [
-        'Business — $99 / month',
-        'Up to 150 employees, advanced permissions, analytics, API access, and priority support.',
-      ],
-      ['Enterprise — custom pricing', 'A tailored plan, onboarding approach, and company scale for complex organizations.'],
-    ],
-    updatedInPractice: [
-      ['Start with the plan you need', 'Starter gives a new company a clear, affordable starting point, while Growth adds the operational tools most teams need every day.'],
-      ['Grow without replacing the system', 'Business and Enterprise add deeper control, analytics, integration options, and support as the operation becomes more complex.'],
-      ['Know what you are paying for', 'Choose the employee capacity and operational support your company needs, without a maze of add-ons.'],
-    ],
+    closer: '',
+    points: [],
+    inPractice: [],
     icon: Calendar,
   },
   'getting-started': {
     index: '06',
+    sheet: 'ATL-06',
     label: 'Getting started',
     title: 'Set up the operating picture in an afternoon.',
     intro:
       'Atlas becomes useful quickly because it starts with the things you already know: your company, your people, and the first piece of work that matters.',
+    closer: 'Three steps, and the picture starts drawing itself.',
     points: [
       ['Create your company', 'Set up the company and become its owner.'],
       [
@@ -288,12 +280,6 @@ const PAGES = {
   },
 };
 
-Object.assign(PAGES.pricing, {
-  intro: PAGES.pricing.updatedIntro,
-  points: PAGES.pricing.updatedPoints,
-  inPractice: PAGES.pricing.updatedInPractice,
-});
-
 export function MarketingDetailPage() {
   const { section } = useParams();
   const { session } = useAuth();
@@ -306,211 +292,286 @@ export function MarketingDetailPage() {
   useEffect(() => {
     window.scrollTo(0, 0);
   }, [section]);
+
   if (!page) return <Navigate to="/" replace />;
   const Icon = page.icon;
+  const isPricing = section === 'pricing';
 
   return (
-    <div className="min-h-full bg-paper">
-      <header className="border-b border-edge bg-paper">
-        <div className="mx-auto flex w-full max-w-[1120px] flex-wrap items-center justify-between gap-y-2 px-5 py-3 sm:px-8">
-          <Link to="/" aria-label="Atlas home">
-            <Logo markClassName="h-[24px] w-[24px]" wordClassName="text-[15px]" />
-          </Link>
-          <nav
-            className="order-3 flex w-full gap-1 overflow-x-auto pb-0.5 md:order-none md:w-auto md:overflow-visible"
-            aria-label="Explore Atlas"
-          >
-            {MARKETING_TABS.map(([tabSection, label]) => (
-              <Link
-                key={tabSection}
-                to={`/explore/${tabSection}`}
-                className={`shrink-0 border-b px-2 py-1.5 text-[12px] font-medium transition-colors ${
-                  tabSection === section
-                    ? 'border-ink text-ink'
-                    : 'border-transparent text-ink-3 hover:border-ink hover:text-ink'
-                }`}
-              >
-                {label}
-              </Link>
-            ))}
-          </nav>
-          <div className="flex items-center gap-2">
-            {session ? (
-              <Link
-                to="/app"
-                className="inline-flex h-8 items-center rounded-sm bg-ink px-3.5 text-[13px] font-medium text-white transition-colors hover:bg-ink-2"
-              >
-                Open panel
-              </Link>
-            ) : (
-              <>
-                <Link
-                  to="/signin"
-                  className="px-2 py-1.5 text-[13px] font-medium text-ink-2 transition-colors hover:text-ink"
-                >
-                  Sign in
-                </Link>
-                <Link
-                  to="/start"
-                  className="inline-flex h-8 items-center rounded-sm bg-ink px-3.5 text-[13px] font-medium text-white transition-colors hover:bg-ink-2"
-                >
-                  Sign up
-                </Link>
-              </>
-            )}
+    <div className="sheet-set min-h-full bg-paper">
+      <MarketingHeader current={section} />
+
+      <main>
+        {/* ------------------------------------------------------------ hero */}
+        <section className="drafting-grid border-b border-edge">
+          <div className="mx-auto w-full max-w-[1180px] px-5 sm:px-8">
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, ease: DRAFT_EASE }}
+              className="ticked relative border-x border-edge bg-paper/40 px-5 py-16 sm:px-10 sm:py-24"
+            >
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                <span className="font-mono text-[11px] text-ink-2">SHEET {page.index}</span>
+                <span aria-hidden className="h-px w-8 bg-edgeStrong" />
+                <p className="edge-sm">{page.label}</p>
+                <Icon aria-hidden className="ml-auto text-[26px] text-ink-3" />
+              </div>
+
+              <h1 className="display mt-8 max-w-[15ch] text-[2.7rem] leading-[0.95] sm:text-[4.6rem]">
+                {page.title}
+              </h1>
+
+              <div className="mt-9 flex max-w-[62ch] items-start gap-4">
+                <span aria-hidden className="mt-[11px] flex shrink-0 items-center">
+                  <span className="h-[7px] w-[7px] bg-ink" />
+                  <span className="h-px w-12 bg-edgeStrong" />
+                </span>
+                <p className="text-[16px] leading-relaxed text-ink-2">{page.intro}</p>
+              </div>
+            </motion.div>
           </div>
-        </div>
-      </header>
-      <main className={`mx-auto w-full px-5 py-14 sm:px-8 sm:py-20 ${section === 'pricing' ? 'max-w-[1180px]' : 'max-w-[960px]'}`}>
-        {section === 'pricing' ? (
+        </section>
+
+        {isPricing ? (
           <PricingContent signedIn={Boolean(session)} />
         ) : (
           <>
-            <div className="border-l-2 border-ink pl-5 sm:pl-7">
-          <p className="edge">
-            {page.index} · {page.label}
-          </p>
-          <Icon className="mt-8 text-[28px] text-ink-3" />
-          <h1 className="display mt-5 max-w-[16ch] text-[2.7rem] leading-[0.98] sm:text-[4.2rem]">
-            {page.title}
-          </h1>
-          <p className="mt-7 max-w-[58ch] text-[16px] leading-relaxed text-ink-2">{page.intro}</p>
-        </div>
-            <section className="mt-14 border-t border-edge">
-          {page.points.map(([title, body], index) => (
-            <article
-              key={title}
-              className="grid gap-3 border-b border-rule py-7 sm:grid-cols-[52px_1fr]"
-            >
-              <span className="font-mono text-[11px] text-ink-4">
-                {String(index + 1).padStart(2, '0')}
-              </span>
-              <div>
-                <h2 className="title text-[18px]">{title}</h2>
-                <p className="mt-2 max-w-[56ch] text-[14px] leading-relaxed text-ink-3">{body}</p>
+            {/* ------------------------------------------------------- points */}
+            <section className="border-b border-edge">
+              <div className="mx-auto w-full max-w-[1180px] px-5 py-14 sm:px-8 sm:py-20">
+                <ol>
+                  {page.points.map(([title, body], index) => (
+                    <li
+                      key={title}
+                      className="grid items-baseline gap-x-8 gap-y-2 border-b border-rule py-7 last:border-b-0 sm:grid-cols-[4.5rem_minmax(0,20ch)_1fr]"
+                    >
+                      <span className="font-mono text-[1.6rem] font-light leading-none text-ink-3 sm:text-[2rem]">
+                        {String(index + 1).padStart(2, '0')}
+                      </span>
+                      <h2 className="title text-[19px] sm:text-[21px]">{title}</h2>
+                      <p className="max-w-[62ch] text-[14.5px] leading-relaxed text-ink-2">
+                        {body}
+                      </p>
+                    </li>
+                  ))}
+                </ol>
               </div>
-            </article>
-          ))}
             </section>
-            <section className="mt-16">
-          <div className="max-w-[58ch]">
-            <p className="edge">In practice</p>
-            <h2 className="display mt-4 max-w-[18ch] text-[2rem] leading-[1.02] sm:text-[2.8rem]">
-              Made for the way a real company moves.
-            </h2>
-          </div>
-          <div className="mt-10 grid border-l border-t border-edge md:grid-cols-3">
-            {(page.inPractice ?? []).map(([title, body], index) => (
-              <article key={title} className="border-b border-r border-edge p-6 sm:p-7">
-                <span className="font-mono text-[11px] text-ink-4">
-                  {String(index + 1).padStart(2, '0')}
-                </span>
-                <h3 className="title mt-8 text-[17px]">{title}</h3>
-                <p className="mt-3 text-[14px] leading-relaxed text-ink-3">{body}</p>
-              </article>
-            ))}
-          </div>
+
+            {/* --------------------------------------------- the negative print */}
+            <section className="negative drafting-grid-negative border-b border-ink">
+              <div className="mx-auto w-full max-w-[1180px] px-5 py-16 sm:px-8 sm:py-24">
+                <div className="ticked ticked-negative relative border border-white/15 p-6 sm:p-10">
+                  <div className="flex items-center gap-3">
+                    <span className="font-mono text-[11px] text-white/45">IN PRACTICE</span>
+                    <motion.span
+                      aria-hidden
+                      initial={{ scaleX: 0 }}
+                      whileInView={{ scaleX: 1 }}
+                      viewport={{ once: true, amount: 0.6 }}
+                      transition={{ duration: 0.6, ease: DRAFT_EASE }}
+                      style={{ originX: 0 }}
+                      className="h-px flex-1 bg-white/25"
+                    />
+                  </div>
+
+                  <h2 className="display mt-7 max-w-[20ch] text-[1.9rem] leading-[1.02] sm:text-[3rem]">
+                    {page.closer}
+                  </h2>
+
+                  <div className="border-white/12 bg-white/12 mt-10 grid gap-px border md:grid-cols-3">
+                    {page.inPractice.map(([title, body], index) => (
+                      <article key={title} className="bg-ink p-6 sm:p-7">
+                        <span className="font-mono text-[11px] text-white/40">
+                          {String(index + 1).padStart(2, '0')}
+                        </span>
+                        <h3 className="title mt-7 text-[17px]">{title}</h3>
+                        <p className="mt-3 text-[13.5px] leading-relaxed text-white/70">{body}</p>
+                      </article>
+                    ))}
+                  </div>
+                </div>
+              </div>
             </section>
-            <div className="mt-12 flex flex-wrap items-center gap-3">
-          <Link
-            to={session ? '/app' : '/start'}
-            className="group inline-flex h-11 items-center gap-2 rounded-sm bg-ink px-5 text-[14px] font-medium text-white transition-colors hover:bg-ink-2"
-          >
-            {session ? 'Open your panel' : 'Get started'}{' '}
-            <ArrowRight className="text-[14px] transition-transform group-hover:translate-x-1" />
-          </Link>
-          <Link
-            to="/"
-            className="inline-flex h-11 items-center rounded-sm border border-edge bg-sheet px-5 text-[14px] font-medium text-ink hover:bg-paper"
-          >
-            Back to overview
-          </Link>
-            </div>
+
+            <ClosingActions signedIn={Boolean(session)} />
           </>
         )}
       </main>
+
+      <MarketingFooter sheet={page.sheet} title={page.label} />
     </div>
+  );
+}
+
+function ClosingActions({ signedIn }: { signedIn: boolean }) {
+  return (
+    <section className="border-b border-edge">
+      <div className="mx-auto flex w-full max-w-[1180px] flex-wrap items-center gap-3 px-5 py-12 sm:px-8">
+        <Link
+          to={signedIn ? '/app' : '/start'}
+          className="group inline-flex h-12 items-center gap-2.5 rounded-sm bg-ink px-6 text-[14.5px] font-medium text-white transition-colors hover:bg-ink-2"
+        >
+          {signedIn ? 'Open your panel' : 'Get started'}
+          <ArrowRight className="text-[14px] transition-transform duration-200 ease-draft group-hover:translate-x-1" />
+        </Link>
+        <Link
+          to="/"
+          className="inline-flex h-12 items-center rounded-sm border border-edge bg-sheet px-6 text-[14.5px] font-medium text-ink transition-colors hover:border-edgeStrong hover:bg-paper"
+        >
+          Back to overview
+        </Link>
+      </div>
+    </section>
   );
 }
 
 function PricingContent({ signedIn }: { signedIn: boolean }) {
   const actionHref = signedIn ? '/app' : '/start';
+
   return (
     <>
-      <section className="relative overflow-hidden border border-edge bg-sheet px-6 py-10 sm:px-10 sm:py-14">
-        <div className="pointer-events-none absolute -right-16 -top-20 h-64 w-64 rounded-full border-[28px] border-mark/15" />
-        <div className="relative max-w-[720px]">
-          <p className="edge text-mark">05 · Pricing</p>
-          <h1 className="display mt-5 max-w-[14ch] text-[2.8rem] leading-[0.95] sm:text-[4.5rem]">
-            Plans that grow with the way you work.
-          </h1>
-          <p className="mt-7 max-w-[58ch] text-[16px] leading-relaxed text-ink-2">
-            Start with the space your team needs today. Every plan is clear, monthly, and built around running a better business—not decoding an add-on list.
+      {/* ---------------------------------------------------------- the plans */}
+      <section className="border-b border-edge">
+        <div className="mx-auto w-full max-w-[1180px] px-5 py-14 sm:px-8 sm:py-20">
+          {/* One hairline grid rather than four floating cards: the plans are a
+              comparison, and a comparison wants a shared rule between columns. */}
+          <div className="grid gap-px border border-edge bg-edge lg:grid-cols-4">
+            {PRICING_PLANS.map((plan) => (
+              <article
+                key={plan.name}
+                className={`flex flex-col p-6 sm:p-7 ${
+                  plan.featured ? 'negative ticked ticked-negative relative' : 'bg-paper'
+                }`}
+              >
+                <div className="flex items-baseline justify-between gap-2">
+                  <p className="edge-sm">{plan.name}</p>
+                  {/* White, not `mark`. The annotation blue is specified
+                      against the paper ground and only reaches 3.2:1 on ink,
+                      so on the negative print it cannot carry text. */}
+                  {plan.featured && (
+                    <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-white">
+                      Most chosen
+                    </span>
+                  )}
+                </div>
+
+                <div className="figure-rule mt-5">
+                  <div className="flex items-baseline gap-1.5">
+                    {/* A price is a figure and sets in the mono. "Custom" is a
+                        word, so it sets in the display face rather than
+                        wearing the mono as a costume. */}
+                    <span
+                      className={`leading-none ${
+                        plan.price === 'Custom'
+                          ? 'display text-[2.1rem]'
+                          : 'font-mono text-[2.9rem] font-light'
+                      } ${plan.featured ? 'text-white' : 'text-ink'}`}
+                    >
+                      {plan.price}
+                    </span>
+                    <span
+                      className={`text-[12.5px] ${plan.featured ? 'text-white/60' : 'text-ink-2'}`}
+                    >
+                      {plan.price === 'Custom' ? '' : '/ month'}
+                    </span>
+                  </div>
+                </div>
+
+                <p
+                  className={`mt-4 min-h-[3.4rem] text-[13.5px] leading-relaxed ${
+                    plan.featured ? 'text-white/70' : 'text-ink-2'
+                  }`}
+                >
+                  {plan.description}
+                </p>
+
+                <p
+                  className={`mt-5 border-y py-3 text-[13px] font-semibold ${
+                    plan.featured ? 'border-white/20 text-white' : 'border-rule text-ink'
+                  }`}
+                >
+                  {plan.capacity}
+                </p>
+
+                <ul className="mt-6 space-y-3">
+                  {plan.features.map((feature) => (
+                    <li
+                      key={feature}
+                      className={`flex items-start gap-2.5 text-[13px] leading-snug ${
+                        plan.featured ? 'text-white/85' : 'text-ink-2'
+                      }`}
+                    >
+                      <Check
+                        aria-hidden
+                        className={`mt-[2px] shrink-0 text-[13px] ${
+                          plan.featured ? 'text-white/50' : 'text-ink-3'
+                        }`}
+                      />
+                      {feature}
+                    </li>
+                  ))}
+                </ul>
+
+                <Link
+                  to={actionHref}
+                  className={`mt-8 inline-flex h-11 items-center justify-center rounded-sm px-4 text-[13.5px] font-medium transition-colors ${
+                    plan.featured
+                      ? 'bg-white text-ink hover:bg-paper'
+                      : 'border border-edge bg-sheet text-ink hover:border-edgeStrong hover:bg-paper'
+                  }`}
+                >
+                  {`Buy ${plan.name}`}
+                </Link>
+              </article>
+            ))}
+          </div>
+
+          <p className="mt-5 max-w-[68ch] text-[13.5px] leading-relaxed text-ink-2">
+            Every plan starts monthly and includes the shared operating picture: people, work,
+            knowledge and live updates. Move up when your team needs more room — without replacing
+            the system your company already relies on.
           </p>
         </div>
       </section>
 
-      <section className="mt-8 grid gap-4 lg:grid-cols-4 lg:items-stretch">
-        {PRICING_PLANS.map((plan) => (
-          <article
-            key={plan.name}
-            className={`relative flex flex-col border p-6 sm:p-7 ${plan.featured ? 'border-ink bg-ink text-white shadow-[8px_8px_0_0_var(--color-mark)]' : 'border-edge bg-paper'}`}
-          >
-            {plan.featured && (
-              <span className="absolute -top-3 left-5 bg-mark px-3 py-1 font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-white">
-                Most popular
-              </span>
-            )}
-            <p className={`edge-sm ${plan.featured ? 'text-white/60' : 'text-ink-4'}`}>{plan.name}</p>
-            <div className="mt-5 flex items-baseline gap-1.5">
-              <span className={`display text-[3.1rem] leading-none ${plan.featured ? 'text-white' : ''}`}>
-                {plan.price}
-              </span>
-              <span className={`text-[13px] ${plan.featured ? 'text-white/65' : 'text-ink-3'}`}>{plan.price === 'Custom' ? 'pricing' : '/ month'}</span>
+      {/* -------------------------------------------------------------- FAQ */}
+      <section className="border-b border-edge">
+        <div className="mx-auto w-full max-w-[1180px] px-5 py-14 sm:px-8 sm:py-20">
+          <div className="grid gap-10 lg:grid-cols-[0.8fr_1.2fr] lg:gap-16">
+            <div>
+              <h2 className="display max-w-[13ch] text-[2rem] leading-[1.02] sm:text-[2.7rem]">
+                Before you pick a plan.
+              </h2>
+              <p className="mt-6 max-w-[40ch] text-[14.5px] leading-relaxed text-ink-2">
+                The questions that decide whether Atlas fits the way your company already works.
+              </p>
             </div>
-            <p className={`mt-5 min-h-[3.2rem] text-[13.5px] leading-relaxed ${plan.featured ? 'text-white/75' : 'text-ink-3'}`}>{plan.description}</p>
-            <p className={`mt-6 border-y py-3 text-[13px] font-semibold ${plan.featured ? 'border-white/20 text-white' : 'border-edge text-ink'}`}>{plan.capacity}</p>
-            <ul className="mt-6 space-y-3">
-              {plan.features.map((feature) => (
-                <li key={feature} className={`flex items-start gap-2.5 text-[13px] leading-snug ${plan.featured ? 'text-white/85' : 'text-ink-2'}`}>
-                  <Check className={`mt-[2px] shrink-0 text-[13px] ${plan.featured ? 'text-mark' : 'text-ink'}`} />
-                  {feature}
-                </li>
+
+            <dl>
+              {PRICING_FAQ.map(([question, answer], index) => (
+                <div
+                  key={question}
+                  className="grid gap-x-6 gap-y-2 border-b border-rule py-6 first:border-t first:border-rule sm:grid-cols-[3rem_1fr]"
+                >
+                  <span aria-hidden className="font-mono text-[11px] text-ink-2">
+                    {String(index + 1).padStart(2, '0')}
+                  </span>
+                  <div>
+                    <dt className="title text-[16px]">{question}</dt>
+                    <dd className="mt-2 max-w-[62ch] text-[14px] leading-relaxed text-ink-2">
+                      {answer}
+                    </dd>
+                  </div>
+                </div>
               ))}
-            </ul>
-            <Link to={actionHref} className={`mt-8 inline-flex h-10 items-center justify-center rounded-sm px-4 text-[13px] font-medium transition-colors ${plan.featured ? 'bg-white text-ink hover:bg-paper' : 'bg-ink text-white hover:bg-ink-2'}`}>
-              {signedIn ? 'Open Atlas' : `Choose ${plan.name}`}
-            </Link>
-          </article>
-        ))}
-      </section>
-
-      <section className="mt-16 grid gap-8 border-t border-edge pt-10 md:grid-cols-[0.75fr_1.25fr]">
-        <div>
-          <p className="edge">No maze of add-ons</p>
-          <h2 className="display mt-4 max-w-[12ch] text-[2rem] leading-[1.02] sm:text-[2.7rem]">Choose for the work ahead.</h2>
-        </div>
-        <div className="grid border-l border-t border-edge sm:grid-cols-2">
-          {[
-            ['Start simple', 'Starter gives a new company an affordable operating foundation.'],
-            ['Run the day', 'Growth brings together Atlasy, scheduling, reporting, and knowledge.'],
-            ['Add control', 'Business adds analytics, API access, and advanced permissions.'],
-            ['Build together', 'Enterprise is designed around your company, scale, and rollout needs.'],
-          ].map(([title, body]) => (
-            <div key={title} className="border-b border-r border-edge p-5 sm:p-6">
-              <h3 className="title text-[16px]">{title}</h3>
-              <p className="mt-2 text-[13px] leading-relaxed text-ink-3">{body}</p>
-            </div>
-          ))}
+            </dl>
+          </div>
         </div>
       </section>
 
-      <div className="mt-12 flex flex-wrap items-center justify-between gap-4 border-t border-edge pt-8">
-        <p className="max-w-[52ch] text-[14px] leading-relaxed text-ink-3">Every Atlas plan starts monthly. Move up when your team needs more room—without replacing the system your company already relies on.</p>
-        <Link to={actionHref} className="group inline-flex h-11 items-center gap-2 rounded-sm bg-ink px-5 text-[14px] font-medium text-white hover:bg-ink-2">
-          {signedIn ? 'Open your panel' : 'Get started'} <ArrowRight className="text-[14px] transition-transform group-hover:translate-x-1" />
-        </Link>
-      </div>
+      <ClosingActions signedIn={signedIn} />
     </>
   );
 }
