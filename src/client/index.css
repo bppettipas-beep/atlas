@@ -212,6 +212,94 @@
       24px 24px,
       24px 24px;
   }
+
+  /* ------------------------------------------------- the negative print --- */
+
+  /**
+   * The blueprint reversal.
+   *
+   * A drawing gets reproduced as a negative — that is literally what a
+   * blueprint is — so the marketing sheets can invert to ink ground without
+   * leaving the world the product is drawn in. No new colour enters: this is
+   * the same ink and the same paper, swapped.
+   *
+   * Deliberately confined to the marketing pages. The app never inverts,
+   * because an owner reads it in daylight and a worker reads it outdoors.
+   */
+  .negative {
+    @apply bg-ink text-white;
+  }
+
+  .negative .edge,
+  .negative .edge-sm {
+    @apply text-white/55;
+  }
+
+  .negative .display,
+  .negative .title {
+    @apply text-white;
+  }
+
+  .drafting-grid-negative {
+    background-color: theme('colors.ink.DEFAULT');
+    background-image:
+      linear-gradient(to right, rgba(255, 255, 255, 0.07) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(255, 255, 255, 0.07) 1px, transparent 1px),
+      linear-gradient(to right, rgba(255, 255, 255, 0.032) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(255, 255, 255, 0.032) 1px, transparent 1px);
+    background-size:
+      120px 120px,
+      120px 120px,
+      24px 24px,
+      24px 24px;
+  }
+
+  /* Registration ticks for the negative print. */
+  .ticked-negative::before,
+  .ticked-negative::after {
+    border-color: rgba(255, 255, 255, 0.42);
+  }
+
+  .hatched-negative {
+    background-image: repeating-linear-gradient(
+      45deg,
+      rgba(255, 255, 255, 0.12) 0 1px,
+      transparent 1px 7px
+    );
+  }
+
+  /**
+   * The marketing sheet set.
+   *
+   * These pages lie on the paper ground rather than on a white sheet, and the
+   * edge register was specified against sheet: ink-3 is 4.6:1 on #ffffff but
+   * only 3.2:1 on #f4f3f1. One step darker here keeps every label above the
+   * AA floor. Scoped to the marketing pages, so the app is untouched.
+   */
+  .sheet-set .edge,
+  .sheet-set .edge-sm {
+    @apply text-ink-2;
+  }
+
+  /* The negative print carries its own register and must not inherit that. */
+  .sheet-set .negative .edge,
+  .sheet-set .negative .edge-sm {
+    @apply text-white/55;
+  }
+
+  /* ------------------------------------------------------- drawn figures -- */
+
+  /**
+   * A figure the way a drawing prints one: an edge-register label, a large
+   * light monospace number, and a 2px ink rule holding it to the sheet.
+   */
+  .figure-rule {
+    @apply border-t-2 border-ink pt-3;
+  }
+
+  .negative .figure-rule {
+    @apply border-white;
+  }
 }
 
 /* ----------------------------------------------------- React Flow overrides */
