@@ -27,7 +27,7 @@ const pendingTaskDeletes = new Map<string, { taskId: string; title: string; expi
 const pendingPersonRemovals = new Map<string, { membershipId: string; fullName: string; expiresAt: number }>();
 
 function isConfirmation(text: string) {
-  return /^(?:yes|yep|yeah|confirm|confirmed|delete it|do it|remove it)[.!\s]*$/i.test(text.trim());
+  return /^(?:y|ye|yes|yep|yeah|confirm|confirmed|delete it|do it|remove it)[.!\s]*$/i.test(text.trim());
 }
 
 /** Makes “Johns” and “John's” (plus casing and punctuation) compare as one title. */
@@ -48,6 +48,27 @@ function requestedTaskDeletion(text: string) {
   if (!match) return null;
   const title = match[1].trim().replace(/^['“”"]|['“”"]$/g, '');
   return title && !/^(?:all|every|everything|all tasks)$/i.test(title) ? title : null;
+}
+
+function wantsTestTask(text: string) {
+  return (
+    /\btask\b.*\brandom\b|\brandom\b.*\b(?:task|subject)\b/i.test(text) ||
+    /\b(?:make|come)\b.*\b(?:up|random)\b.*\btest\b/i.test(text)
+  );
+}
+
+function createdTask(data: unknown) {
+  if (
+    typeof data === 'object' &&
+    data !== null &&
+    'id' in data &&
+    'title' in data &&
+    typeof (data as { id?: unknown }).id === 'string' &&
+    typeof (data as { title?: unknown }).title === 'string'
+  ) {
+    return data as { id: string; title: string };
+  }
+  return null;
 }
 
 function deletionTitleFromHistory(history: ChatMessage[]) {
@@ -332,6 +353,37 @@ export async function runAssistant(options: {
     }
   }
 
+  // For an explicit test request, sensible defaults are more useful than
+  // another round of questions. This call returns only after Atlas has either
+  // saved the task or returned a real permission/validation error.
+  if (latestUserMessage?.content && wantsTestTask(latestUserMessage.content)) {
+    const dueAt = new Date(Date.now() + 24 * 60 * 60 * 1_000);
+    dueAt.setHours(17, 0, 0, 0);
+    const result = await runTool(
+      'create_task',
+      {
+        title: 'Test task for system verification',
+        description: 'Temporary task created by Atlasy for testing.',
+        assigneeId: options.context.membershipId,
+        dueAt: dueAt.toISOString(),
+        priority: 'LOW',
+      },
+      options.cookie,
+    );
+    const task = result.ok ? createdTask(result.data) : null;
+    if (task) {
+      return {
+        reply: `Created “${task.title}” for tomorrow at 5:00 PM.`,
+        actions: [{ name: 'create_task', ok: true, summary: `Created “${task.title}”` }],
+      };
+    }
+    const summary = describe('create_task', false, result.data);
+    return {
+      reply: `I could not create that test task: ${summary}`,
+      actions: [{ name: 'create_task', ok: false, summary }],
+    };
+  }
+
   let pendingRemoval = pendingPersonRemovals.get(options.context.membershipId);
   if (pendingRemoval && pendingRemoval.expiresAt <= Date.now()) {
     pendingPersonRemovals.delete(options.context.membershipId);
@@ -415,6 +467,23 @@ export async function runAssistant(options: {
       }
 
       const result = await runTool(call.function.name, args, options.cookie);
+
+      // Do not allow a model-written sentence to claim a task exists. A task
+      // creation is only successful when the API returns the saved task.
+      if (call.function.name === 'create_task') {
+        const task = result.ok ? createdTask(result.data) : null;
+        if (task) {
+          return {
+            reply: `Created “${task.title}”.`,
+            actions: [{ name: 'create_task', ok: true, summary: `Created “${task.title}”` }],
+          };
+        }
+        const summary = describe('create_task', false, result.data);
+        return {
+          reply: `I could not create that task: ${summary}`,
+          actions: [{ name: 'create_task', ok: false, summary }],
+        };
+      }
 
       if (call.function.name === 'prepare_task_deletion' && result.ok) {
         const task = result.data as { id?: string; title?: string };
