@@ -2,6 +2,7 @@ import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import { ArrowRight } from '@/components/icons';
 import { Logo, LogoMark } from '@/components/Logo';
+import { LegalFooter } from '@/components/marketing/LegalFooter';
 import { DRAFT_EASE, LoadingState } from '@/components/ui';
 import { useAuth } from '@/providers/AuthProvider';
 
@@ -152,10 +153,11 @@ export function LandingPage() {
           </Link>
         </section>
 
-        <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-edge py-5">
+        <footer className="hidden">
           <Logo markClassName="h-[18px] w-[18px]" wordClassName="text-[13px]" />
           <p className="edge-sm text-ink-4">Rev. 1.0 · Built to be read, not decoded</p>
         </footer>
+        <LegalFooter />
       </main>
     </div>
   );

@@ -9,6 +9,7 @@ import {
   TreeStructure,
 } from '@/components/icons';
 import { Logo } from '@/components/Logo';
+import { LegalFooter } from '@/components/marketing/LegalFooter';
 import { useAuth } from '@/providers/AuthProvider';
 import { useEffect } from 'react';
 import { Link, Navigate, useParams } from 'react-router-dom';
@@ -429,6 +430,9 @@ export function MarketingDetailPage() {
           </>
         )}
       </main>
+      <div className="mx-auto w-full max-w-[1180px] px-5 sm:px-8">
+        <LegalFooter />
+      </div>
     </div>
   );
 }
