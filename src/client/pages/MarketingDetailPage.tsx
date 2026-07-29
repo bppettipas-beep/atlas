@@ -463,7 +463,9 @@ function PricingContent({ signedIn }: { signedIn: boolean }) {
             )}
             <p className={`edge-sm ${plan.featured ? 'text-white/60' : 'text-ink-4'}`}>{plan.name}</p>
             <div className="mt-5 flex items-baseline gap-1.5">
-              <span className="display text-[3.1rem] leading-none">{plan.price}</span>
+              <span className={`display text-[3.1rem] leading-none ${plan.featured ? 'text-white' : ''}`}>
+                {plan.price}
+              </span>
               <span className={`text-[13px] ${plan.featured ? 'text-white/65' : 'text-ink-3'}`}>{plan.price === 'Custom' ? 'pricing' : '/ month'}</span>
             </div>
             <p className={`mt-5 min-h-[3.2rem] text-[13.5px] leading-relaxed ${plan.featured ? 'text-white/75' : 'text-ink-3'}`}>{plan.description}</p>
