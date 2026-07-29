@@ -102,15 +102,20 @@ async function resolveAuth(req: Request, res: Response): Promise<AuthContext | n
   const context = await contextFromMembership(fallback.id);
   if (!context) return null;
 
-  // Rotate: revoke the presented refresh token and issue a fresh pair.
+  // Rotate: revoke the presented refresh token and issue a fresh pair. The
+  // conditional update is essential: two concurrent requests carrying a stolen
+  // token must not both mint successor sessions after they have passed the
+  // lookup above. Exactly one request wins this compare-and-set.
   const next = createRefreshToken();
   const expiresAt = refreshTokenExpiry();
-  await prisma.$transaction([
-    prisma.refreshToken.update({
-      where: { id: stored.id },
+  const rotated = await prisma.$transaction(async (tx) => {
+    const revoked = await tx.refreshToken.updateMany({
+      where: { id: stored.id, revokedAt: null },
       data: { revokedAt: new Date(), lastUsedAt: new Date() },
-    }),
-    prisma.refreshToken.create({
+    });
+    if (revoked.count !== 1) return false;
+
+    await tx.refreshToken.create({
       data: {
         userId: stored.userId,
         tokenHash: next.tokenHash,
@@ -118,8 +123,14 @@ async function resolveAuth(req: Request, res: Response): Promise<AuthContext | n
         userAgent: req.get('user-agent') ?? null,
         ipAddress: req.ip ?? null,
       },
-    }),
-  ]);
+    });
+    return true;
+  });
+
+  if (!rotated) {
+    clearAuthCookies(res);
+    return null;
+  }
 
   setAuthCookies(
     res,
