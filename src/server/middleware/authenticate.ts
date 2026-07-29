@@ -1,5 +1,5 @@
 import type { NextFunction, Request, Response } from 'express';
-import type { CompanyRole } from '@prisma/client';
+import type { CompanyRole, MembershipStatus } from '@prisma/client';
 import { ACCESS_COOKIE, REFRESH_COOKIE, clearAuthCookies, setAuthCookies } from '../auth/cookies';
 import {
   createRefreshToken,
@@ -15,6 +15,11 @@ export interface AuthContext {
   userId: string;
   membershipId: string;
   companyId: string;
+  rankId: string;
+  rankKey: string;
+  rankPosition: number;
+  status: MembershipStatus;
+  /** @deprecated Temporary migration field. Do not add new authorization checks with it. */
   role: CompanyRole;
   fullName: string;
   email: string;
@@ -34,13 +39,20 @@ export function currentAuth(req: Request): AuthContext {
 async function contextFromMembership(membershipId: string): Promise<AuthContext | null> {
   const membership = await prisma.membership.findUnique({
     where: { id: membershipId },
-    include: { user: { select: { id: true, fullName: true, email: true } } },
+    include: {
+      user: { select: { id: true, fullName: true, email: true } },
+      rank: { select: { id: true, key: true, position: true } },
+    },
   });
-  if (!membership || membership.status !== 'ACTIVE' || membership.deactivatedAt) return null;
+  if (!membership || membership.status !== 'ACTIVE' || membership.deactivatedAt || !membership.rank) return null;
   return {
     userId: membership.userId,
     membershipId: membership.id,
     companyId: membership.companyId,
+    rankId: membership.rank.id,
+    rankKey: membership.rank.key,
+    rankPosition: membership.rank.position,
+    status: membership.status,
     role: membership.role,
     fullName: membership.user.fullName,
     email: membership.user.email,

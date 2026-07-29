@@ -6,8 +6,10 @@ import type { AuthContext } from '../middleware/authenticate';
  * cannot use, but that is only a courtesy — the API is the actual boundary.
  */
 
-export const isOwner = (auth: AuthContext) => auth.role === 'OWNER' || auth.role === 'CO_OWNER';
-export const isLeadership = (auth: AuthContext) => isOwner(auth) || auth.role === 'MANAGER';
+export const isOwner = (auth: AuthContext) =>
+  auth.rankKey === 'owner' || auth.rankKey === 'co_owner';
+export const isLeadership = (auth: AuthContext) =>
+  ['owner', 'co_owner', 'administrator', 'manager'].includes(auth.rankKey);
 
 /** Teams the manager leads or belongs to. */
 export async function managedTeamIds(auth: AuthContext): Promise<string[]> {
@@ -41,7 +43,7 @@ export async function managedMembershipIds(auth: AuthContext): Promise<string[]>
     });
     return all.map((m) => m.id);
   }
-  if (auth.role !== 'MANAGER') return [auth.membershipId];
+  if (auth.rankKey !== 'manager') return [auth.membershipId];
 
   const teamIds = await managedTeamIds(auth);
   const members = await prisma.membership.findMany({
@@ -62,7 +64,7 @@ export async function managedMembershipIds(auth: AuthContext): Promise<string[]>
 /** Can the caller edit this person's full profile (role, manager, notes…)? */
 export async function canManagePerson(auth: AuthContext, targetId: string): Promise<boolean> {
   if (isOwner(auth)) return true;
-  if (auth.role !== 'MANAGER') return false;
+  if (auth.rankKey !== 'manager') return false;
   if (targetId === auth.membershipId) return true;
   const managed = await managedMembershipIds(auth);
   return managed.includes(targetId);
@@ -79,7 +81,7 @@ export async function canEditTask(
   task: { assigneeId: string | null; createdById: string | null; teamId: string | null },
 ): Promise<boolean> {
   if (isOwner(auth)) return true;
-  if (auth.role === 'MANAGER') {
+  if (auth.rankKey === 'manager') {
     if (!task.teamId) return true;
     const teamIds = await managedTeamIds(auth);
     return teamIds.includes(task.teamId);
