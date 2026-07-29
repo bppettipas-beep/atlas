@@ -94,12 +94,28 @@ export async function notify(input: CreateNotificationInput) {
   });
 
   emitNotification(input.recipientId, serializeNotification(notification));
-  await sendNotificationEmail({
-    to: recipient.user.email,
-    recipientName: recipient.user.fullName,
-    title: notification.title,
-    body: notification.body,
-  });
+
+  // Not awaited, on purpose. A leadership fan-out calls this once per person,
+  // so awaiting Resend here would add its round trip to the request that
+  // triggered it — several seconds on a busy company, and up to the ten second
+  // timeout each if the provider is slow. The notification is already
+  // committed and already on the socket; the email is a side effect of it.
+  if (recipient.notificationPreference?.emailNotifications !== false) {
+    void sendNotificationEmail({
+      to: recipient.user.email,
+      recipientName: recipient.user.fullName,
+      title: notification.title,
+      body: notification.body,
+      link: {
+        taskId: notification.taskId,
+        entityType: notification.entityType,
+        entityId: notification.entityId,
+      },
+    }).catch((error) => {
+      console.error('Atlas could not send notification email.', error);
+    });
+  }
+
   return notification;
 }
 

@@ -24,6 +24,8 @@ the React front end, with PostgreSQL as the only source of truth.
 - [Testing](#testing)
 - [Deploying to Railway](#deploying-to-railway)
 - [Environment variables](#environment-variables)
+- [Google sign-in](#google-sign-in)
+- [Notification email](#notification-email)
 - [Design notes](#design-notes)
 - [Not built yet](#not-built-yet)
 
@@ -445,11 +447,11 @@ Every variable is documented in `.env.example`. The ones that matter:
 | `AUTH_RATE_LIMIT`            | no          | Credential attempts per IP per 15 min, default 40                   |
 | `GOOGLE_CLIENT_ID`           | no          | Enables Google sign-in. See below                                   |
 | `GOOGLE_CLIENT_SECRET`       | no          | Enables Google sign-in. See below                                   |
-| `RESEND_API_KEY`             | no          | Enables email copies of in-app notifications                        |
+| `RESEND_API_KEY`             | no          | Enables email copies of in-app notifications. See below             |
 | `EMAIL_FROM`                 | no          | Verified Resend sender, e.g. `Atlas <notifications@example.com>`    |
 | `ASSISTANT_API_KEY`          | no          | Enables Atlasy, the in-app assistant. See below                     |
-| `ASSISTANT_BASE_URL`         | no          | OpenAI-compatible endpoint. Defaults to Groq                        |
-| `ASSISTANT_MODEL`            | no          | Model name, default `llama-3.3-70b-versatile`                       |
+| `ASSISTANT_BASE_URL`         | no          | OpenAI-compatible endpoint. Defaults to Anthropic                   |
+| `ASSISTANT_MODEL`            | no          | Model name, default `claude-haiku-4-5-20251001`                     |
 
 The server validates all of this at startup and exits with a readable message
 listing exactly what is missing, rather than failing on the first query.
@@ -530,6 +532,54 @@ rendered at all — the app never offers a route it cannot complete.
 - Knowledge documents are Markdown rendered by a small parser that HTML-escapes
   the whole document _before_ producing any tags, so a document cannot inject
   markup or script.
+
+---
+
+## Notification email
+
+Optional, and off until both variables are set. Everything that reaches the
+notification bell is also emailed: assignments, mentions, comments, blockers,
+deadline changes, announcements, and — for owners and managers — the company
+activity feed. Each email links straight to the task, document or person it is
+about, not just to the app.
+
+### Setting it up
+
+1. Create an account at <https://resend.com> and add the domain you want to
+   send from under **Domains**. Resend gives you DKIM and SPF records to add at
+   your DNS provider; sending will not work until the domain shows as verified.
+2. Create an API key at <https://resend.com/api-keys>. **Sending access** is
+   enough — it never needs to read anything.
+3. Set both variables. In `.env` locally, and as Railway variables in
+   production:
+
+   ```
+   RESEND_API_KEY="re_..."
+   EMAIL_FROM="Atlas <notifications@yourdomain.com>"
+   ```
+
+   `EMAIL_FROM` must be on the domain you verified in step 1. **Never commit
+   the key.**
+
+4. Make sure `APP_ORIGIN` is your real public URL. Every link in the email is
+   built from it, so a wrong value sends your staff to localhost.
+
+Without a domain of your own, Resend's `onboarding@resend.dev` sender works for
+testing but only delivers to the address that owns the Resend account.
+
+### What it does
+
+- **One email per notification**, sent after the notification is committed. The
+  send is never awaited by the request that triggered it, so a slow or failing
+  mail provider cannot make Atlas feel slow, and cannot lose the in-app copy.
+- **Respects the per-person switches.** The Notifications section of
+  **Account settings** controls what is notified at all; a separate _Email me
+  these too_ switch controls whether it also leaves the building. On by default.
+  Every email carries a link back to that screen.
+- **Never writes to a placeholder.** People added without an email address hold
+  a `@placeholder.atlas.invalid` address, which is skipped rather than bounced.
+- **Fails quietly.** A provider outage is logged, never surfaced as a request
+  error, and never blocks the notification itself.
 
 ---
 

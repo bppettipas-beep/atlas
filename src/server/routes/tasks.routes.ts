@@ -552,6 +552,10 @@ tasksRouter.patch(
       await notifyLeadership({
         companyId: auth.companyId,
         actorId: auth.membershipId,
+        // Same dedup as the completion path below. Without it, a task raised by
+        // an owner or manager notified them twice for one event: once as the
+        // work's own person in the loop above, once again in this fan-out.
+        except: [task.assigneeId, task.createdById],
         type: 'TASK_STATUS_CHANGED',
         title: `Ready for review: ${task.title}`,
         body: `${auth.fullName} finished this and is waiting for approval.`,

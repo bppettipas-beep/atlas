@@ -27,6 +27,7 @@ interface Preferences {
   announcements: boolean;
   taskComments: boolean;
   companyActivity: boolean;
+  emailNotifications: boolean;
 }
 
 const PREFERENCE_COPY: {
@@ -210,6 +211,19 @@ export function AccountPage() {
                   description={item.description}
                 />
               ))}
+
+              {/* The switches above decide what you are told about at all.
+                  This one only decides whether it also reaches your inbox, so
+                  it sits apart from them rather than reading as another
+                  category of notification. */}
+              <div className="mt-4 border-t border-rule pt-2">
+                <Toggle
+                  checked={prefs.emailNotifications}
+                  onChange={(value) => void updatePreference('emailNotifications', value)}
+                  label="Email me these too"
+                  description="Sends a copy of everything above to your email address, so you still hear about it when Atlas is closed."
+                />
+              </div>
             </div>
           ) : (
             <p className="py-4 text-[13px] text-ink-3">Loading your preferences…</p>
@@ -278,7 +292,9 @@ export function AccountPage() {
             <Button
               variant="primary"
               loading={changing}
-              disabled={(hasPassword && !passwords.currentPassword) || passwords.newPassword.length < 8}
+              disabled={
+                (hasPassword && !passwords.currentPassword) || passwords.newPassword.length < 8
+              }
               onClick={() => void changePassword()}
             >
               {hasPassword ? 'Change password' : 'Set password'}

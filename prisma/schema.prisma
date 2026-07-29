@@ -839,6 +839,11 @@ model NotificationPreference {
   // themselves. Only owners and managers are ever sent these, so the switch is
   // inert for a worker rather than needing a separate shape.
   companyActivity  Boolean  @default(true)
+  // The master switch for the inbox copy. The switches above decide whether a
+  // notification happens at all; this one only decides whether it also leaves
+  // the building. On by default, because a notification nobody is in the app
+  // to see is the whole reason email exists.
+  emailNotifications Boolean @default(true)
   updatedAt        DateTime @updatedAt
 
   membership Membership @relation(fields: [membershipId], references: [id], onDelete: Cascade)

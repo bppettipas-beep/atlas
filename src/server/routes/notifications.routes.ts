@@ -21,6 +21,7 @@ interface PreferenceShape {
   announcements: boolean;
   taskComments: boolean;
   companyActivity: boolean;
+  emailNotifications: boolean;
 }
 
 /** The switches, and only the switches — never the row id or membership id. */
@@ -34,6 +35,7 @@ function toPreferences(row: PreferenceShape): PreferenceShape {
     announcements: row.announcements,
     taskComments: row.taskComments,
     companyActivity: row.companyActivity,
+    emailNotifications: row.emailNotifications,
   };
 }
 
@@ -121,6 +123,7 @@ notificationsRouter.patch(
       announcements: z.boolean().optional(),
       taskComments: z.boolean().optional(),
       companyActivity: z.boolean().optional(),
+      emailNotifications: z.boolean().optional(),
     }),
   ),
   asyncHandler(async (req, res) => {

@@ -1276,6 +1276,64 @@ describe('notifications', () => {
     expect(types(box)).toContain('TASK_COMMENTED');
   });
 
+  it('emails notifications by default, and exposes the switch to turn that off', async () => {
+    const owner = await signUpOwner(app);
+
+    const initial = await owner.agent.get('/api/notifications/preferences').expect(200);
+    expect(initial.body.emailNotifications).toBe(true);
+
+    const updated = await owner.agent
+      .patch('/api/notifications/preferences')
+      .send({ emailNotifications: false })
+      .expect(200);
+    expect(updated.body.emailNotifications).toBe(false);
+
+    const persisted = await owner.agent.get('/api/notifications/preferences').expect(200);
+    expect(persisted.body.emailNotifications).toBe(false);
+  });
+
+  it('tells the owner once when work is sent for review, not twice', async () => {
+    const { owner, worker } = await companyOfTwo();
+
+    const task = await owner.agent
+      .post('/api/tasks')
+      .send({ title: 'Deep clean the kitchen', assigneeId: worker.session.membership.id })
+      .expect(201);
+    await worker.agent
+      .patch(`/api/tasks/${task.body.id}/status`)
+      .send({ status: 'AWAITING_REVIEW' })
+      .expect(200);
+
+    // The owner raised this task, so the direct notification already reached
+    // them. The leadership fan-out must skip them the way the completion path
+    // does, or the same event lands in the bell twice.
+    const box = await inbox(owner);
+    const aboutThisTask = box.items.filter((item) => item.taskId === task.body.id);
+    expect(aboutThisTask).toHaveLength(1);
+  });
+
+  it('still shows a notification in the app when its email copy is switched off', async () => {
+    const { owner, worker } = await companyOfTwo();
+
+    await owner.agent
+      .patch('/api/notifications/preferences')
+      .send({ emailNotifications: false })
+      .expect(200);
+
+    // The email switch must only stop the email. Losing the bell as well would
+    // make turning it off a much worse trade than anybody intended.
+    const task = await owner.agent
+      .post('/api/tasks')
+      .send({ title: 'Still want the bell', assigneeId: worker.session.membership.id })
+      .expect(201);
+    await worker.agent
+      .post(`/api/tasks/${task.body.id}/comments`)
+      .send({ body: 'On it.' })
+      .expect(201);
+
+    expect(types(await inbox(owner))).toContain('TASK_COMMENTED');
+  });
+
   it('clears read notifications and leaves the unread ones alone', async () => {
     const { owner, worker } = await companyOfTwo();
     const first = await owner.agent
@@ -1388,5 +1446,199 @@ describe('task list filters', () => {
     const titles = response.body.items.map((t: { title: string }) => t.title);
     expect(titles).toContain('Blocked job');
     expect(titles).not.toContain('Untouched job');
+  });
+});
+
+/* ========================================================================== */
+/*  Cross-tenant sweep — "paste user A's URL as user B"                       */
+/* ========================================================================== */
+
+describe('cross-tenant isolation', () => {
+  let victim: Client;
+  let attacker: Client;
+  let attackerWorker: ReturnType<typeof request.agent>;
+  /** Every id that belongs to the victim company and nobody else. */
+  let owned: Record<string, string>;
+
+  beforeAll(async () => {
+    victim = await signUpOwner(app, { companyName: `Victim ${Date.now().toString(36)}` });
+    attacker = await signUpOwner(app, { companyName: `Attacker ${Date.now().toString(36)}` });
+
+    const attackerCode = await createInviteCode(attacker);
+    attackerWorker = (await joinWithCode(app, attackerCode)).agent;
+
+    const task = await victim.agent.post('/api/tasks').send({ title: 'Victim work' }).expect(201);
+    const team = await victim.agent
+      .post('/api/organization/teams')
+      .send({ name: 'Victim Crew', leadId: victim.session.membership.id })
+      .expect(201);
+    const role = await victim.agent.post('/api/roles').send({ name: 'Victim Role' }).expect(201);
+    const doc = await victim.agent
+      .post('/api/knowledge')
+      .send({ title: 'Victim handbook', contentMarkdown: 'secret', status: 'PUBLISHED' })
+      .expect(201);
+    const announcement = await victim.agent
+      .post('/api/companies/current/announcements')
+      .send({ title: 'Victim notice', body: 'Internal only.' })
+      .expect(201);
+    const inviteCode = await createInviteCode(victim);
+    const invites = await victim.agent.get('/api/invites').expect(200);
+    const invite = invites.body.items.find((i: { code: string }) => i.code === inviteCode);
+
+    owned = {
+      taskId: task.body.id,
+      teamId: team.body.id,
+      roleId: role.body.id,
+      docId: doc.body.id,
+      announcementId: announcement.body.id,
+      inviteId: invite.id,
+      membershipId: victim.session.membership.id,
+      companyId: victim.session.company.id,
+    };
+  });
+
+  /** Anything but a 200 is fine here — 403 and 404 are both honest answers. */
+  const forbidden = (status: number) => status === 403 || status === 404 || status === 400;
+
+  it('refuses every read of another company’s records', async () => {
+    const reads = [
+      `/api/tasks/${owned.taskId}`,
+      `/api/people/${owned.membershipId}`,
+      `/api/knowledge/${owned.docId}`,
+      `/api/schedule/availability/${owned.membershipId}`,
+    ];
+
+    for (const path of reads) {
+      const response = await attacker.agent.get(path);
+      expect(forbidden(response.status), `${path} returned ${response.status}`).toBe(true);
+    }
+  });
+
+  it('refuses every write to another company’s records', async () => {
+    const writes: [string, string, object][] = [
+      ['patch', `/api/tasks/${owned.taskId}`, { title: 'Owned by me now' }],
+      ['patch', `/api/tasks/${owned.taskId}/status`, { status: 'DONE' }],
+      ['delete', `/api/tasks/${owned.taskId}`, {}],
+      ['post', `/api/tasks/${owned.taskId}/comments`, { body: 'hello' }],
+      ['patch', `/api/organization/teams/${owned.teamId}`, { name: 'Renamed' }],
+      ['delete', `/api/organization/teams/${owned.teamId}`, {}],
+      ['patch', `/api/roles/${owned.roleId}`, { name: 'Renamed' }],
+      ['delete', `/api/roles/${owned.roleId}`, {}],
+      ['patch', `/api/knowledge/${owned.docId}`, { title: 'Renamed' }],
+      ['delete', `/api/knowledge/${owned.docId}`, {}],
+      ['patch', `/api/invites/${owned.inviteId}`, { active: false }],
+      ['delete', `/api/invites/${owned.inviteId}`, {}],
+      ['delete', `/api/companies/current/announcements/${owned.announcementId}`, {}],
+    ];
+
+    for (const [method, path, body] of writes) {
+      const agent = attacker.agent as unknown as Record<
+        string,
+        (p: string) => { send: (b: object) => Promise<{ status: number }> }
+      >;
+      const response = await agent[method](path).send(body);
+      expect(
+        forbidden(response.status),
+        `${method.toUpperCase()} ${path} returned ${response.status}`,
+      ).toBe(true);
+    }
+  });
+
+  it('leaves the victim’s records untouched after all of that', async () => {
+    const task = await victim.agent.get(`/api/tasks/${owned.taskId}`).expect(200);
+    expect(task.body.title).toBe('Victim work');
+    expect(task.body.status).not.toBe('DONE');
+    expect(task.body.comments).toHaveLength(0);
+
+    await victim.agent.get(`/api/knowledge/${owned.docId}`).expect(200);
+    const roles = await victim.agent.get('/api/roles').expect(200);
+    expect(roles.body.items.map((r: { name: string }) => r.name)).toContain('Victim Role');
+  });
+
+  it('never mentions another company in any list endpoint', async () => {
+    const lists: [string, string][] = [
+      ['/api/people', 'items'],
+      ['/api/tasks', 'items'],
+      ['/api/roles', 'items'],
+      ['/api/companies/current/announcements', 'items'],
+    ];
+
+    for (const [path, key] of lists) {
+      const response = await attacker.agent.get(path).expect(200);
+      const serialized = JSON.stringify(response.body[key]);
+      expect(serialized, `${path} leaked a victim id`).not.toContain(owned.taskId);
+      expect(serialized, `${path} leaked a victim id`).not.toContain(owned.membershipId);
+      expect(serialized, `${path} leaked a victim id`).not.toContain(owned.roleId);
+    }
+  });
+
+  it('does not leak another company through the chat rooms', async () => {
+    const conversations = await attacker.agent.get('/api/chat/conversations').expect(200);
+    const ids = conversations.body.items.map((c: { id: string }) => c.id);
+
+    const victimRooms = await victim.agent.get('/api/chat/conversations').expect(200);
+    for (const room of victimRooms.body.items) {
+      expect(ids).not.toContain(room.id);
+      // And the attacker cannot read it by id either, company room or not.
+      const response = await attacker.agent.get(`/api/chat/conversations/${room.id}/messages`);
+      expect(forbidden(response.status), `chat ${room.id} returned ${response.status}`).toBe(true);
+    }
+  });
+
+  it('locks every admin surface against a logged-out stranger', async () => {
+    const adminPaths = [
+      '/api/invites',
+      '/api/activity',
+      '/api/knowledge',
+      '/api/companies/current',
+      '/api/roles',
+      '/api/people',
+      '/api/organization/graph',
+      '/api/notifications',
+      '/api/schedule/permissions',
+      '/api/chat/conversations',
+    ];
+
+    for (const path of adminPaths) {
+      const response = await request(app).get(path);
+      expect(response.status, `${path} answered a stranger with ${response.status}`).toBe(401);
+    }
+  });
+
+  it('locks every leadership-only write against an ordinary worker', async () => {
+    const code = await createInviteCode(attacker);
+    const workerAgent = (await joinWithCode(app, code)).agent;
+
+    const writes: [string, string, object][] = [
+      ['post', '/api/invites', { role: 'WORKER' }],
+      ['post', '/api/roles', { name: 'Self Promotion' }],
+      ['post', '/api/organization/teams', { name: 'My Own Team' }],
+      ['post', '/api/knowledge', { title: 'Should not exist' }],
+      [
+        'post',
+        '/api/companies/current/announcements',
+        { title: 'Hello all', body: 'From a worker.' },
+      ],
+      ['patch', '/api/companies/current', { name: 'Renamed By A Worker' }],
+      ['post', '/api/people', { fullName: 'Ghost Employee' }],
+    ];
+
+    for (const [method, path, body] of writes) {
+      const agent = workerAgent as unknown as Record<
+        string,
+        (p: string) => { send: (b: object) => Promise<{ status: number }> }
+      >;
+      const response = await agent[method](path).send(body);
+      expect(response.status, `${method.toUpperCase()} ${path} returned ${response.status}`).toBe(
+        403,
+      );
+    }
+  });
+
+  it('does not let a worker in another company reach any of it either', async () => {
+    const response = await attackerWorker.get(`/api/tasks/${owned.taskId}`);
+    expect(forbidden(response.status)).toBe(true);
+    const person = await attackerWorker.get(`/api/people/${owned.membershipId}`);
+    expect(forbidden(person.status)).toBe(true);
   });
 });
