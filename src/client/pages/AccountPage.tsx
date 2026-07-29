@@ -340,6 +340,14 @@ export function AccountPage() {
             </Button>
           </div>
         </Sheet>
+
+        {session.user.isPlatformAdmin && (
+          <div className="flex justify-center pt-2">
+            <span className="border border-alert bg-alert px-4 py-2 font-mono text-[11px] font-bold tracking-[0.18em] text-white">
+              ADMINISTRATOR
+            </span>
+          </div>
+        )}
       </PageBody>
 
       <Modal
