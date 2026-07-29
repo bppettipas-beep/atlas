@@ -24,10 +24,15 @@ const DELETE_CONFIRMATION_TTL_MS = 10 * 60 * 1000;
 /** A deliberate pause between identifying work and deleting it. */
 const pendingTaskDeletes = new Map<string, { taskId: string; title: string; expiresAt: number }>();
 /** People removal gets the same server-enforced pause as task deletion. */
-const pendingPersonRemovals = new Map<string, { membershipId: string; fullName: string; expiresAt: number }>();
+const pendingPersonRemovals = new Map<
+  string,
+  { membershipId: string; fullName: string; expiresAt: number }
+>();
 
 function isConfirmation(text: string) {
-  return /^(?:y|ye|yes|yep|yeah|confirm|confirmed|delete it|do it|remove it)[.!\s]*$/i.test(text.trim());
+  return /^(?:y|ye|yes|yep|yeah|confirm|confirmed|delete it|do it|remove it)[.!\s]*$/i.test(
+    text.trim(),
+  );
 }
 
 /** Makes “Johns” and “John's” (plus casing and punctuation) compare as one title. */
@@ -83,7 +88,9 @@ function removalNameFromHistory(history: ChatMessage[]) {
   const previous = [...history]
     .reverse()
     .find((message) => message.role === 'assistant' && message.content)?.content;
-  const match = previous?.match(/^Remove [â€œ"](.+?)[â€"] from the company\? Reply yes to confirm\.$/);
+  const match = previous?.match(
+    /^Remove [â€œ"](.+?)[â€"] from the company\? Reply yes to confirm\.$/,
+  );
   return match?.[1] ?? null;
 }
 
@@ -193,7 +200,10 @@ interface Completion {
   error?: { message?: string };
 }
 
-async function complete(messages: ChatMessage[], permissionKeys: readonly string[]): Promise<ChatMessage> {
+async function complete(
+  messages: ChatMessage[],
+  permissionKeys: readonly string[],
+): Promise<ChatMessage> {
   let response: Response;
   try {
     response = await fetch(`${env.ASSISTANT_BASE_URL.replace(/\/+$/, '')}/chat/completions`, {
@@ -345,7 +355,9 @@ export async function runAssistant(options: {
   // Do not make title punctuation a reason to abandon a deletion request. This
   // runs before the model so “delete clean johns house” reliably finds
   // “Clean John's house”, while still requiring the confirmation below.
-  const requestedTitle = latestUserMessage?.content ? requestedTaskDeletion(latestUserMessage.content) : null;
+  const requestedTitle = latestUserMessage?.content
+    ? requestedTaskDeletion(latestUserMessage.content)
+    : null;
   if (requestedTitle) {
     const lookup = await runTool('list_tasks', { includeDone: false, limit: 200 }, options.cookie);
     const tasks =
@@ -424,7 +436,11 @@ export async function runAssistant(options: {
   }
   if (pendingRemoval && latestUserMessage?.content && isConfirmation(latestUserMessage.content)) {
     pendingPersonRemovals.delete(options.context.membershipId);
-    const result = await runTool('remove_person', { id: pendingRemoval.membershipId }, options.cookie);
+    const result = await runTool(
+      'remove_person',
+      { id: pendingRemoval.membershipId },
+      options.cookie,
+    );
     if (result.ok) {
       return {
         reply: `Removed â€œ${pendingRemoval.fullName}â€ from the company.`,
@@ -436,7 +452,11 @@ export async function runAssistant(options: {
     return {
       reply: `I could not remove â€œ${pendingRemoval.fullName}â€ from the company.`,
       actions: [
-        { name: 'remove_person', ok: false, summary: describe('remove_person', false, result.data) },
+        {
+          name: 'remove_person',
+          ok: false,
+          summary: describe('remove_person', false, result.data),
+        },
       ],
     };
   }
@@ -464,7 +484,7 @@ export async function runAssistant(options: {
     }
 
     for (const call of calls) {
-      let args: Record<string, unknown> = {};
+      let args: Record<string, unknown>;
       try {
         args = call.function.arguments ? JSON.parse(call.function.arguments) : {};
       } catch {

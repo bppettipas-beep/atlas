@@ -67,15 +67,21 @@ export async function scheduleScope(auth: AuthContext): Promise<ScheduleScope> {
   const scopedTeamIds = grants.some((grant) => grant.scope === PermissionScope.TEAM)
     ? await managedTeamIds(auth)
     : [];
-  const teamIds = [...new Set([...selectedTeamIds, ...scopedTeamIds])];
+  let teamIds = [...new Set([...selectedTeamIds, ...scopedTeamIds])];
   let membershipIds: string[];
   if (companyWide) {
-    membershipIds = (
-      await prisma.membership.findMany({
+    const [memberships, teams] = await Promise.all([
+      prisma.membership.findMany({
         where: { companyId: auth.companyId, status: 'ACTIVE', deactivatedAt: null },
         select: { id: true },
-      })
-    ).map((membership) => membership.id);
+      }),
+      prisma.team.findMany({
+        where: { companyId: auth.companyId, archivedAt: null },
+        select: { id: true },
+      }),
+    ]);
+    membershipIds = memberships.map((membership) => membership.id);
+    teamIds = teams.map((team) => team.id);
   } else {
     const managed = grants.some((grant) => grant.scope === PermissionScope.MANAGED_PEOPLE)
       ? await managedMembershipIds(auth)
@@ -183,8 +189,10 @@ function availableMinutesIn(from: Date, to: Date, index: AvailabilityIndex | und
       dayEnd.setMinutes(window.endMinute);
 
       let minutes = overlapMinutes(from, to, dayStart, dayEnd);
+      const availableStart = new Date(Math.max(from.getTime(), dayStart.getTime()));
+      const availableEnd = new Date(Math.min(to.getTime(), dayEnd.getTime()));
       for (const period of index.timeOff) {
-        minutes -= overlapMinutes(dayStart, dayEnd, period.startAt, period.endAt);
+        minutes -= overlapMinutes(availableStart, availableEnd, period.startAt, period.endAt);
       }
       total += Math.max(minutes, 0);
     }
@@ -341,7 +349,10 @@ export async function buildSchedule(
       const own = byPerson.get(resource.id) ?? [];
       const scheduledMinutes = own.reduce(
         (total, block) =>
-          total + Math.round((new Date(block.endAt).getTime() - new Date(block.startAt).getTime()) / MINUTE),
+          total +
+          Math.round(
+            (new Date(block.endAt).getTime() - new Date(block.startAt).getTime()) / MINUTE,
+          ),
         0,
       );
       return {
@@ -473,7 +484,10 @@ export async function describeConflicts(options: {
   startAt: Date;
   endAt: Date;
   ignoreTaskId?: string;
-}): Promise<{ conflicts: { taskId: string; title: string; startAt: string; endAt: string }[]; unavailable: string | null }> {
+}): Promise<{
+  conflicts: { taskId: string; title: string; startAt: string; endAt: string }[];
+  unavailable: string | null;
+}> {
   if (!options.membershipId) return { conflicts: [], unavailable: null };
 
   const [candidates, hours, timeOff] = await Promise.all([
@@ -488,9 +502,12 @@ export async function describeConflicts(options: {
       },
       select: { id: true, title: true, startAt: true, endAt: true },
     }),
-    prisma.workingHours.findMany({ where: { membershipId: options.membershipId } }),
+    prisma.workingHours.findMany({
+      where: { companyId: options.companyId, membershipId: options.membershipId },
+    }),
     prisma.timeOff.findMany({
       where: {
+        companyId: options.companyId,
         membershipId: options.membershipId,
         startAt: { lt: options.endAt },
         endAt: { gt: options.startAt },
@@ -499,7 +516,11 @@ export async function describeConflicts(options: {
   ]);
 
   const conflicts = candidates
-    .map((task) => ({ task, start: task.startAt as Date, end: blockEnd(task.startAt as Date, task.endAt) }))
+    .map((task) => ({
+      task,
+      start: task.startAt as Date,
+      end: blockEnd(task.startAt as Date, task.endAt),
+    }))
     .filter((entry) => overlaps(options.startAt, options.endAt, entry.start, entry.end))
     .map((entry) => ({
       taskId: entry.task.id,

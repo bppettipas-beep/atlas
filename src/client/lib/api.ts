@@ -58,7 +58,7 @@ async function handle<T>(response: Response): Promise<T> {
   // A gateway, a proxy or a crashed process answers with HTML, not JSON. Left
   // unguarded the parse threw a raw SyntaxError past every `catch (ApiError)`
   // in the app, and the user was shown "Unexpected token '<'".
-  let payload: unknown = null;
+  let payload: unknown;
   try {
     payload = text ? JSON.parse(text) : null;
   } catch {

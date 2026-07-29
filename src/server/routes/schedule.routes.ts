@@ -44,8 +44,8 @@ const rangeSchema = z.object({
   from: z.coerce.date(),
   to: z.coerce.date(),
   resources: list,
-  status: list,
-  priority: list,
+  status: list.pipe(z.array(z.enum(['NOT_STARTED', 'IN_PROGRESS', 'BLOCKED', 'REVIEW', 'DONE']))),
+  priority: list.pipe(z.array(z.enum(['LOW', 'NORMAL', 'HIGH', 'URGENT']))),
   location: z.string().trim().max(120).optional(),
 });
 
@@ -191,6 +191,31 @@ scheduleRouter.patch(
         throw ApiError.forbidden('That person is not yours to schedule.');
       }
     }
+    if (input.teamId) {
+      const scope = await scheduleScope(auth);
+      if (!scope.teamIds.includes(input.teamId)) {
+        throw ApiError.forbidden('That team is not yours to schedule.');
+      }
+      const team = await prisma.team.findFirst({
+        where: { id: input.teamId, companyId: auth.companyId, archivedAt: null },
+        select: { id: true },
+      });
+      if (!team) throw ApiError.badRequest('That team is not in this company.', 'BAD_TEAM');
+    }
+
+    // A PATCH that moves only the start keeps the existing duration. Silently
+    // dropping the end time turns a two-hour booking into the one-hour default.
+    const existingDuration =
+      task.startAt && task.endAt
+        ? Math.max(task.endAt.getTime() - task.startAt.getTime(), 0)
+        : null;
+    const nextEndAt = input.startAt
+      ? input.endAt !== undefined
+        ? input.endAt
+        : existingDuration
+          ? new Date(input.startAt.getTime() + existingDuration)
+          : null
+      : null;
 
     const updated = await prisma.task.update({
       where: { id: task.id },
@@ -198,7 +223,7 @@ scheduleRouter.patch(
         startAt: input.startAt,
         // Clearing the start clears the end too; an end time on its own is not
         // a schedule, and leaving one behind makes the next booking confusing.
-        endAt: input.startAt ? (input.endAt ?? null) : null,
+        endAt: nextEndAt,
         scheduledById: input.startAt ? auth.membershipId : null,
         ...(input.assigneeId !== undefined ? { assigneeId: input.assigneeId } : {}),
         ...(input.teamId !== undefined ? { teamId: input.teamId } : {}),
@@ -234,21 +259,23 @@ scheduleRouter.patch(
     emitToCompany(auth.companyId, 'schedule:updated', { taskId: updated.id });
     emitToCompany(auth.companyId, 'task:updated', { taskId: updated.id });
 
-    const conflicts = await describeConflicts({
-      companyId: auth.companyId,
-      membershipId: updated.assigneeId,
-      startAt: updated.startAt ?? new Date(),
-      endAt: updated.endAt ?? new Date(),
-      ignoreTaskId: updated.id,
-    });
+    const conflicts = input.startAt
+      ? await describeConflicts({
+          companyId: auth.companyId,
+          membershipId: updated.assigneeId,
+          startAt: updated.startAt as Date,
+          endAt: updated.endAt ?? new Date((updated.startAt as Date).getTime() + 60 * 60 * 1_000),
+          ignoreTaskId: updated.id,
+        })
+      : { conflicts: [], unavailable: null };
 
     res.json({
       taskId: updated.id,
       startAt: updated.startAt?.toISOString() ?? null,
       endAt: updated.endAt?.toISOString() ?? null,
       // Reported, never enforced — see describeConflicts.
-      conflicts: input.startAt ? conflicts.conflicts : [],
-      unavailable: input.startAt ? conflicts.unavailable : null,
+      conflicts: conflicts.conflicts,
+      unavailable: conflicts.unavailable,
     });
   }),
 );

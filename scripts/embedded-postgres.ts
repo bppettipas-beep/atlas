@@ -50,6 +50,7 @@ export async function startEmbeddedPostgres(options: {
         `  rm -rf ${dataDir}    (PowerShell: Remove-Item -Recurse -Force ${dataDir})\n` +
         `Then re-run: npm run dev:db && npm run db:push && npm run db:seed\n\n` +
         `Original error: ${error instanceof Error ? error.message : String(error)}`,
+      { cause: error },
     );
   }
 

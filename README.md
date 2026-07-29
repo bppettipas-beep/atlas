@@ -622,5 +622,3 @@ Honest list of what a real deployment would want next:
 - **Reporting and exports.** No CSV export or trend charts yet.
 - **Audit log export.** The activity feed is complete but cannot be exported.
 - **Multi-factor authentication.**
-- **Code splitting.** All routes are in one JS chunk (~210 KB gzipped). Fine at
-  this size; `React.lazy` per route is the fix when it grows.

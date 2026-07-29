@@ -2,7 +2,7 @@
   "name": "atlas",
   "version": "1.0.0",
   "private": true,
-  "description": "Atlas \u2014 the operating system for a small business.",
+  "description": "Atlas — the operating system for a small business.",
   "license": "MIT",
   "engines": {
     "node": ">=20"
@@ -56,7 +56,7 @@
   "devDependencies": {
     "@electric-sql/pglite": "0.5.4",
     "@electric-sql/pglite-socket": "0.2.7",
-    "@eslint/js": "9.39.5",
+    "@eslint/js": "10.0.1",
     "@tailwindcss/typography": "0.5.20",
     "@types/compression": "1.8.1",
     "@types/cookie-parser": "1.4.10",
@@ -74,7 +74,7 @@
     "clsx": "2.1.1",
     "concurrently": "10.0.4",
     "date-fns": "4.4.0",
-    "eslint": "9.39.5",
+    "eslint": "10.8.0",
     "eslint-config-prettier": "10.1.8",
     "eslint-plugin-react-hooks": "7.1.1",
     "eslint-plugin-react-refresh": "0.5.3",
@@ -86,7 +86,7 @@
     "prettier-plugin-tailwindcss": "0.8.1",
     "react": "19.2.8",
     "react-dom": "19.2.8",
-    "react-router-dom": "7.18.1",
+    "react-router-dom": "7.18.2",
     "socket.io-client": "4.8.3",
     "supertest": "7.2.2",
     "tailwind-merge": "3.6.0",

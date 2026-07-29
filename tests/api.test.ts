@@ -1515,6 +1515,94 @@ describe('task list filters', () => {
 });
 
 /* ========================================================================== */
+/*  Schedule integrity                                                        */
+/* ========================================================================== */
+
+describe('schedule integrity', () => {
+  it('keeps a booking duration when only its start time is moved', async () => {
+    const owner = await signUpOwner(app);
+    const task = await owner.agent.post('/api/tasks').send({ title: 'Two-hour visit' }).expect(201);
+
+    await owner.agent
+      .patch(`/api/schedule/tasks/${task.body.id}`)
+      .send({
+        startAt: '2030-01-07T09:00:00.000Z',
+        endAt: '2030-01-07T11:00:00.000Z',
+      })
+      .expect(200);
+
+    const moved = await owner.agent
+      .patch(`/api/schedule/tasks/${task.body.id}`)
+      .send({ startAt: '2030-01-08T13:00:00.000Z' })
+      .expect(200);
+
+    expect(moved.body.startAt).toBe('2030-01-08T13:00:00.000Z');
+    expect(moved.body.endAt).toBe('2030-01-08T15:00:00.000Z');
+  });
+
+  it('shows company-wide leaders team resources and team-owned work', async () => {
+    const owner = await signUpOwner(app);
+    const team = await owner.agent
+      .post('/api/organization/teams')
+      .send({ name: 'Day Crew', leadId: owner.session.membership.id })
+      .expect(201);
+    const task = await owner.agent
+      .post('/api/tasks')
+      .send({ title: 'Crew briefing', teamId: team.body.id })
+      .expect(201);
+    await owner.agent
+      .patch(`/api/schedule/tasks/${task.body.id}`)
+      .send({ startAt: '2030-01-07T09:00:00.000Z' })
+      .expect(200);
+
+    const schedule = await owner.agent
+      .get('/api/schedule')
+      .query({
+        from: '2030-01-07T00:00:00.000Z',
+        to: '2030-01-08T00:00:00.000Z',
+        resources: team.body.id,
+      })
+      .expect(200);
+
+    expect(schedule.body.resources).toContainEqual(
+      expect.objectContaining({ id: team.body.id, kind: 'TEAM' }),
+    );
+    expect(schedule.body.blocks).toContainEqual(expect.objectContaining({ taskId: task.body.id }));
+  });
+
+  it('rejects a team from another company when scheduling work', async () => {
+    const first = await signUpOwner(app);
+    const second = await signUpOwner(app);
+    const foreignTeam = await first.agent
+      .post('/api/organization/teams')
+      .send({ name: 'Foreign Crew', leadId: first.session.membership.id })
+      .expect(201);
+    const task = await second.agent.post('/api/tasks').send({ title: 'Local work' }).expect(201);
+
+    await second.agent
+      .patch(`/api/schedule/tasks/${task.body.id}`)
+      .send({ startAt: '2030-01-07T09:00:00.000Z', teamId: foreignTeam.body.id })
+      .expect(403);
+
+    const stored = await prisma.task.findUniqueOrThrow({ where: { id: task.body.id } });
+    expect(stored.teamId).toBeNull();
+    expect(stored.startAt).toBeNull();
+  });
+
+  it('rejects invalid schedule filters as a client error', async () => {
+    const owner = await signUpOwner(app);
+    await owner.agent
+      .get('/api/schedule')
+      .query({
+        from: '2030-01-07T00:00:00.000Z',
+        to: '2030-01-08T00:00:00.000Z',
+        status: 'NOT_A_STATUS',
+      })
+      .expect(422);
+  });
+});
+
+/* ========================================================================== */
 /*  Cross-tenant sweep — "paste user A's URL as user B"                       */
 /* ========================================================================== */
 

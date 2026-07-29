@@ -2,32 +2,65 @@ import { Navigate, Route, Routes, useLocation, useParams } from 'react-router-do
 import { AppShell } from '@/components/layout/AppShell';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { LoadingState, ToastProvider } from '@/components/ui';
-import { AccountPage } from '@/pages/AccountPage';
-import { AdminPage } from '@/pages/AdminPage';
-import { ActivityPage } from '@/pages/ActivityPage';
-import { CompanySettingsPage } from '@/pages/CompanySettingsPage';
-import { ChatPage } from '@/pages/ChatPage';
-import { HomePage } from '@/pages/HomePage';
-import { InvitationsPage } from '@/pages/InvitationsPage';
-import { KnowledgeDocPage } from '@/pages/KnowledgeDocPage';
-import { KnowledgePage } from '@/pages/KnowledgePage';
-import { LandingPage } from '@/pages/LandingPage';
-import { LegalPage } from '@/pages/LegalPage';
-import { MarketingDetailPage } from '@/pages/MarketingDetailPage';
-import { MyDayPage } from '@/pages/MyDayPage';
-import { NotFoundPage } from '@/pages/NotFoundPage';
-import { OrganizationMapPage } from '@/pages/OrganizationMapPage';
-import { OwnerSignupPage } from '@/pages/OwnerSignupPage';
-import { PeoplePage } from '@/pages/PeoplePage';
-import { ProfilePage } from '@/pages/ProfilePage';
-import { SchedulePage } from '@/pages/SchedulePage';
-import { SignInPage } from '@/pages/SignInPage';
-import { StartPage } from '@/pages/StartPage';
-import { WorkPage } from '@/pages/WorkPage';
-import { WorkerJoinPage } from '@/pages/WorkerJoinPage';
 import { AuthProvider, useAuth } from '@/providers/AuthProvider';
 import { RealtimeProvider } from '@/providers/RealtimeProvider';
-import type { ReactNode } from 'react';
+import { lazy, Suspense, type ReactNode } from 'react';
+
+const AccountPage = lazy(() =>
+  import('@/pages/AccountPage').then((m) => ({ default: m.AccountPage })),
+);
+const AdminPage = lazy(() => import('@/pages/AdminPage').then((m) => ({ default: m.AdminPage })));
+const ActivityPage = lazy(() =>
+  import('@/pages/ActivityPage').then((m) => ({ default: m.ActivityPage })),
+);
+const CompanySettingsPage = lazy(() =>
+  import('@/pages/CompanySettingsPage').then((m) => ({ default: m.CompanySettingsPage })),
+);
+const ChatPage = lazy(() => import('@/pages/ChatPage').then((m) => ({ default: m.ChatPage })));
+const HomePage = lazy(() => import('@/pages/HomePage').then((m) => ({ default: m.HomePage })));
+const InvitationsPage = lazy(() =>
+  import('@/pages/InvitationsPage').then((m) => ({ default: m.InvitationsPage })),
+);
+const KnowledgeDocPage = lazy(() =>
+  import('@/pages/KnowledgeDocPage').then((m) => ({ default: m.KnowledgeDocPage })),
+);
+const KnowledgePage = lazy(() =>
+  import('@/pages/KnowledgePage').then((m) => ({ default: m.KnowledgePage })),
+);
+const LandingPage = lazy(() =>
+  import('@/pages/LandingPage').then((m) => ({ default: m.LandingPage })),
+);
+const LegalPage = lazy(() => import('@/pages/LegalPage').then((m) => ({ default: m.LegalPage })));
+const MarketingDetailPage = lazy(() =>
+  import('@/pages/MarketingDetailPage').then((m) => ({ default: m.MarketingDetailPage })),
+);
+const MyDayPage = lazy(() => import('@/pages/MyDayPage').then((m) => ({ default: m.MyDayPage })));
+const NotFoundPage = lazy(() =>
+  import('@/pages/NotFoundPage').then((m) => ({ default: m.NotFoundPage })),
+);
+const OrganizationMapPage = lazy(() =>
+  import('@/pages/OrganizationMapPage').then((m) => ({ default: m.OrganizationMapPage })),
+);
+const OwnerSignupPage = lazy(() =>
+  import('@/pages/OwnerSignupPage').then((m) => ({ default: m.OwnerSignupPage })),
+);
+const PeoplePage = lazy(() =>
+  import('@/pages/PeoplePage').then((m) => ({ default: m.PeoplePage })),
+);
+const ProfilePage = lazy(() =>
+  import('@/pages/ProfilePage').then((m) => ({ default: m.ProfilePage })),
+);
+const SchedulePage = lazy(() =>
+  import('@/pages/SchedulePage').then((m) => ({ default: m.SchedulePage })),
+);
+const SignInPage = lazy(() =>
+  import('@/pages/SignInPage').then((m) => ({ default: m.SignInPage })),
+);
+const StartPage = lazy(() => import('@/pages/StartPage').then((m) => ({ default: m.StartPage })));
+const WorkPage = lazy(() => import('@/pages/WorkPage').then((m) => ({ default: m.WorkPage })));
+const WorkerJoinPage = lazy(() =>
+  import('@/pages/WorkerJoinPage').then((m) => ({ default: m.WorkerJoinPage })),
+);
 
 /** Blocks a route until the session is known, then redirects if signed out. */
 function RequireAuth({ children }: { children: ReactNode }) {
@@ -77,86 +110,88 @@ export function App() {
       <ToastProvider>
         <AuthProvider>
           <RealtimeProvider>
-            <Routes>
-              <Route path="/" element={<LandingPage />} />
-              <Route path="/explore/:section" element={<MarketingRoute />} />
-              <Route path="/legal/:document" element={<LegalPage />} />
-              <Route path="/start" element={<StartPage />} />
-              <Route path="/signin" element={<SignInPage />} />
-              <Route path="/signup/owner" element={<OwnerSignupPage />} />
-              <Route path="/join" element={<WorkerJoinPage />} />
+            <Suspense fallback={<LoadingState className="h-screen" label="Loading this sheet" />}>
+              <Routes>
+                <Route path="/" element={<LandingPage />} />
+                <Route path="/explore/:section" element={<MarketingRoute />} />
+                <Route path="/legal/:document" element={<LegalPage />} />
+                <Route path="/start" element={<StartPage />} />
+                <Route path="/signin" element={<SignInPage />} />
+                <Route path="/signup/owner" element={<OwnerSignupPage />} />
+                <Route path="/join" element={<WorkerJoinPage />} />
 
-              <Route
-                path="/app"
-                element={
-                  <RequireAuth>
-                    <AppShell />
-                  </RequireAuth>
-                }
-              >
-                <Route index element={<AppIndex />} />
-                <Route path="home" element={<HomePage />} />
-                <Route path="my-day" element={<MyDayPage />} />
-                <Route path="organization" element={<OrganizationMapPage />} />
-                <Route path="people" element={<PeoplePage />} />
-                <Route path="chat" element={<ChatPage />} />
-                <Route path="work" element={<WorkPage />} />
-                <Route path="schedule" element={<SchedulePage />} />
                 <Route
-                  path="knowledge"
+                  path="/app"
                   element={
-                    <RequireLeadership>
-                      <KnowledgePage />
-                    </RequireLeadership>
+                    <RequireAuth>
+                      <AppShell />
+                    </RequireAuth>
                   }
-                />
-                <Route
-                  path="knowledge/:id"
-                  element={
-                    <RequireLeadership>
-                      <KnowledgeDocPage />
-                    </RequireLeadership>
-                  }
-                />
-                <Route
-                  path="activity"
-                  element={
-                    <RequireLeadership>
-                      <ActivityPage />
-                    </RequireLeadership>
-                  }
-                />
-                <Route path="profile" element={<ProfilePage />} />
-                <Route path="account" element={<AccountPage />} />
-                <Route
-                  path="admin"
-                  element={
-                    <RequirePlatformAdmin>
-                      <AdminPage />
-                    </RequirePlatformAdmin>
-                  }
-                />
-                <Route
-                  path="invitations"
-                  element={
-                    <RequireLeadership>
-                      <InvitationsPage />
-                    </RequireLeadership>
-                  }
-                />
-                <Route
-                  path="settings"
-                  element={
-                    <RequireLeadership>
-                      <CompanySettingsPage />
-                    </RequireLeadership>
-                  }
-                />
+                >
+                  <Route index element={<AppIndex />} />
+                  <Route path="home" element={<HomePage />} />
+                  <Route path="my-day" element={<MyDayPage />} />
+                  <Route path="organization" element={<OrganizationMapPage />} />
+                  <Route path="people" element={<PeoplePage />} />
+                  <Route path="chat" element={<ChatPage />} />
+                  <Route path="work" element={<WorkPage />} />
+                  <Route path="schedule" element={<SchedulePage />} />
+                  <Route
+                    path="knowledge"
+                    element={
+                      <RequireLeadership>
+                        <KnowledgePage />
+                      </RequireLeadership>
+                    }
+                  />
+                  <Route
+                    path="knowledge/:id"
+                    element={
+                      <RequireLeadership>
+                        <KnowledgeDocPage />
+                      </RequireLeadership>
+                    }
+                  />
+                  <Route
+                    path="activity"
+                    element={
+                      <RequireLeadership>
+                        <ActivityPage />
+                      </RequireLeadership>
+                    }
+                  />
+                  <Route path="profile" element={<ProfilePage />} />
+                  <Route path="account" element={<AccountPage />} />
+                  <Route
+                    path="admin"
+                    element={
+                      <RequirePlatformAdmin>
+                        <AdminPage />
+                      </RequirePlatformAdmin>
+                    }
+                  />
+                  <Route
+                    path="invitations"
+                    element={
+                      <RequireLeadership>
+                        <InvitationsPage />
+                      </RequireLeadership>
+                    }
+                  />
+                  <Route
+                    path="settings"
+                    element={
+                      <RequireLeadership>
+                        <CompanySettingsPage />
+                      </RequireLeadership>
+                    }
+                  />
+                  <Route path="*" element={<NotFoundPage />} />
+                </Route>
+
                 <Route path="*" element={<NotFoundPage />} />
-              </Route>
-
-              <Route path="*" element={<NotFoundPage />} />
-            </Routes>
+              </Routes>
+            </Suspense>
           </RealtimeProvider>
         </AuthProvider>
       </ToastProvider>
