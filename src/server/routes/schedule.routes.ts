@@ -10,12 +10,12 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { ApiError, asyncHandler } from '../http/errors';
 import { parsedQuery, validateBody, validateQuery } from '../http/validate';
-import { currentAuth, requireAuth, requireRole } from '../middleware/authenticate';
+import { currentAuth, requireAuth, requirePermission } from '../middleware/authenticate';
 import { prisma } from '../prisma';
 import { emitToCompany } from '../realtime/io';
 import { recordActivity } from '../services/activity';
 import { notify } from '../services/notifications';
-import { canEditTask, canManagePerson, isLeadership } from '../services/permissions';
+import { canEditTask, isLeadership } from '../services/permissions';
 import {
   MAX_RANGE_DAYS,
   buildSchedule,
@@ -23,6 +23,7 @@ import {
   scheduleScope,
 } from '../services/schedule';
 import type { TaskPriority, TaskStatus } from '../../shared/types';
+import { canAccessMembership, PERMISSIONS } from '../services/authorization';
 
 export const scheduleRouter = Router();
 
@@ -50,6 +51,7 @@ const rangeSchema = z.object({
 
 scheduleRouter.get(
   '/',
+  requirePermission(PERMISSIONS.SCHEDULE_VIEW),
   validateQuery(rangeSchema),
   asyncHandler(async (req, res) => {
     const auth = currentAuth(req);
@@ -82,6 +84,7 @@ scheduleRouter.get(
 /** What the client may offer. The server still checks every write regardless. */
 scheduleRouter.get(
   '/permissions',
+  requirePermission(PERMISSIONS.SCHEDULE_VIEW),
   asyncHandler(async (req, res) => {
     const auth = currentAuth(req);
     const scope = await scheduleScope(auth);
@@ -101,6 +104,7 @@ scheduleRouter.get(
  */
 scheduleRouter.get(
   '/conflicts',
+  requirePermission(PERMISSIONS.SCHEDULE_VIEW),
   validateQuery(
     z.object({
       membershipId: z.string().min(1),
@@ -143,7 +147,7 @@ scheduleRouter.get(
  */
 scheduleRouter.patch(
   '/tasks/:id',
-  requireRole('OWNER', 'MANAGER'),
+  requirePermission(PERMISSIONS.SCHEDULE_MANAGE),
   validateBody(
     z.object({
       startAt: z.coerce.date().nullable(),
@@ -333,7 +337,10 @@ scheduleRouter.put(
     const { workingHours } = req.body as { workingHours: z.infer<typeof HOURS>[] };
 
     // Your own hours are yours to state. Somebody else's need authority over them.
-    if (membershipId !== auth.membershipId && !(await canManagePerson(auth, membershipId))) {
+    if (
+      membershipId !== auth.membershipId &&
+      !(await canAccessMembership(auth, PERMISSIONS.AVAILABILITY_MANAGE, membershipId))
+    ) {
       throw ApiError.forbidden('You cannot change that person’s working hours.');
     }
 
@@ -383,7 +390,10 @@ scheduleRouter.post(
 
     // A worker may say they are unavailable. That is the point of the feature:
     // the person who knows they cannot make it is the person reporting it.
-    if (membershipId !== auth.membershipId && !(await canManagePerson(auth, membershipId))) {
+    if (
+      membershipId !== auth.membershipId &&
+      !(await canAccessMembership(auth, PERMISSIONS.AVAILABILITY_MANAGE, membershipId))
+    ) {
       throw ApiError.forbidden('You cannot book time off for that person.');
     }
     if (input.endAt.getTime() <= input.startAt.getTime()) {
@@ -468,7 +478,7 @@ scheduleRouter.delete(
 
     if (
       period.membershipId !== auth.membershipId &&
-      !(await canManagePerson(auth, period.membershipId))
+      !(await canAccessMembership(auth, PERMISSIONS.AVAILABILITY_MANAGE, period.membershipId))
     ) {
       throw ApiError.forbidden('You cannot change that person’s time off.');
     }

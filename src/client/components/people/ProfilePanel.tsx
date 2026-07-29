@@ -288,6 +288,13 @@ function OverviewTab({
   const roles = rolesQuery.data?.items ?? [];
 
   const { session } = useAuth();
+  const canManageRanks = session?.membership.permissions.includes('ranks.manage') ?? false;
+  const ranksQuery = useQuery<{
+    items: { id: string; key: string; name: string; position: number }[];
+  }>(
+    (signal) => canManageRanks ? api.get('/ranks', undefined, signal) : Promise.resolve({ items: [] }),
+    [canManageRanks],
+  );
   const isMe = person.id === session?.membership.id;
   const [confirmRemove, setConfirmRemove] = useState(false);
   const [removing, setRemoving] = useState(false);
@@ -339,10 +346,10 @@ function OverviewTab({
     }
   };
 
-  const changeRole = async (role: string) => {
+  const changeRank = async (rankId: string) => {
     try {
-      await api.patch(`/people/${person.id}/role`, { role });
-      toast.success('Access level updated.');
+      await api.patch(`/ranks/members/${person.id}`, { rankId });
+      toast.success('Rank updated.');
       onChanged();
     } catch (error) {
       toast.error(errorMessage(error));
@@ -484,18 +491,17 @@ function OverviewTab({
           </div>
         )}
 
-        {isOwner && (
+        {canManageRanks && (
           <div className="mt-3">
             <Field label="Access level" htmlFor="role-select" hint="What they are allowed to do.">
               <Select
                 id="role-select"
-                value={person.role}
-                onChange={(event) => void changeRole(event.target.value)}
+                value={person.rank.id}
+                onChange={(event) => void changeRank(event.target.value)}
               >
-                <option value="OWNER">Owner</option>
-                <option value="CO_OWNER">Co-owner</option>
-                <option value="MANAGER">Manager</option>
-                <option value="WORKER">Worker</option>
+                {(ranksQuery.data?.items ?? []).map((rank) => (
+                  <option key={rank.id} value={rank.id}>{rank.name}</option>
+                ))}
               </Select>
             </Field>
           </div>

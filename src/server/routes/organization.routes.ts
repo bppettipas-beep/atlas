@@ -2,7 +2,8 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { ApiError, asyncHandler } from '../http/errors';
 import { parsedQuery, validateBody, validateQuery } from '../http/validate';
-import { currentAuth, requireAuth, requireRole } from '../middleware/authenticate';
+import { currentAuth, requireAuth, requirePermission } from '../middleware/authenticate';
+import { PERMISSIONS } from '../services/authorization';
 import { prisma } from '../prisma';
 import { emitToCompany } from '../realtime/io';
 import { recordActivity } from '../services/activity';
@@ -13,7 +14,7 @@ import { serializeTeam } from '../services/serializers';
 
 export const organizationRouter = Router();
 
-organizationRouter.use(requireAuth);
+organizationRouter.use(requireAuth, requirePermission(PERMISSIONS.PEOPLE_VIEW));
 
 // --------------------------------- graph -----------------------------------
 
@@ -38,7 +39,7 @@ organizationRouter.get(
  */
 organizationRouter.patch(
   '/nodes/positions',
-  requireRole('OWNER', 'MANAGER'),
+  requirePermission(PERMISSIONS.ORGANIZATION_MANAGE),
   validateBody(
     z.object({
       positions: z
@@ -89,7 +90,7 @@ organizationRouter.patch(
 
 organizationRouter.post(
   '/relationships',
-  requireRole('OWNER', 'MANAGER'),
+  requirePermission(PERMISSIONS.ORGANIZATION_MANAGE),
   validateBody(
     z.object({
       sourceNodeId: z.string().min(1),
@@ -152,7 +153,7 @@ organizationRouter.post(
 
 organizationRouter.delete(
   '/relationships/:id',
-  requireRole('OWNER', 'MANAGER'),
+  requirePermission(PERMISSIONS.ORGANIZATION_MANAGE),
   asyncHandler(async (req, res) => {
     const auth = currentAuth(req);
     const relationship = await prisma.organizationRelationship.findFirst({
@@ -206,7 +207,7 @@ const teamSchema = z.object({
 
 organizationRouter.post(
   '/teams',
-  requireRole('OWNER', 'MANAGER'),
+  requirePermission(PERMISSIONS.ORGANIZATION_MANAGE),
   validateBody(teamSchema),
   asyncHandler(async (req, res) => {
     const auth = currentAuth(req);
@@ -269,7 +270,7 @@ async function assertCanManageTeam(auth: ReturnType<typeof currentAuth>, teamId:
 
 organizationRouter.patch(
   '/teams/:id',
-  requireRole('OWNER', 'MANAGER'),
+  requirePermission(PERMISSIONS.ORGANIZATION_MANAGE),
   validateBody(teamSchema.partial()),
   asyncHandler(async (req, res) => {
     const auth = currentAuth(req);
@@ -296,7 +297,7 @@ organizationRouter.patch(
 
 organizationRouter.delete(
   '/teams/:id',
-  requireRole('OWNER'),
+  requirePermission(PERMISSIONS.ORGANIZATION_MANAGE),
   asyncHandler(async (req, res) => {
     const auth = currentAuth(req);
     const team = await assertCanManageTeam(auth, req.params.id);
@@ -309,7 +310,7 @@ organizationRouter.delete(
 
 organizationRouter.post(
   '/teams/:id/members',
-  requireRole('OWNER', 'MANAGER'),
+  requirePermission(PERMISSIONS.ORGANIZATION_MANAGE),
   validateBody(
     z.object({
       membershipId: z.string().min(1),
@@ -361,7 +362,7 @@ organizationRouter.post(
 
 organizationRouter.delete(
   '/teams/:id/members/:membershipId',
-  requireRole('OWNER', 'MANAGER'),
+  requirePermission(PERMISSIONS.ORGANIZATION_MANAGE),
   asyncHandler(async (req, res) => {
     const auth = currentAuth(req);
     const team = await assertCanManageTeam(auth, req.params.id);

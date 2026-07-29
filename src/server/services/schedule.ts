@@ -13,6 +13,7 @@
  * from midnight so they survive daylight saving without shifting.
  */
 import { isOverdue } from '../lib/dates';
+import { PermissionScope } from '@prisma/client';
 import type { AuthContext } from '../middleware/authenticate';
 import { prisma } from '../prisma';
 import type {
@@ -24,7 +25,8 @@ import type {
   TaskPriority,
   TaskStatus,
 } from '../../shared/types';
-import { isLeadership, managedMembershipIds, managedTeamIds } from './permissions';
+import { managedMembershipIds, managedTeamIds } from './permissions';
+import { hasPermission, PERMISSIONS } from './authorization';
 
 /** Assumed length of a block whose task only ever had a start time. */
 export const DEFAULT_BLOCK_MINUTES = 60;
@@ -52,15 +54,51 @@ export interface ScheduleScope {
  * three sentences are written down, and every schedule route goes through it.
  */
 export async function scheduleScope(auth: AuthContext): Promise<ScheduleScope> {
-  const [membershipIds, teamIds] = await Promise.all([
-    managedMembershipIds(auth),
-    managedTeamIds(auth),
+  const [viewGrants, manageGrants, availabilityGrants] = await Promise.all([
+    hasPermission(auth, PERMISSIONS.SCHEDULE_VIEW),
+    hasPermission(auth, PERMISSIONS.SCHEDULE_MANAGE),
+    hasPermission(auth, PERMISSIONS.AVAILABILITY_MANAGE),
   ]);
+  const grants = [...viewGrants, ...manageGrants];
+  const companyWide = grants.some((grant) => grant.scope === PermissionScope.COMPANY_WIDE);
+  const selectedTeamIds = grants
+    .filter((grant) => grant.scope === PermissionScope.SELECTED_TEAMS)
+    .flatMap((grant) => grant.selectedTeamIds);
+  const scopedTeamIds = grants.some((grant) => grant.scope === PermissionScope.TEAM)
+    ? await managedTeamIds(auth)
+    : [];
+  const teamIds = [...new Set([...selectedTeamIds, ...scopedTeamIds])];
+  let membershipIds: string[];
+  if (companyWide) {
+    membershipIds = (
+      await prisma.membership.findMany({
+        where: { companyId: auth.companyId, status: 'ACTIVE', deactivatedAt: null },
+        select: { id: true },
+      })
+    ).map((membership) => membership.id);
+  } else {
+    const managed = grants.some((grant) => grant.scope === PermissionScope.MANAGED_PEOPLE)
+      ? await managedMembershipIds(auth)
+      : [];
+    const teamMembers = teamIds.length
+      ? await prisma.teamMembership.findMany({
+          where: { teamId: { in: teamIds } },
+          select: { membershipId: true },
+        })
+      : [];
+    membershipIds = [
+      ...new Set([
+        auth.membershipId,
+        ...managed,
+        ...teamMembers.map((membership) => membership.membershipId),
+      ]),
+    ];
+  }
   return {
     membershipIds,
     teamIds,
-    canScheduleOthers: isLeadership(auth),
-    canManageAvailability: isLeadership(auth),
+    canScheduleOthers: manageGrants.some((grant) => grant.scope !== PermissionScope.OWN),
+    canManageAvailability: availabilityGrants.some((grant) => grant.scope !== PermissionScope.OWN),
   };
 }
 
@@ -75,7 +113,7 @@ function canSeeTask(
   if (task.createdById === auth.membershipId) return true;
   // Work nobody owns yet is a leadership concern; a worker has no reason to see
   // every unassigned job in the company on their own schedule.
-  if (!task.assigneeId && !task.teamId) return isLeadership(auth);
+  if (!task.assigneeId && !task.teamId) return scope.canScheduleOthers;
   return false;
 }
 

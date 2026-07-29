@@ -47,7 +47,7 @@ export function CompanySettingsPage() {
   const session = useSession();
   const { isOwner, refresh } = useAuth();
   const [tab, setTab] = useState<'company' | 'ranks' | 'routines'>('company');
-  const isLeadership = session.membership.role !== 'WORKER';
+  const canManageRanks = session.membership.permissions.includes('ranks.manage');
 
   return (
     <PageTransition>
@@ -69,7 +69,7 @@ export function CompanySettingsPage() {
         />
 
         {tab === 'company' && <CompanyTab canEdit={isOwner} onSaved={refresh} />}
-        {tab === 'ranks' && isLeadership && <RanksPermissionsTab />}
+        {tab === 'ranks' && canManageRanks && <RanksPermissionsTab />}
         {tab === 'routines' && <RoutinesTab />}
       </PageBody>
     </PageTransition>

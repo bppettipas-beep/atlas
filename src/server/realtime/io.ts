@@ -12,7 +12,7 @@ interface SocketAuth {
   userId: string;
   membershipId: string;
   companyId: string;
-  role: 'OWNER' | 'CO_OWNER' | 'MANAGER' | 'WORKER';
+  leadership: boolean;
 }
 
 /** Minimal cookie parser — Socket.IO handshakes do not run Express middleware. */
@@ -59,7 +59,16 @@ export function initRealtime(httpServer: HttpServer): SocketServer {
       }
       const membership = await prisma.membership.findFirst({
         where: { id: claims.mid, status: 'ACTIVE', deactivatedAt: null },
-        select: { id: true, companyId: true, userId: true, role: true },
+        select: {
+          id: true,
+          companyId: true,
+          userId: true,
+          rank: {
+            select: {
+              permissions: { where: { permissionKey: 'activity.view' }, select: { id: true } },
+            },
+          },
+        },
       });
       if (!membership) {
         next(new Error('unauthorized'));
@@ -69,7 +78,7 @@ export function initRealtime(httpServer: HttpServer): SocketServer {
         userId: membership.userId,
         membershipId: membership.id,
         companyId: membership.companyId,
-        role: membership.role,
+        leadership: membership.rank.permissions.length > 0,
       };
       next();
     } catch (error) {
@@ -81,7 +90,7 @@ export function initRealtime(httpServer: HttpServer): SocketServer {
     const auth = (socket.data as { auth: SocketAuth }).auth;
     socket.join(companyRoom(auth.companyId));
     socket.join(memberRoom(auth.membershipId));
-    if (auth.role === 'OWNER' || auth.role === 'CO_OWNER' || auth.role === 'MANAGER') {
+    if (auth.leadership) {
       socket.join(leadershipRoom(auth.companyId));
     }
     socket.emit('ready', { companyId: auth.companyId, membershipId: auth.membershipId });

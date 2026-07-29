@@ -5,8 +5,9 @@ import { runAssistant, type ChatMessage } from '../assistant';
 import { env } from '../env';
 import { asyncHandler } from '../http/errors';
 import { validateBody } from '../http/validate';
-import { currentAuth, requireAuth } from '../middleware/authenticate';
+import { currentAuth, requireAuth, requirePermission } from '../middleware/authenticate';
 import { prisma } from '../prisma';
+import { PERMISSIONS } from '../services/authorization';
 
 export const assistantRouter = Router();
 
@@ -34,6 +35,7 @@ const assistantLimiter = rateLimit({
 
 assistantRouter.post(
   '/chat',
+  requirePermission(PERMISSIONS.ATLASY_USE),
   assistantLimiter,
   validateBody(
     z.object({
@@ -78,6 +80,7 @@ assistantRouter.post(
         // So "assign it to me" resolves without a lookup that could pick the
         // wrong person with a similar name.
         membershipId: membership.id,
+        permissionKeys: auth.permissionKeys,
       },
     });
 

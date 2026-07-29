@@ -45,6 +45,12 @@ export function serializePerson(membership: any): PersonSummary {
     email: membership.user.email,
     avatarUrl: membership.user.avatarUrl ?? null,
     role: membership.role,
+    rank: {
+      id: membership.rank.id,
+      key: membership.rank.key,
+      name: membership.rank.name,
+      position: membership.rank.position,
+    },
     status: membership.status,
     jobTitle: membership.jobTitle ?? null,
     managerId: membership.managerId ?? null,
@@ -268,6 +274,7 @@ export const personInclude = {
   user: { select: { id: true, fullName: true, email: true, avatarUrl: true } },
   profile: true,
   assignedRole: { select: { id: true, name: true, color: true } },
+  rank: { select: { id: true, key: true, name: true, position: true } },
   teamMemberships: { include: { team: true } },
 } as const;
 

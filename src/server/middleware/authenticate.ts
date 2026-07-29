@@ -10,6 +10,7 @@ import {
 } from '../auth/tokens';
 import { ApiError } from '../http/errors';
 import { prisma } from '../prisma';
+import { requirePermission as assertPermission } from '../services/authorization';
 
 export interface AuthContext {
   userId: string;
@@ -18,6 +19,7 @@ export interface AuthContext {
   rankId: string;
   rankKey: string;
   rankPosition: number;
+  permissionKeys: string[];
   status: MembershipStatus;
   /** @deprecated Temporary migration field. Do not add new authorization checks with it. */
   role: CompanyRole;
@@ -41,7 +43,14 @@ async function contextFromMembership(membershipId: string): Promise<AuthContext 
     where: { id: membershipId },
     include: {
       user: { select: { id: true, fullName: true, email: true } },
-      rank: { select: { id: true, key: true, position: true } },
+      rank: {
+        select: {
+          id: true,
+          key: true,
+          position: true,
+          permissions: { select: { permissionKey: true } },
+        },
+      },
     },
   });
   if (!membership || membership.status !== 'ACTIVE' || membership.deactivatedAt || !membership.rank) return null;
@@ -52,6 +61,7 @@ async function contextFromMembership(membershipId: string): Promise<AuthContext 
     rankId: membership.rank.id,
     rankKey: membership.rank.key,
     rankPosition: membership.rank.position,
+    permissionKeys: [...new Set(membership.rank.permissions.map((grant) => grant.permissionKey))],
     status: membership.status,
     role: membership.role,
     fullName: membership.user.fullName,
@@ -189,7 +199,9 @@ export function requireRole(...roles: CompanyRole[]) {
     // the boundary means new owner-only routes cannot accidentally leave them
     // with a lesser implementation of the same authority.
     const allowed =
-      roles.includes(req.auth.role) || (req.auth.role === 'CO_OWNER' && roles.includes('OWNER'));
+      (roles.includes('OWNER') && req.auth.rankPosition <= 2) ||
+      (roles.includes('MANAGER') && req.auth.rankPosition <= 4) ||
+      (roles.includes('WORKER') && req.auth.rankPosition >= 5);
     if (!allowed) {
       next(
         ApiError.forbidden(
@@ -201,5 +213,21 @@ export function requireRole(...roles: CompanyRole[]) {
       return;
     }
     next();
+  };
+}
+
+/** Server-side permission gate for non-resource-specific operations. */
+export function requirePermission(permissionKey: string) {
+  return async (req: Request, _res: Response, next: NextFunction) => {
+    if (!req.auth) {
+      next(ApiError.unauthorized());
+      return;
+    }
+    try {
+      await assertPermission(req.auth, permissionKey);
+      next();
+    } catch (error) {
+      next(error);
+    }
   };
 }

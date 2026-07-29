@@ -2,7 +2,8 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { ApiError, asyncHandler } from '../http/errors';
 import { parsedQuery, validateBody, validateQuery } from '../http/validate';
-import { currentAuth, requireAuth, requireRole } from '../middleware/authenticate';
+import { currentAuth, requireAuth, requirePermission } from '../middleware/authenticate';
+import { PERMISSIONS } from '../services/authorization';
 import { uniqueSlug } from '../lib/ids';
 import { prisma } from '../prisma';
 import { emitToCompany } from '../realtime/io';
@@ -19,7 +20,7 @@ import type { KnowledgeDocumentDetail } from '../../shared/types';
 
 export const knowledgeRouter = Router();
 
-knowledgeRouter.use(requireAuth, requireRole('OWNER', 'MANAGER'));
+knowledgeRouter.use(requireAuth, requirePermission(PERMISSIONS.KNOWLEDGE_VIEW));
 
 const summaryInclude = {
   owner: { include: { user: { select: { fullName: true, avatarUrl: true } } } },
@@ -187,7 +188,7 @@ const documentSchema = z.object({
 
 knowledgeRouter.post(
   '/',
-  requireRole('OWNER', 'MANAGER'),
+  requirePermission(PERMISSIONS.KNOWLEDGE_MANAGE),
   validateBody(documentSchema),
   asyncHandler(async (req, res) => {
     const auth = currentAuth(req);
@@ -275,7 +276,7 @@ async function announceDocument(
 
 knowledgeRouter.patch(
   '/:id',
-  requireRole('OWNER', 'MANAGER'),
+  requirePermission(PERMISSIONS.KNOWLEDGE_MANAGE),
   validateBody(documentSchema.partial()),
   asyncHandler(async (req, res) => {
     const auth = currentAuth(req);
@@ -361,7 +362,7 @@ knowledgeRouter.patch(
 
 knowledgeRouter.delete(
   '/:id',
-  requireRole('OWNER', 'MANAGER'),
+  requirePermission(PERMISSIONS.KNOWLEDGE_MANAGE),
   asyncHandler(async (req, res) => {
     const auth = currentAuth(req);
     const existing = await prisma.knowledgeDocument.findFirst({
@@ -420,7 +421,7 @@ knowledgeRouter.post(
 /** Restores an older revision as a new version. */
 knowledgeRouter.post(
   '/:id/revisions/:revisionId/restore',
-  requireRole('OWNER', 'MANAGER'),
+  requirePermission(PERMISSIONS.KNOWLEDGE_MANAGE),
   asyncHandler(async (req, res) => {
     const auth = currentAuth(req);
     const document = await prisma.knowledgeDocument.findFirst({

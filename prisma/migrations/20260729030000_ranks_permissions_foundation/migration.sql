@@ -79,6 +79,42 @@ WHERE r."companyId" = m."companyId"
     ELSE 'worker'
   END;
 
+-- Default grants. These are policy defaults, not hard-coded authorization:
+-- the application reads RankPermission for every gated operation.
+INSERT INTO "RankPermission" ("id", "rankId", "permissionKey", "scope", "updatedAt")
+SELECT CONCAT(r."id", '_', REPLACE(p.key, '.', '_')), r."id", p.key,
+  CASE
+    WHEN r.key IN ('owner', 'co_owner', 'administrator') THEN 'COMPANY_WIDE'::"PermissionScope"
+    WHEN r.key = 'manager' THEN 'COMPANY_WIDE'::"PermissionScope"
+    WHEN r.key IN ('supervisor', 'team_lead') THEN 'TEAM'::"PermissionScope"
+    WHEN p.key LIKE 'chat.%' OR p.key = 'chat.use' THEN 'COMPANY_WIDE'::"PermissionScope"
+    ELSE 'OWN'::"PermissionScope"
+  END,
+  CURRENT_TIMESTAMP
+FROM "Rank" r
+CROSS JOIN (VALUES
+  ('company.manage'), ('ranks.manage'), ('people.view'), ('people.manage'),
+  ('invites.manage'), ('organization.manage'), ('tasks.view'), ('tasks.create'),
+  ('tasks.manage'), ('tasks.delete'), ('schedule.view'), ('schedule.manage'),
+  ('availability.manage'), ('knowledge.view'), ('knowledge.manage'), ('activity.view'),
+  ('metrics.view'), ('chat.use'), ('chat.company.read'), ('chat.company.post'),
+  ('atlasy.use'), ('atlasy.briefing')
+) AS p(key)
+WHERE
+  r.key IN ('owner', 'co_owner', 'administrator')
+  OR (r.key = 'manager' AND p.key NOT IN ('company.manage', 'ranks.manage'))
+  OR (r.key IN ('supervisor', 'team_lead') AND p.key IN (
+    'people.view', 'people.manage', 'organization.manage', 'tasks.view', 'tasks.create',
+    'tasks.manage', 'tasks.delete', 'schedule.view', 'schedule.manage',
+    'availability.manage', 'knowledge.view', 'knowledge.manage', 'activity.view',
+    'metrics.view', 'chat.use', 'chat.company.read', 'chat.company.post',
+    'atlasy.use', 'atlasy.briefing'
+  ))
+  OR (r.key IN ('worker', 'contractor', 'guest') AND p.key IN (
+    'people.view', 'tasks.view', 'tasks.manage', 'schedule.view', 'chat.use',
+    'chat.company.read', 'chat.company.post', 'atlasy.use'
+  ));
+
 ALTER TABLE "Membership" ALTER COLUMN "rankId" SET NOT NULL;
 
 CREATE UNIQUE INDEX "Rank_companyId_key_key" ON "Rank"("companyId", "key");

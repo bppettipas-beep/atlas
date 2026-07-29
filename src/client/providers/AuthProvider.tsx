@@ -75,12 +75,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signIn,
       signOut,
       switchCompany,
-      isOwner: session?.membership.role === 'OWNER' || session?.membership.role === 'CO_OWNER',
-      isManager: session?.membership.role === 'MANAGER',
-      isLeadership:
-        session?.membership.role === 'OWNER' ||
-        session?.membership.role === 'CO_OWNER' ||
-        session?.membership.role === 'MANAGER',
+      isOwner: session?.membership.permissions.includes('company.manage') ?? false,
+      isManager: session?.membership.rank.key === 'manager',
+      isLeadership: session?.membership.permissions.includes('activity.view') ?? false,
     }),
     [session, loading, load, signIn, signOut, switchCompany],
   );

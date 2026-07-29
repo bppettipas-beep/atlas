@@ -9,7 +9,8 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { ApiError, asyncHandler } from '../http/errors';
 import { validateBody } from '../http/validate';
-import { currentAuth, requireRole } from '../middleware/authenticate';
+import { currentAuth, requirePermission } from '../middleware/authenticate';
+import { PERMISSIONS } from '../services/authorization';
 import { prisma } from '../prisma';
 import { emitToCompany } from '../realtime/io';
 import { broadcastOrganizationChange } from '../services/organization';
@@ -118,7 +119,7 @@ rolesRouter.get(
 
 rolesRouter.post(
   '/',
-  requireRole('OWNER', 'MANAGER'),
+  requirePermission(PERMISSIONS.ORGANIZATION_MANAGE),
   validateBody(roleBodySchema),
   asyncHandler(async (req, res) => {
     const auth = currentAuth(req);
@@ -168,7 +169,7 @@ rolesRouter.post(
 
 rolesRouter.patch(
   '/:id',
-  requireRole('OWNER', 'MANAGER'),
+  requirePermission(PERMISSIONS.ORGANIZATION_MANAGE),
   validateBody(roleBodySchema.partial()),
   asyncHandler(async (req, res) => {
     const auth = currentAuth(req);
@@ -222,7 +223,7 @@ rolesRouter.patch(
  */
 rolesRouter.patch(
   '/reorder/siblings',
-  requireRole('OWNER', 'MANAGER'),
+  requirePermission(PERMISSIONS.ORGANIZATION_MANAGE),
   validateBody(z.object({ ids: z.array(z.string().min(1)).min(1) })),
   asyncHandler(async (req, res) => {
     const auth = currentAuth(req);
@@ -247,7 +248,7 @@ rolesRouter.patch(
 
 rolesRouter.delete(
   '/:id',
-  requireRole('OWNER', 'MANAGER'),
+  requirePermission(PERMISSIONS.ORGANIZATION_MANAGE),
   asyncHandler(async (req, res) => {
     const auth = currentAuth(req);
     const role = await loadRole(req.params.id, auth.companyId);

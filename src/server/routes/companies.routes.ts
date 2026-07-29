@@ -2,7 +2,8 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { ApiError, asyncHandler } from '../http/errors';
 import { validateBody } from '../http/validate';
-import { currentAuth, requireAuth, requireRole } from '../middleware/authenticate';
+import { currentAuth, requireAuth, requirePermission } from '../middleware/authenticate';
+import { PERMISSIONS } from '../services/authorization';
 import { prisma } from '../prisma';
 import { emitToCompany } from '../realtime/io';
 import { recordActivity } from '../services/activity';
@@ -106,7 +107,7 @@ async function companyMetrics(companyId: string, now = new Date()): Promise<Comp
 
 companiesRouter.patch(
   '/current',
-  requireRole('OWNER'),
+  requirePermission(PERMISSIONS.COMPANY_MANAGE),
   validateBody(companyUpdateSchema),
   asyncHandler(async (req, res) => {
     const auth = currentAuth(req);
@@ -214,7 +215,7 @@ companiesRouter.get(
 /** Management-only operational metrics for the company dashboard and Atlasy. */
 companiesRouter.get(
   '/current/metrics',
-  requireRole('OWNER', 'MANAGER'),
+  requirePermission(PERMISSIONS.METRICS_VIEW),
   asyncHandler(async (req, res) => {
     const auth = currentAuth(req);
     res.json(await companyMetrics(auth.companyId));
@@ -224,7 +225,7 @@ companiesRouter.get(
 /** A concise, data-backed start-of-day brief. Atlasy can expand on this in chat. */
 companiesRouter.get(
   '/current/briefing',
-  requireRole('OWNER', 'MANAGER'),
+  requirePermission(PERMISSIONS.ATLASY_BRIEFING),
   asyncHandler(async (req, res) => {
     const auth = currentAuth(req);
     const metrics = await companyMetrics(auth.companyId);
@@ -269,7 +270,7 @@ companiesRouter.get(
 
 companiesRouter.post(
   '/current/announcements',
-  requireRole('OWNER', 'MANAGER'),
+  requirePermission(PERMISSIONS.ORGANIZATION_MANAGE),
   validateBody(
     z.object({
       title: z.string().trim().min(2, 'Give the announcement a title').max(140),
@@ -317,7 +318,7 @@ companiesRouter.post(
 
 companiesRouter.delete(
   '/current/announcements/:id',
-  requireRole('OWNER', 'MANAGER'),
+  requirePermission(PERMISSIONS.ORGANIZATION_MANAGE),
   asyncHandler(async (req, res) => {
     const auth = currentAuth(req);
     const announcement = await prisma.announcement.findFirst({

@@ -140,6 +140,7 @@ export interface PersonSummary {
   email: string;
   avatarUrl: string | null;
   role: CompanyRole;
+  rank: { id: string; key: string; name: string; position: number };
   status: MembershipStatus;
   jobTitle: string | null;
   managerId: string | null;
@@ -437,13 +438,15 @@ export interface SessionUserDto {
   membership: {
     id: string;
     role: CompanyRole;
+    rank: { id: string; key: string; name: string; position: number };
+    permissions: string[];
     jobTitle: string | null;
     status: MembershipStatus;
     availability: AvailabilityStatus;
   };
   company: CompanyDto;
   /** All companies this login belongs to, for the account switcher. */
-  memberships: { id: string; companyId: string; companyName: string; role: CompanyRole }[];
+  memberships: { id: string; companyId: string; companyName: string; role: CompanyRole; rankName: string }[];
   unreadNotifications: number;
 }
 

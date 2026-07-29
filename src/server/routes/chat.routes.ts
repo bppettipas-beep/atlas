@@ -3,12 +3,13 @@ import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { z } from 'zod';
 import { ApiError, asyncHandler } from '../http/errors';
 import { validateBody } from '../http/validate';
-import { currentAuth, requireAuth } from '../middleware/authenticate';
+import { currentAuth, requireAuth, requirePermission } from '../middleware/authenticate';
 import { prisma } from '../prisma';
 import { emitToCompany, emitToMember } from '../realtime/io';
+import { PERMISSIONS } from '../services/authorization';
 
 export const chatRouter = Router();
-chatRouter.use(requireAuth);
+chatRouter.use(requireAuth, requirePermission(PERMISSIONS.CHAT_USE));
 
 /** Limits automated spam without affecting a normal conversation. */
 const chatWriteLimiter = rateLimit({
@@ -75,7 +76,7 @@ async function postCompanyMessage(companyId: string, membershipId: string, body:
   return payload;
 }
 
-chatRouter.get('/company/messages', asyncHandler(async (req, res) => {
+chatRouter.get('/company/messages', requirePermission(PERMISSIONS.CHAT_COMPANY_READ), asyncHandler(async (req, res) => {
   const auth = currentAuth(req);
   const room = await ensureCompanyRoom(auth.companyId);
   const hours = Math.max(1, Math.min(168, Number(req.query.sinceHours) || 24));
@@ -88,7 +89,7 @@ chatRouter.get('/company/messages', asyncHandler(async (req, res) => {
   res.json({ items: rows.map(message) });
 }));
 
-chatRouter.post('/company/messages', chatWriteLimiter, validateBody(z.object({ body: z.string().trim().min(1).max(4_000) })), asyncHandler(async (req, res) => {
+chatRouter.post('/company/messages', requirePermission(PERMISSIONS.CHAT_COMPANY_POST), chatWriteLimiter, validateBody(z.object({ body: z.string().trim().min(1).max(4_000) })), asyncHandler(async (req, res) => {
   const auth = currentAuth(req);
   const payload = await postCompanyMessage(auth.companyId, auth.membershipId, req.body.body);
   res.status(201).json({ message: payload.message });

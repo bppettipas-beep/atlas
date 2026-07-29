@@ -272,7 +272,7 @@ model Membership {
   /// are migrated to `rankId`, then removed by the rank-system migration.
   role          CompanyRole      @default(WORKER)
   status        MembershipStatus @default(ACTIVE)
-  rankId        String?
+  rankId        String
   jobTitle      String?
   /// The company's own named role — what somebody *is* on the org chart.
   /// Carries no permissions.
@@ -295,7 +295,7 @@ model Membership {
   directReports Membership[] @relation("ManagerReports")
 
   assignedRole Role? @relation(fields: [roleId], references: [id], onDelete: SetNull)
-  rank         Rank? @relation(fields: [rankId], references: [id], onDelete: Restrict)
+  rank         Rank @relation(fields: [rankId], references: [id], onDelete: Restrict)
 
   profile                EmployeeProfile?
   orgNode                OrganizationNode?

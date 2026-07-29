@@ -33,6 +33,7 @@ import { ApiError, asyncHandler } from '../http/errors';
 import { validateBody, validateQuery, parsedQuery } from '../http/validate';
 import { currentAuth, requireAuth } from '../middleware/authenticate';
 import { prisma } from '../prisma';
+import { createCompanyRanks, rankIdForLegacyRole } from '../services/authorization';
 import { uniqueSlug } from '../lib/ids';
 import { recordActivity } from '../services/activity';
 import { ensureNotificationPreference, notify, notifyLeadership } from '../services/notifications';
@@ -219,13 +220,17 @@ export async function buildSessionPayload(
       },
       company: true,
       profile: true,
+      rank: { include: { permissions: { select: { permissionKey: true } } } },
     },
   });
 
   const [memberships, unread] = await Promise.all([
     prisma.membership.findMany({
       where: { userId, status: 'ACTIVE', deactivatedAt: null },
-      include: { company: { select: { id: true, name: true } } },
+      include: {
+        company: { select: { id: true, name: true } },
+        rank: { select: { name: true } },
+      },
       orderBy: { createdAt: 'asc' },
     }),
     prisma.notification.count({ where: { recipientId: membershipId, readAt: null } }),
@@ -245,6 +250,13 @@ export async function buildSessionPayload(
     membership: {
       id: membership.id,
       role: membership.role,
+      rank: {
+        id: membership.rank.id,
+        key: membership.rank.key,
+        name: membership.rank.name,
+        position: membership.rank.position,
+      },
+      permissions: [...new Set(membership.rank.permissions.map((grant) => grant.permissionKey))],
       jobTitle: membership.jobTitle,
       status: membership.status,
       availability: membership.profile?.availability ?? 'AVAILABLE',
@@ -255,6 +267,7 @@ export async function buildSessionPayload(
       companyId: item.companyId,
       companyName: item.company.name,
       role: item.role,
+      rankName: item.rank.name,
     })),
     unreadNotifications: unread,
   };
@@ -420,11 +433,13 @@ authRouter.post(
           logoUrl: input.logoUrl || null,
         },
       });
+      const ranks = await createCompanyRanks(tx, company.id);
 
       const membership = await tx.membership.create({
         data: {
           userId: user.id,
           companyId: company.id,
+          rankId: ranks.get('owner')!.id,
           role: 'OWNER',
           jobTitle: 'Owner',
           profile: {
@@ -601,6 +616,7 @@ authRouter.post(
         data: {
           userId: user.id,
           companyId: invite.companyId,
+          rankId: await rankIdForLegacyRole(tx, invite.companyId, invite.role),
           role: invite.role,
           roleId: defaultRole?.id ?? null,
           jobTitle: input.jobTitle || null,

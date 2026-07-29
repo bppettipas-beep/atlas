@@ -2,19 +2,20 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { ApiError, asyncHandler } from '../http/errors';
 import { validateBody } from '../http/validate';
-import { currentAuth, requireAuth, requireRole } from '../middleware/authenticate';
+import { currentAuth, requireAuth, requirePermission } from '../middleware/authenticate';
 import { generateInviteCode } from '../lib/ids';
 import { prisma } from '../prisma';
 import { recordActivity } from '../services/activity';
 import { serializeInviteCode } from '../services/serializers';
 import type { CompanyRole, DirectInviteDto } from '../../shared/types';
+import { PERMISSIONS } from '../services/authorization';
 
 export const invitesRouter = Router();
 
 // Invitation codes are secrets: only owners and managers may read or write
 // them. Workers hitting these routes get a 403 from the server, not just a
 // hidden button in the UI.
-invitesRouter.use(requireAuth, requireRole('OWNER', 'MANAGER'));
+invitesRouter.use(requireAuth, requirePermission(PERMISSIONS.INVITES_MANAGE));
 
 const createSchema = z.object({
   label: z.string().trim().max(80).optional().or(z.literal('')),
@@ -52,7 +53,7 @@ invitesRouter.post(
     const input = req.body as z.infer<typeof createSchema>;
 
     // Managers must not be able to mint owner-level or manager-level access.
-    if (auth.role === 'MANAGER' && input.role === 'MANAGER') {
+    if (auth.rankPosition >= 4 && input.role === 'MANAGER') {
       throw ApiError.forbidden('Only the owner can invite managers.');
     }
     if (input.expiresAt && input.expiresAt.getTime() < Date.now()) {
@@ -234,7 +235,7 @@ invitesRouter.post(
       teamId?: string | null;
     };
 
-    if (auth.role === 'MANAGER' && input.role === 'MANAGER') {
+    if (auth.rankPosition >= 4 && input.role === 'MANAGER') {
       throw ApiError.forbidden('Only the owner can invite managers.');
     }
 

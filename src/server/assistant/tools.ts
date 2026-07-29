@@ -18,7 +18,7 @@ export interface ToolDefinition {
   description: string;
   /** JSON Schema for the arguments, as the OpenAI tool-calling format expects. */
   parameters: Record<string, unknown>;
-  method: 'GET' | 'POST' | 'PATCH' | 'DELETE';
+  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   /** `:param` segments are filled from the arguments; the rest become body or query. */
   path: string;
   /**
@@ -29,6 +29,8 @@ export interface ToolDefinition {
   mutates?: boolean;
   /** Available to Atlasy's server flow but never offered to the language model. */
   internal?: boolean;
+  /** Omit this tool from the model entirely when the caller lacks the grant. */
+  requiredPermission?: string;
 }
 
 const str = (description: string) => ({ type: 'string', description });
@@ -58,6 +60,115 @@ export const TOOLS: ToolDefinition[] = [
     method: 'GET',
     path: '/api/roles',
     parameters: { type: 'object', properties: {} },
+  },
+  {
+    name: 'list_ranks_and_permissions',
+    requiredPermission: 'ranks.manage',
+    description:
+      'List the company’s access ranks, hierarchy positions, member counts, permission catalog, available scopes, and every current permission grant. Use this before changing rank permissions or assigning a rank. Atlas only allows this when the signed-in person has ranks.manage.',
+    method: 'GET',
+    path: '/api/ranks',
+    parameters: { type: 'object', properties: {} },
+  },
+  {
+    name: 'create_rank',
+    requiredPermission: 'ranks.manage',
+    mutates: true,
+    description:
+      'Create a new company access rank. This creates an empty rank with no permissions; use set_rank_permissions afterward to grant access. Requires ranks.manage.',
+    method: 'POST',
+    path: '/api/ranks',
+    parameters: {
+      type: 'object',
+      required: ['name'],
+      properties: {
+        name: str('Unique rank name, such as "Dispatch Supervisor".'),
+        description: str('Optional plain-language description of the rank.'),
+      },
+    },
+  },
+  {
+    name: 'edit_rank',
+    requiredPermission: 'ranks.manage',
+    mutates: true,
+    description:
+      'Rename a rank or change its description. Use list_ranks_and_permissions first to get the exact rank id. Atlas prevents a person from editing a rank at or above their own.',
+    method: 'PATCH',
+    path: '/api/ranks/:id/details',
+    parameters: {
+      type: 'object',
+      required: ['id'],
+      properties: {
+        id: str('Exact rank id from list_ranks_and_permissions.'),
+        name: str('New rank name. Omit to leave unchanged.'),
+        description: {
+          type: ['string', 'null'],
+          description: 'New description, null to clear it, or omit to leave unchanged.',
+        },
+      },
+    },
+  },
+  {
+    name: 'set_rank_permissions',
+    requiredPermission: 'ranks.manage',
+    mutates: true,
+    description:
+      'Replace every permission grant on one rank. This is a complete replacement, not a partial patch: preserve any existing grants the user still wants. Always call list_ranks_and_permissions first, explain the resulting access clearly, and only use permission keys and scopes returned by that tool. Owner permissions cannot be reduced.',
+    method: 'PUT',
+    path: '/api/ranks/:id/permissions',
+    parameters: {
+      type: 'object',
+      required: ['id', 'permissions'],
+      properties: {
+        id: str('Exact rank id from list_ranks_and_permissions.'),
+        permissions: {
+          type: 'array',
+          description: 'The complete desired grant list for this rank.',
+          items: {
+            type: 'object',
+            required: ['key', 'scope', 'selectedTeamIds'],
+            properties: {
+              key: str('Exact permission key from the catalog.'),
+              scope: {
+                type: 'string',
+                enum: [
+                  'OWN',
+                  'ASSIGNED',
+                  'TEAM',
+                  'MANAGED_PEOPLE',
+                  'SELECTED_TEAMS',
+                  'COMPANY_WIDE',
+                  'EXPLICITLY_SHARED',
+                ],
+              },
+              selectedTeamIds: {
+                type: 'array',
+                items: { type: 'string' },
+                description:
+                  'Exact team ids from list_teams when scope is SELECTED_TEAMS; otherwise an empty array.',
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+  {
+    name: 'assign_rank',
+    requiredPermission: 'ranks.manage',
+    mutates: true,
+    description:
+      'Assign an access rank to a person. Use search_people and list_ranks_and_permissions first. Atlas prevents self-promotion and assigning a rank at or above the signed-in person.',
+    method: 'PATCH',
+    path: '/api/ranks/members/:membershipId',
+    parameters: {
+      type: 'object',
+      required: ['membershipId', 'rankId'],
+      properties: {
+        membershipId: str('Exact membership id from search_people.'),
+        rankId: str('Exact rank id from list_ranks_and_permissions.'),
+      },
+    },
   },
   {
     name: 'list_tasks',
@@ -435,8 +546,11 @@ export async function runTool(
 }
 
 /** The tool list in the shape the chat completions API expects. */
-export function toolSchemas() {
-  return TOOLS.filter((tool) => !tool.internal).map((tool) => ({
+export function toolSchemas(permissionKeys?: readonly string[]) {
+  const allowed = new Set(permissionKeys);
+  return TOOLS.filter(
+    (tool) => !tool.internal && (!tool.requiredPermission || allowed.has(tool.requiredPermission)),
+  ).map((tool) => ({
     type: 'function' as const,
     function: { name: tool.name, description: tool.description, parameters: tool.parameters },
   }));

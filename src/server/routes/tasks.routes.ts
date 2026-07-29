@@ -1,9 +1,11 @@
 import { Router } from 'express';
+import { PermissionScope } from '@prisma/client';
 import { z } from 'zod';
 import type { Prisma } from '@prisma/client';
 import { ApiError, asyncHandler } from '../http/errors';
 import { booleanQuery, parsedQuery, validateBody, validateQuery } from '../http/validate';
-import { currentAuth, requireAuth, requireRole } from '../middleware/authenticate';
+import { currentAuth, requireAuth, requirePermission } from '../middleware/authenticate';
+import { canAccessMembership, hasPermission, PERMISSIONS } from '../services/authorization';
 import { endOfDay, startOfDay } from '../lib/dates';
 import { upload } from '../lib/uploads';
 import { prisma } from '../prisma';
@@ -24,7 +26,7 @@ import type { TaskDetail } from '../../shared/types';
 
 export const tasksRouter = Router();
 
-tasksRouter.use(requireAuth);
+tasksRouter.use(requireAuth, requirePermission(PERMISSIONS.TASKS_VIEW));
 
 const STATUSES = ['NOT_STARTED', 'IN_PROGRESS', 'BLOCKED', 'AWAITING_REVIEW', 'DONE'] as const;
 const PRIORITIES = ['LOW', 'MEDIUM', 'HIGH', 'URGENT'] as const;
@@ -264,13 +266,35 @@ async function assertRelationsInCompany(
 
 tasksRouter.post(
   '/',
-  requireRole('OWNER', 'MANAGER'),
+  requirePermission(PERMISSIONS.TASKS_CREATE),
   validateBody(createSchema),
   asyncHandler(async (req, res) => {
     const auth = currentAuth(req);
     const input = req.body as z.infer<typeof createSchema>;
 
     await assertRelationsInCompany(auth.companyId, input);
+    const createGrants = await hasPermission(auth, PERMISSIONS.TASKS_CREATE);
+    const sharesTargetTeam = input.teamId && createGrants.some((grant) => grant.scope === PermissionScope.TEAM)
+      ? Boolean(await prisma.teamMembership.findFirst({
+          where: { teamId: input.teamId, membershipId: auth.membershipId },
+          select: { id: true },
+        }))
+      : false;
+    const canCreate =
+      createGrants.some((grant) => grant.scope === PermissionScope.COMPANY_WIDE) ||
+      (input.assigneeId === auth.membershipId &&
+        createGrants.some((grant) =>
+          grant.scope === PermissionScope.OWN || grant.scope === PermissionScope.ASSIGNED)) ||
+      (Boolean(input.assigneeId) &&
+        await canAccessMembership(auth, PERMISSIONS.TASKS_CREATE, input.assigneeId!)) ||
+      (Boolean(input.teamId) &&
+        createGrants.some((grant) =>
+          (grant.scope === PermissionScope.SELECTED_TEAMS &&
+            grant.selectedTeamIds.includes(input.teamId!)) ||
+          (grant.scope === PermissionScope.TEAM && sharesTargetTeam)));
+    if (!canCreate) {
+      throw ApiError.forbidden('Your task creation scope does not include that assignee or team.');
+    }
 
     const task = await prisma.task.create({
       data: {
@@ -354,7 +378,7 @@ const updateSchema = createSchema
 
 tasksRouter.patch(
   '/:id',
-  requireRole('OWNER', 'MANAGER'),
+  requirePermission(PERMISSIONS.TASKS_MANAGE),
   validateBody(updateSchema),
   asyncHandler(async (req, res) => {
     const auth = currentAuth(req);
@@ -587,7 +611,7 @@ tasksRouter.patch(
 
 tasksRouter.post(
   '/:id/approve',
-  requireRole('OWNER', 'MANAGER'),
+  requirePermission(PERMISSIONS.TASKS_MANAGE),
   asyncHandler(async (req, res) => {
     const auth = currentAuth(req);
     const existing = await loadTask(req.params.id, auth);
@@ -658,7 +682,7 @@ tasksRouter.delete(
 
 tasksRouter.delete(
   '/:id/permanent',
-  requireRole('OWNER', 'MANAGER'),
+  requirePermission(PERMISSIONS.TASKS_MANAGE),
   asyncHandler(async (req, res) => {
     const auth = currentAuth(req);
     const existing = await loadTask(req.params.id, auth);
@@ -673,7 +697,7 @@ tasksRouter.delete(
 
 tasksRouter.delete(
   '/:id',
-  requireRole('OWNER', 'MANAGER'),
+  requirePermission(PERMISSIONS.TASKS_MANAGE),
   asyncHandler(async (req, res) => {
     const auth = currentAuth(req);
     const existing = await loadTask(req.params.id, auth);
@@ -698,7 +722,7 @@ async function recalculateProgress(taskId: string) {
 
 tasksRouter.post(
   '/:id/subtasks',
-  requireRole('OWNER', 'MANAGER'),
+  requirePermission(PERMISSIONS.TASKS_MANAGE),
   validateBody(z.object({ title: z.string().trim().min(1, 'Name the step').max(200) })),
   asyncHandler(async (req, res) => {
     const auth = currentAuth(req);
@@ -747,7 +771,7 @@ tasksRouter.patch(
 
 tasksRouter.delete(
   '/:id/subtasks/:subtaskId',
-  requireRole('OWNER', 'MANAGER'),
+  requirePermission(PERMISSIONS.TASKS_MANAGE),
   asyncHandler(async (req, res) => {
     const auth = currentAuth(req);
     const task = await loadTask(req.params.id, auth);
@@ -952,7 +976,7 @@ const templateSchema = z.object({
 
 tasksRouter.get(
   '/templates/list',
-  requireRole('OWNER', 'MANAGER'),
+  requirePermission(PERMISSIONS.TASKS_MANAGE),
   asyncHandler(async (req, res) => {
     const auth = currentAuth(req);
     const templates = await prisma.taskTemplate.findMany({
@@ -990,7 +1014,7 @@ tasksRouter.get(
 
 tasksRouter.post(
   '/templates',
-  requireRole('OWNER', 'MANAGER'),
+  requirePermission(PERMISSIONS.TASKS_MANAGE),
   validateBody(templateSchema),
   asyncHandler(async (req, res) => {
     const auth = currentAuth(req);
@@ -1028,7 +1052,7 @@ tasksRouter.post(
 
 tasksRouter.patch(
   '/templates/:templateId',
-  requireRole('OWNER', 'MANAGER'),
+  requirePermission(PERMISSIONS.TASKS_DELETE),
   validateBody(templateSchema.partial()),
   asyncHandler(async (req, res) => {
     const auth = currentAuth(req);
@@ -1055,7 +1079,7 @@ tasksRouter.patch(
 
 tasksRouter.delete(
   '/templates/:templateId',
-  requireRole('OWNER', 'MANAGER'),
+  requirePermission(PERMISSIONS.TASKS_DELETE),
   asyncHandler(async (req, res) => {
     const auth = currentAuth(req);
     const existing = await prisma.taskTemplate.findFirst({

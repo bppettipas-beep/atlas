@@ -109,6 +109,51 @@ describe('owner sign-up', () => {
   });
 });
 
+describe('ranks and permissions', () => {
+  it('bootstraps system ranks and grants with every new company', async () => {
+    const owner = await signUpOwner(app);
+    const response = await owner.agent.get('/api/ranks');
+
+    expect(response.status).toBe(200);
+    expect(response.body.items).toHaveLength(9);
+    expect(response.body.items[0]).toMatchObject({
+      key: 'owner',
+      position: 1,
+      isProtected: true,
+    });
+    expect(response.body.items[0].permissions.length).toBe(response.body.catalog.length);
+    expect(owner.session.membership.rank.key).toBe('owner');
+    expect(owner.session.membership.permissions).toContain('ranks.manage');
+  });
+
+  it('edits stored grants while keeping owner authority locked', async () => {
+    const owner = await signUpOwner(app);
+    const ranks = await owner.agent.get('/api/ranks');
+    const manager = ranks.body.items.find((rank: { key: string }) => rank.key === 'manager');
+    const ownerRank = ranks.body.items.find((rank: { key: string }) => rank.key === 'owner');
+
+    const changed = await owner.agent.put(`/api/ranks/${manager.id}/permissions`).send({
+      permissions: [{ key: 'schedule.view', scope: 'TEAM', selectedTeamIds: [] }],
+    });
+    expect(changed.status).toBe(200);
+    expect(
+      changed.body.items.find((rank: { key: string }) => rank.key === 'manager').permissions,
+    ).toEqual([expect.objectContaining({ permissionKey: 'schedule.view', scope: 'TEAM' })]);
+
+    await owner.agent
+      .put(`/api/ranks/${ownerRank.id}/permissions`)
+      .send({ permissions: [] })
+      .expect(403);
+  });
+
+  it('does not expose rank administration to workers', async () => {
+    const owner = await signUpOwner(app);
+    const code = await createInviteCode(owner);
+    const worker = await joinWithCode(app, code);
+    await worker.agent.get('/api/ranks').expect(403);
+  });
+});
+
 /* ========================================================================== */
 /*  Worker join by invitation code                                            */
 /* ========================================================================== */
@@ -787,16 +832,20 @@ describe('Atlasy', () => {
   });
 
   it('only offers tools that map to real, permission-checked endpoints', async () => {
-    const { TOOLS } = await import('../src/server/assistant/tools');
+    const { TOOLS, toolSchemas } = await import('../src/server/assistant/tools');
 
     // The model picks a tool name, never a URL. If that list ever grew a path
     // outside /api, the assistant would have a door the routes do not guard.
     for (const tool of TOOLS) {
       expect(tool.path.startsWith('/api/')).toBe(true);
-      expect(['GET', 'POST', 'PATCH', 'DELETE']).toContain(tool.method);
+      expect(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']).toContain(tool.method);
       expect(tool.description.length).toBeGreaterThan(10);
     }
     expect(TOOLS.map((tool) => tool.name)).toContain('create_task');
+    const withoutRankAccess = toolSchemas([]).map((schema) => schema.function.name);
+    const withRankAccess = toolSchemas(['ranks.manage']).map((schema) => schema.function.name);
+    expect(withoutRankAccess).not.toContain('set_rank_permissions');
+    expect(withRankAccess).toContain('set_rank_permissions');
   });
 });
 

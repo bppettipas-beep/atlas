@@ -3,9 +3,10 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { ApiError, asyncHandler } from '../http/errors';
 import { booleanQuery, parsedQuery, validateBody, validateQuery } from '../http/validate';
-import { currentAuth, requireAuth, requireRole } from '../middleware/authenticate';
+import { currentAuth, requireAuth, requirePermission } from '../middleware/authenticate';
 import { daysAgo, endOfDay, startOfDay } from '../lib/dates';
 import { prisma } from '../prisma';
+import { PERMISSIONS, rankIdForLegacyRole } from '../services/authorization';
 import { emitToCompany } from '../realtime/io';
 import { recordActivity } from '../services/activity';
 import { notify, notifyLeadership } from '../services/notifications';
@@ -25,7 +26,7 @@ import type { MyDayDto, PersonDetail, PersonSummary } from '../../shared/types';
 
 export const peopleRouter = Router();
 
-peopleRouter.use(requireAuth);
+peopleRouter.use(requireAuth, requirePermission(PERMISSIONS.PEOPLE_VIEW));
 
 /** Loads a membership and proves it belongs to the caller's company. */
 async function loadPersonInCompany(id: string, companyId: string) {
@@ -432,7 +433,7 @@ const SELF_EDITABLE = new Set([
  */
 peopleRouter.post(
   '/',
-  requireRole('OWNER', 'MANAGER'),
+  requirePermission(PERMISSIONS.PEOPLE_MANAGE),
   validateBody(
     z.object({
       fullName: z.string().trim().min(2, 'Enter their name').max(120),
@@ -507,6 +508,7 @@ peopleRouter.post(
         data: {
           userId: user.id,
           companyId: auth.companyId,
+          rankId: await rankIdForLegacyRole(tx, auth.companyId, 'WORKER'),
           role: 'WORKER',
           isPlaceholder: true,
           roleId: input.roleId ?? null,
@@ -553,7 +555,7 @@ peopleRouter.post(
  */
 peopleRouter.delete(
   '/:id/placeholder',
-  requireRole('OWNER', 'MANAGER'),
+  requirePermission(PERMISSIONS.PEOPLE_MANAGE),
   asyncHandler(async (req, res) => {
     const auth = currentAuth(req);
     const membership = await loadPersonInCompany(req.params.id, auth.companyId);
@@ -584,7 +586,7 @@ peopleRouter.delete(
  */
 peopleRouter.patch(
   '/:id/assigned-role',
-  requireRole('OWNER', 'MANAGER'),
+  requirePermission(PERMISSIONS.PEOPLE_MANAGE),
   validateBody(z.object({ roleId: z.string().min(1).nullable() })),
   asyncHandler(async (req, res) => {
     const auth = currentAuth(req);
@@ -714,7 +716,7 @@ peopleRouter.patch(
 
 peopleRouter.patch(
   '/:id/role',
-  requireRole('OWNER'),
+  requirePermission(PERMISSIONS.RANKS_MANAGE),
   validateBody(z.object({ role: z.enum(['OWNER', 'CO_OWNER', 'MANAGER', 'WORKER']) })),
   asyncHandler(async (req, res) => {
     const auth = currentAuth(req);
@@ -733,7 +735,21 @@ peopleRouter.patch(
       }
     }
 
-    await prisma.membership.update({ where: { id: membership.id }, data: { role } });
+    await prisma.$transaction(async (tx) => {
+      const rankId = await rankIdForLegacyRole(tx, auth.companyId, role);
+      await tx.membership.update({ where: { id: membership.id }, data: { role, rankId } });
+      await tx.permissionAuditLog.create({
+        data: {
+          companyId: auth.companyId,
+          actorId: auth.membershipId,
+          affectedMembershipId: membership.id,
+          affectedRankId: rankId,
+          action: 'MEMBER_RANK_CHANGED',
+          previousValue: { role: membership.role, rankId: membership.rankId },
+          nextValue: { role, rankId },
+        },
+      });
+    });
 
     await recordActivity({
       companyId: auth.companyId,
@@ -751,7 +767,7 @@ peopleRouter.patch(
 
 peopleRouter.patch(
   '/:id/manager',
-  requireRole('OWNER', 'MANAGER'),
+  requirePermission(PERMISSIONS.PEOPLE_MANAGE),
   validateBody(z.object({ managerId: z.string().min(1).nullable() })),
   asyncHandler(async (req, res) => {
     const auth = currentAuth(req);
@@ -808,7 +824,7 @@ peopleRouter.patch(
 
 peopleRouter.delete(
   '/:id',
-  requireRole('OWNER'),
+  requirePermission(PERMISSIONS.PEOPLE_MANAGE),
   asyncHandler(async (req, res) => {
     const auth = currentAuth(req);
     const membership = await loadPersonInCompany(req.params.id, auth.companyId);
@@ -1012,7 +1028,7 @@ peopleRouter.delete(
 
 peopleRouter.post(
   '/:id/training',
-  requireRole('OWNER', 'MANAGER'),
+  requirePermission(PERMISSIONS.PEOPLE_MANAGE),
   validateBody(
     z.object({
       title: z.string().trim().min(1, 'Name the training step').max(160),
@@ -1062,7 +1078,7 @@ peopleRouter.patch(
 
 peopleRouter.post(
   '/:id/notes',
-  requireRole('OWNER', 'MANAGER'),
+  requirePermission(PERMISSIONS.PEOPLE_MANAGE),
   validateBody(z.object({ body: z.string().trim().min(1, 'Write a note').max(2000) })),
   asyncHandler(async (req, res) => {
     const auth = currentAuth(req);
@@ -1092,14 +1108,14 @@ peopleRouter.post(
 
 peopleRouter.delete(
   '/:id/notes/:noteId',
-  requireRole('OWNER', 'MANAGER'),
+  requirePermission(PERMISSIONS.PEOPLE_MANAGE),
   asyncHandler(async (req, res) => {
     const auth = currentAuth(req);
     const note = await prisma.memberNote.findFirst({
       where: { id: req.params.noteId, companyId: auth.companyId, subjectId: req.params.id },
     });
     if (!note) throw ApiError.notFound('That note no longer exists.');
-    if (auth.role !== 'OWNER' && auth.role !== 'CO_OWNER' && note.authorId !== auth.membershipId) {
+    if (auth.rankPosition > 2 && note.authorId !== auth.membershipId) {
       throw ApiError.forbidden('You can only delete notes you wrote.');
     }
     await prisma.memberNote.delete({ where: { id: note.id } });
@@ -1137,7 +1153,7 @@ peopleRouter.post(
 // Keeps the map in sync if a company was created before nodes existed.
 peopleRouter.post(
   '/sync-organization',
-  requireRole('OWNER', 'MANAGER'),
+  requirePermission(PERMISSIONS.PEOPLE_MANAGE),
   asyncHandler(async (req, res) => {
     const auth = currentAuth(req);
     await ensureOrganizationNodes(auth.companyId);

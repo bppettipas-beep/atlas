@@ -14,6 +14,7 @@
 import { PrismaClient, type CompanyRole, type Prisma } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { loadEnvFile } from '../src/server/lib/loadEnv';
+import { createCompanyRanks } from '../src/server/services/authorization';
 
 loadEnvFile();
 
@@ -348,6 +349,7 @@ async function main() {
       timezone: 'America/Los_Angeles',
     },
   });
+  const rankByKey = await prisma.$transaction((tx) => createCompanyRanks(tx, company.id));
 
   // ------------------------------- roles -----------------------------------
   const roleByKey = new Map<string, string>();
@@ -378,6 +380,15 @@ async function main() {
       data: {
         userId: user.id,
         companyId: company.id,
+        rankId: rankByKey.get(
+          person.role === 'OWNER'
+            ? 'owner'
+            : person.role === 'CO_OWNER'
+              ? 'co_owner'
+              : person.role === 'MANAGER'
+                ? 'manager'
+                : 'worker',
+        )!.id,
         role: person.role,
         roleId: person.roleKey ? (roleByKey.get(person.roleKey) ?? null) : null,
         jobTitle: person.jobTitle,

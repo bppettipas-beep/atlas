@@ -193,7 +193,7 @@ interface Completion {
   error?: { message?: string };
 }
 
-async function complete(messages: ChatMessage[]): Promise<ChatMessage> {
+async function complete(messages: ChatMessage[], permissionKeys: readonly string[]): Promise<ChatMessage> {
   let response: Response;
   try {
     response = await fetch(`${env.ASSISTANT_BASE_URL.replace(/\/+$/, '')}/chat/completions`, {
@@ -206,7 +206,7 @@ async function complete(messages: ChatMessage[]): Promise<ChatMessage> {
       body: JSON.stringify({
         model: env.ASSISTANT_MODEL,
         messages,
-        tools: toolSchemas(),
+        tools: toolSchemas(permissionKeys),
         tool_choice: 'auto',
         temperature: 0.2,
         // Anthropic's API requires an output cap, unlike most OpenAI-compatible
@@ -266,6 +266,12 @@ function describe(name: string, ok: boolean, data: unknown): string {
     return `Created the role “${(data as { name: string }).name}”`;
   }
   if (name === 'assign_role') return 'Role assigned';
+  if (name === 'create_rank' && typeof data === 'object' && data && 'name' in data) {
+    return `Created the rank “${(data as { name: string }).name}”`;
+  }
+  if (name === 'edit_rank') return 'Rank details updated';
+  if (name === 'set_rank_permissions') return 'Rank permissions updated';
+  if (name === 'assign_rank') return 'Rank assigned';
   if (name === 'remove_person') return 'Removed from the company';
   if (name === 'post_announcement' && typeof data === 'object' && data && 'title' in data) {
     return `Posted “${(data as { title: string }).title}”`;
@@ -277,7 +283,13 @@ function describe(name: string, ok: boolean, data: unknown): string {
 export async function runAssistant(options: {
   history: ChatMessage[];
   cookie: string;
-  context: { fullName: string; role: string; companyName: string; membershipId: string };
+  context: {
+    fullName: string;
+    role: string;
+    companyName: string;
+    membershipId: string;
+    permissionKeys: string[];
+  };
 }): Promise<{ reply: string; actions: ToolTrace[] }> {
   if (!env.assistantEnabled) {
     throw ApiError.badRequest('Atlasy is not configured on this instance.', 'ASSISTANT_DISABLED');
@@ -443,7 +455,7 @@ export async function runAssistant(options: {
   const actions: ToolTrace[] = [];
 
   for (let round = 0; round < MAX_ROUNDS; round += 1) {
-    const message = await complete(messages);
+    const message = await complete(messages, options.context.permissionKeys);
     messages.push(message);
 
     const calls = message.tool_calls ?? [];
