@@ -8,7 +8,7 @@
 export const COMPANY_ROLES = ['OWNER', 'CO_OWNER', 'MANAGER', 'WORKER'] as const;
 export type CompanyRole = (typeof COMPANY_ROLES)[number];
 
-export const MEMBERSHIP_STATUSES = ['ACTIVE', 'SUSPENDED'] as const;
+export const MEMBERSHIP_STATUSES = ['INVITED', 'ACTIVE', 'SUSPENDED', 'DEACTIVATED', 'REMOVED'] as const;
 export type MembershipStatus = (typeof MEMBERSHIP_STATUSES)[number];
 
 export const AVAILABILITY_STATUSES = [
