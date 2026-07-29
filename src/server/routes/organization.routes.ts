@@ -1,9 +1,14 @@
 import { Router } from 'express';
+import { PermissionScope } from '@prisma/client';
 import { z } from 'zod';
 import { ApiError, asyncHandler } from '../http/errors';
 import { parsedQuery, validateBody, validateQuery } from '../http/validate';
 import { currentAuth, requireAuth, requirePermission } from '../middleware/authenticate';
-import { PERMISSIONS } from '../services/authorization';
+import {
+  canAccessMembership,
+  hasPermission,
+  PERMISSIONS,
+} from '../services/authorization';
 import { prisma } from '../prisma';
 import { emitToCompany } from '../realtime/io';
 import { recordActivity } from '../services/activity';
@@ -29,7 +34,43 @@ organizationRouter.get(
   asyncHandler(async (req, res) => {
     const auth = currentAuth(req);
     const filters = parsedQuery<z.infer<typeof graphQuerySchema>>(res);
-    res.json(await buildOrganizationGraph(auth.companyId, filters));
+    const graph = await buildOrganizationGraph(auth.companyId, filters);
+    const grants = await hasPermission(auth, PERMISSIONS.PEOPLE_VIEW);
+    if (grants.some((grant) => grant.scope === PermissionScope.COMPANY_WIDE)) {
+      res.json(graph);
+      return;
+    }
+    const personVisibility = await Promise.all(
+      graph.nodes.map(async (node) => ({
+        node,
+        allowed: !node.person ||
+          await canAccessMembership(auth, PERMISSIONS.PEOPLE_VIEW, node.person.id),
+      })),
+    );
+    const visiblePeople = personVisibility
+      .filter(({ node, allowed }) => Boolean(node.person) && allowed)
+      .map(({ node }) => node.person!.id);
+    const visibleTeamIds = new Set(
+      (await prisma.teamMembership.findMany({
+        where: { membershipId: { in: visiblePeople } },
+        select: { teamId: true },
+      })).map((row) => row.teamId),
+    );
+    const nodes = personVisibility
+      .filter(({ node, allowed }) => allowed && (!node.team || visibleTeamIds.has(node.team.id)))
+      .map(({ node }) => node);
+    const nodeIds = new Set(nodes.map((node) => node.id));
+    res.json({
+      nodes,
+      edges: graph.edges.filter((edge) => nodeIds.has(edge.source) && nodeIds.has(edge.target)),
+      summary: {
+        people: nodes.filter((node) => node.kind === 'PERSON').length,
+        teams: nodes.filter((node) => node.kind === 'TEAM').length,
+        activeTasks: 0,
+        overdueTasks: 0,
+        unassignedTasks: 0,
+      },
+    });
   }),
 );
 
@@ -275,10 +316,28 @@ organizationRouter.patch(
   asyncHandler(async (req, res) => {
     const auth = currentAuth(req);
     const team = await assertCanManageTeam(auth, req.params.id);
+    const input = req.body as z.infer<typeof teamSchema>;
+    if (input.leadId) {
+      const lead = await prisma.membership.findFirst({
+        where: {
+          id: input.leadId,
+          companyId: auth.companyId,
+          status: 'ACTIVE',
+          deactivatedAt: null,
+        },
+        select: { id: true },
+      });
+      if (!lead) throw ApiError.badRequest('That team lead is not in your company.');
+    }
 
     const updated = await prisma.team.update({
       where: { id: team.id },
-      data: req.body as Record<string, unknown>,
+      data: {
+        ...(input.name === undefined ? {} : { name: input.name }),
+        ...(input.description === undefined ? {} : { description: input.description }),
+        ...(input.color === undefined ? {} : { color: input.color }),
+        ...(input.leadId === undefined ? {} : { leadId: input.leadId }),
+      },
       include: { _count: { select: { members: true } } },
     });
 

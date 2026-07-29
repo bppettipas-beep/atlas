@@ -7,6 +7,7 @@ export interface AccessTokenClaims {
   sub: string; // user id
   mid: string; // membership id
   cid: string; // company id
+  sid: string; // revocable refresh-session id
   role: 'OWNER' | 'CO_OWNER' | 'MANAGER' | 'WORKER';
 }
 
@@ -32,11 +33,16 @@ export function verifyAccessToken(token: string): AccessTokenClaims | null {
   try {
     const payload = jwt.verify(token, env.JWT_SECRET, { issuer: 'atlas' });
     if (typeof payload === 'string') return null;
-    const { sub, mid, cid, role } = payload as Record<string, unknown>;
-    if (typeof sub !== 'string' || typeof mid !== 'string' || typeof cid !== 'string') return null;
+    const { sub, mid, cid, sid, role } = payload as Record<string, unknown>;
+    if (
+      typeof sub !== 'string' ||
+      typeof mid !== 'string' ||
+      typeof cid !== 'string' ||
+      typeof sid !== 'string'
+    ) return null;
     if (role !== 'OWNER' && role !== 'CO_OWNER' && role !== 'MANAGER' && role !== 'WORKER')
       return null;
-    return { sub, mid, cid, role };
+    return { sub, mid, cid, sid, role };
   } catch {
     return null;
   }

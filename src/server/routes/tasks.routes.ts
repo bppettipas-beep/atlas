@@ -5,14 +5,19 @@ import type { Prisma } from '@prisma/client';
 import { ApiError, asyncHandler } from '../http/errors';
 import { booleanQuery, parsedQuery, validateBody, validateQuery } from '../http/validate';
 import { currentAuth, requireAuth, requirePermission } from '../middleware/authenticate';
-import { canAccessMembership, hasPermission, PERMISSIONS } from '../services/authorization';
+import {
+  canAccessMembership,
+  canAccessTask,
+  hasPermission,
+  PERMISSIONS,
+} from '../services/authorization';
 import { endOfDay, startOfDay } from '../lib/dates';
 import { upload } from '../lib/uploads';
 import { prisma } from '../prisma';
 import { emitToCompany } from '../realtime/io';
 import { recordActivity } from '../services/activity';
 import { notify, notifyLeadership } from '../services/notifications';
-import { canEditTask, canViewTask, isLeadership, managedTeamIds } from '../services/permissions';
+import { canEditTask, canViewTask, isLeadership } from '../services/permissions';
 import { computeNextRun, escalateTask } from '../services/taskAutomation';
 import {
   activityInclude,
@@ -123,13 +128,37 @@ async function toDetail(
 
 /** Restricts a worker's task list to work they are allowed to see. */
 async function visibilityFilter(auth: ReturnType<typeof currentAuth>) {
-  if (isLeadership(auth)) return {};
-  const teamIds = await managedTeamIds(auth);
+  const grants = await hasPermission(auth, PERMISSIONS.TASKS_VIEW);
+  if (grants.some((grant) => grant.scope === PermissionScope.COMPANY_WIDE)) return {};
+
+  const actorTeamIds = grants.some((grant) => grant.scope === PermissionScope.TEAM)
+    ? await prisma.teamMembership.findMany({
+        where: { membershipId: auth.membershipId },
+        select: { teamId: true },
+      }).then((rows) => rows.map((row) => row.teamId))
+    : [];
+  const selectedTeamIds = grants
+    .filter((grant) => grant.scope === PermissionScope.SELECTED_TEAMS)
+    .flatMap((grant) => grant.selectedTeamIds);
+  const managedIds = grants.some((grant) => grant.scope === PermissionScope.MANAGED_PEOPLE)
+    ? await prisma.membership.findMany({
+        where: { companyId: auth.companyId, managerId: auth.membershipId },
+        select: { id: true },
+      }).then((rows) => rows.map((row) => row.id))
+    : [];
+  const teamIds = [...new Set([...actorTeamIds, ...selectedTeamIds])];
+
   return {
     OR: [
-      { assigneeId: auth.membershipId },
-      { createdById: auth.membershipId },
+      ...(grants.some(
+        (grant) => grant.scope === PermissionScope.OWN || grant.scope === PermissionScope.ASSIGNED,
+      )
+        ? [{ assigneeId: auth.membershipId }, { createdById: auth.membershipId }]
+        : []),
+      ...(managedIds.length ? [{ assigneeId: { in: managedIds } }] : []),
       ...(teamIds.length ? [{ teamId: { in: teamIds } }] : []),
+      // An impossible predicate keeps a misconfigured/empty scope fail-closed.
+      ...(!grants.length ? [{ id: '__not_authorized__' }] : []),
     ],
   };
 }
@@ -663,11 +692,13 @@ tasksRouter.post(
 
 tasksRouter.delete(
   '/',
+  requirePermission(PERMISSIONS.TASKS_DELETE),
   validateBody(z.object({ confirmation: z.literal('DELETE_ALL_TASKS') })),
   asyncHandler(async (req, res) => {
     const auth = currentAuth(req);
-    if (!isLeadership(auth)) {
-      throw ApiError.forbidden('Only owners and managers can clear company work.');
+    const grants = await hasPermission(auth, PERMISSIONS.TASKS_DELETE);
+    if (!grants.some((grant) => grant.scope === PermissionScope.COMPANY_WIDE)) {
+      throw ApiError.forbidden('Your rank cannot clear all company work.');
     }
 
     // A confirmed company-wide clear is final, matching Atlasy's individual
@@ -682,10 +713,13 @@ tasksRouter.delete(
 
 tasksRouter.delete(
   '/:id/permanent',
-  requirePermission(PERMISSIONS.TASKS_MANAGE),
+  requirePermission(PERMISSIONS.TASKS_DELETE),
   asyncHandler(async (req, res) => {
     const auth = currentAuth(req);
     const existing = await loadTask(req.params.id, auth);
+    if (!(await canAccessTask(auth, PERMISSIONS.TASKS_DELETE, existing))) {
+      throw ApiError.forbidden('You cannot delete that task.');
+    }
     // Atlasy's confirmed delete is intentionally final. Its related comments,
     // subtasks, attachments and task-scoped activity cascade with the record,
     // so a deleted task can never return through a stale archive query.
@@ -697,10 +731,13 @@ tasksRouter.delete(
 
 tasksRouter.delete(
   '/:id',
-  requirePermission(PERMISSIONS.TASKS_MANAGE),
+  requirePermission(PERMISSIONS.TASKS_DELETE),
   asyncHandler(async (req, res) => {
     const auth = currentAuth(req);
     const existing = await loadTask(req.params.id, auth);
+    if (!(await canAccessTask(auth, PERMISSIONS.TASKS_DELETE, existing))) {
+      throw ApiError.forbidden('You cannot delete that task.');
+    }
     // Archived, not deleted — the activity feed keeps referencing it.
     await prisma.task.update({ where: { id: existing.id }, data: { archivedAt: new Date() } });
     emitToCompany(auth.companyId, 'task:deleted', { taskId: existing.id });
@@ -887,7 +924,7 @@ tasksRouter.delete(
       where: { id: req.params.commentId, taskId: task.id },
     });
     if (!comment) throw ApiError.notFound('That comment no longer exists.');
-    if (comment.authorId !== auth.membershipId && !isLeadership(auth)) {
+    if (comment.authorId !== auth.membershipId && !(await canEditTask(auth, task))) {
       throw ApiError.forbidden('You can only delete your own comments.');
     }
     await prisma.taskComment.update({
@@ -942,7 +979,7 @@ tasksRouter.delete(
       where: { id: req.params.attachmentId, taskId: task.id },
     });
     if (!attachment) throw ApiError.notFound('That attachment no longer exists.');
-    if (attachment.uploaderId !== auth.membershipId && !isLeadership(auth)) {
+    if (attachment.uploaderId !== auth.membershipId && !(await canEditTask(auth, task))) {
       throw ApiError.forbidden('You can only remove files you uploaded.');
     }
     await prisma.taskAttachment.delete({ where: { id: attachment.id } });
@@ -1052,7 +1089,7 @@ tasksRouter.post(
 
 tasksRouter.patch(
   '/templates/:templateId',
-  requirePermission(PERMISSIONS.TASKS_DELETE),
+  requirePermission(PERMISSIONS.TASKS_MANAGE),
   validateBody(templateSchema.partial()),
   asyncHandler(async (req, res) => {
     const auth = currentAuth(req);

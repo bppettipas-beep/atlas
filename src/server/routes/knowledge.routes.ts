@@ -3,14 +3,13 @@ import { z } from 'zod';
 import { ApiError, asyncHandler } from '../http/errors';
 import { parsedQuery, validateBody, validateQuery } from '../http/validate';
 import { currentAuth, requireAuth, requirePermission } from '../middleware/authenticate';
-import { PERMISSIONS } from '../services/authorization';
+import { canAccessDocument, PERMISSIONS } from '../services/authorization';
 import { uniqueSlug } from '../lib/ids';
 import { prisma } from '../prisma';
 import { emitToCompany } from '../realtime/io';
 import { recordActivity } from '../services/activity';
 import { notify } from '../services/notifications';
 import { broadcastOrganizationChange } from '../services/organization';
-import { isLeadership } from '../services/permissions';
 import {
   serializeDocumentSummary,
   serializeTaskSummary,
@@ -26,8 +25,34 @@ const summaryInclude = {
   owner: { include: { user: { select: { fullName: true, avatarUrl: true } } } },
   team: { select: { id: true, name: true } },
   acknowledgments: true,
+  people: { select: { membershipId: true } },
   _count: { select: { acknowledgments: true } },
 } as const;
+
+async function assertDocumentRelations(
+  companyId: string,
+  input: { ownerId?: string | null; teamId?: string | null; peopleIds?: string[] },
+) {
+  const membershipIds = [...new Set([
+    ...(input.ownerId ? [input.ownerId] : []),
+    ...(input.peopleIds ?? []),
+  ])];
+  if (membershipIds.length) {
+    const count = await prisma.membership.count({
+      where: { id: { in: membershipIds }, companyId, deactivatedAt: null },
+    });
+    if (count !== membershipIds.length) {
+      throw ApiError.badRequest('One or more selected people are not in your company.');
+    }
+  }
+  if (input.teamId) {
+    const team = await prisma.team.findFirst({
+      where: { id: input.teamId, companyId, archivedAt: null },
+      select: { id: true },
+    });
+    if (!team) throw ApiError.badRequest('That team is not in your company.');
+  }
+}
 
 function excerptFrom(markdown: string): string {
   const text = markdown
@@ -54,16 +79,11 @@ knowledgeRouter.get(
     const auth = currentAuth(req);
     const query = parsedQuery<z.infer<typeof listQuerySchema>>(res);
 
-    const documents = await prisma.knowledgeDocument.findMany({
+    const candidates = await prisma.knowledgeDocument.findMany({
       where: {
         companyId: auth.companyId,
         archivedAt: null,
-        // Workers only see published material; leadership also sees drafts.
-        ...(isLeadership(auth)
-          ? query.status
-            ? { status: query.status }
-            : {}
-          : { status: 'PUBLISHED' }),
+        ...(query.status ? { status: query.status } : {}),
         ...(query.category ? { category: query.category } : {}),
         ...(query.ownerId ? { ownerId: query.ownerId } : {}),
         ...(query.teamId ? { teamId: query.teamId } : {}),
@@ -86,19 +106,28 @@ knowledgeRouter.get(
       },
       include: summaryInclude,
       orderBy: { updatedAt: 'desc' },
-      take: 100,
+      take: 200,
     });
-
-    const categories = await prisma.knowledgeDocument.groupBy({
-      by: ['category'],
-      where: { companyId: auth.companyId, archivedAt: null },
-      _count: { _all: true },
-    });
+    const visible = (
+      await Promise.all(
+        candidates.map(async (document) => ({
+          document,
+          allowed:
+            await canAccessDocument(auth, PERMISSIONS.KNOWLEDGE_VIEW, document) &&
+            (document.status === 'PUBLISHED' ||
+              await canAccessDocument(auth, PERMISSIONS.KNOWLEDGE_MANAGE, document)),
+        })),
+      )
+    ).filter((item) => item.allowed).map((item) => item.document).slice(0, 100);
+    const categoryCounts = new Map<string, number>();
+    for (const document of visible) {
+      categoryCounts.set(document.category, (categoryCounts.get(document.category) ?? 0) + 1);
+    }
 
     res.json({
-      items: documents.map((doc) => serializeDocumentSummary(doc, auth.membershipId)),
-      categories: categories
-        .map((row) => ({ name: row.category, count: row._count._all }))
+      items: visible.map((doc) => serializeDocumentSummary(doc, auth.membershipId)),
+      categories: [...categoryCounts]
+        .map(([name, count]) => ({ name, count }))
         .sort((a, b) => a.name.localeCompare(b.name)),
     });
   }),
@@ -129,7 +158,13 @@ knowledgeRouter.get(
     });
 
     if (!document) throw ApiError.notFound('That document no longer exists.');
-    if (document.status !== 'PUBLISHED' && !isLeadership(auth)) {
+    if (!(await canAccessDocument(auth, PERMISSIONS.KNOWLEDGE_VIEW, document))) {
+      throw ApiError.forbidden('You cannot access that document.');
+    }
+    if (
+      document.status !== 'PUBLISHED' &&
+      !(await canAccessDocument(auth, PERMISSIONS.KNOWLEDGE_MANAGE, document))
+    ) {
       throw ApiError.forbidden('That document has not been published yet.');
     }
 
@@ -193,6 +228,14 @@ knowledgeRouter.post(
   asyncHandler(async (req, res) => {
     const auth = currentAuth(req);
     const input = req.body as z.infer<typeof documentSchema>;
+    await assertDocumentRelations(auth.companyId, input);
+    if (!(await canAccessDocument(auth, PERMISSIONS.KNOWLEDGE_MANAGE, {
+      ownerId: input.ownerId ?? auth.membershipId,
+      teamId: input.teamId ?? null,
+      people: input.peopleIds.map((membershipId) => ({ membershipId })),
+    }))) {
+      throw ApiError.forbidden('Your permission scope cannot create that document.');
+    }
 
     const slug = await uniqueSlug(input.title, async (candidate) =>
       Boolean(
@@ -286,6 +329,10 @@ knowledgeRouter.patch(
     if (!existing) throw ApiError.notFound('That document no longer exists.');
 
     const input = req.body as Partial<z.infer<typeof documentSchema>>;
+    await assertDocumentRelations(auth.companyId, input);
+    if (!(await canAccessDocument(auth, PERMISSIONS.KNOWLEDGE_MANAGE, existing))) {
+      throw ApiError.forbidden('You cannot edit that document.');
+    }
     const contentChanged =
       input.contentMarkdown !== undefined && input.contentMarkdown !== existing.contentMarkdown;
     const titleChanged = input.title !== undefined && input.title !== existing.title;
@@ -369,6 +416,9 @@ knowledgeRouter.delete(
       where: { id: req.params.id, companyId: auth.companyId, archivedAt: null },
     });
     if (!existing) throw ApiError.notFound('That document no longer exists.');
+    if (!(await canAccessDocument(auth, PERMISSIONS.KNOWLEDGE_MANAGE, existing))) {
+      throw ApiError.forbidden('You cannot delete that document.');
+    }
     await prisma.knowledgeDocument.update({
       where: { id: existing.id },
       data: { archivedAt: new Date(), status: 'ARCHIVED' },
@@ -390,8 +440,12 @@ knowledgeRouter.post(
         archivedAt: null,
         status: 'PUBLISHED',
       },
+      include: { people: { select: { membershipId: true } } },
     });
     if (!document) throw ApiError.notFound('That document is not available.');
+    if (!(await canAccessDocument(auth, PERMISSIONS.KNOWLEDGE_VIEW, document))) {
+      throw ApiError.forbidden('You cannot access that document.');
+    }
 
     await prisma.knowledgeAcknowledgment.upsert({
       where: {
@@ -428,6 +482,9 @@ knowledgeRouter.post(
       where: { id: req.params.id, companyId: auth.companyId, archivedAt: null },
     });
     if (!document) throw ApiError.notFound('That document no longer exists.');
+    if (!(await canAccessDocument(auth, PERMISSIONS.KNOWLEDGE_MANAGE, document))) {
+      throw ApiError.forbidden('You cannot restore that document.');
+    }
 
     const revision = await prisma.knowledgeRevision.findFirst({
       where: { id: req.params.revisionId, documentId: document.id },

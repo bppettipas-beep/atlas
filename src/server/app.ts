@@ -8,7 +8,7 @@ import helmet from 'helmet';
 import { env } from './env';
 import { errorHandler, notFoundHandler } from './http/errors';
 import { ensureUploadDir } from './lib/uploads';
-import { attachAuth, requireAuth } from './middleware/authenticate';
+import { attachAuth, currentAuth, requireAuth } from './middleware/authenticate';
 import { prisma } from './prisma';
 import { activityRouter } from './routes/activity.routes';
 import { adminRouter } from './routes/admin.routes';
@@ -26,6 +26,7 @@ import { ranksRouter } from './routes/ranks.routes';
 import { scheduleRouter } from './routes/schedule.routes';
 import { tasksRouter } from './routes/tasks.routes';
 import { uploadsRouter } from './routes/uploads.routes';
+import { canViewTask } from './services/permissions';
 
 export function createApp(): Express {
   const app = express();
@@ -113,28 +114,53 @@ export function createApp(): Express {
 
   // -------------------------------- uploads --------------------------------
   ensureUploadDir();
-  app.use(
-    '/uploads',
-    // Files may contain internal business material. They are available to a
-    // signed-in Atlas session, never to an unauthenticated visitor who learns
-    // or guesses a storage key.
-    attachAuth,
-    requireAuth,
-    express.static(env.uploadDir, {
-      maxAge: '7d',
-      index: false,
-      dotfiles: 'deny',
-      setHeaders: (res) => {
-        // Uploaded files are never executed as HTML.
-        res.setHeader('Content-Disposition', 'inline');
-        res.setHeader('X-Content-Type-Options', 'nosniff');
-        // A second containment layer for a malformed or legacy upload: even if
-        // a browser were to interpret it as HTML, it cannot execute script,
-        // submit forms, or inherit Atlas's application capabilities.
-        res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
-      },
-    }),
-  );
+  app.get('/uploads/:storageKey', attachAuth, requireAuth, async (req, res, next) => {
+    try {
+      const auth = currentAuth(req);
+      const storageKey = path.basename(req.params.storageKey);
+      if (storageKey !== req.params.storageKey) {
+        res.status(404).end();
+        return;
+      }
+      const localUrl = `/uploads/${storageKey}`;
+      const [attachment, companyAsset, personAsset] = await Promise.all([
+        prisma.taskAttachment.findFirst({
+          where: { storageKey },
+          include: {
+            task: {
+              select: { companyId: true, assigneeId: true, createdById: true, teamId: true },
+            },
+          },
+        }),
+        prisma.company.findFirst({
+          where: { id: auth.companyId, logoUrl: localUrl },
+          select: { id: true },
+        }),
+        prisma.user.findFirst({
+          where: {
+            avatarUrl: localUrl,
+            memberships: { some: { companyId: auth.companyId, status: 'ACTIVE' } },
+          },
+          select: { id: true },
+        }),
+      ]);
+      const mayReadAttachment =
+        attachment?.task.companyId === auth.companyId &&
+        await canViewTask(auth, attachment.task);
+      if (!mayReadAttachment && !companyAsset && !personAsset) {
+        res.status(404).end();
+        return;
+      }
+      res.setHeader('Content-Disposition', 'inline');
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
+      res.sendFile(path.join(env.uploadDir, storageKey), (error) => {
+        if (error) next(error);
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
 
   // ---------------------------------- api ----------------------------------
   app.use('/api', attachAuth);

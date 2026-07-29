@@ -40,11 +40,27 @@ import { ensureNotificationPreference, notify, notifyLeadership } from '../servi
 import { ensureOrganizationNodes, broadcastOrganizationChange } from '../services/organization';
 import { serializeCompany } from '../services/serializers';
 import { emitToCompany } from '../realtime/io';
-import { isPlatformAdmin } from '../admin';
 import type { SessionUserDto } from '../../shared/types';
 import type { Request, Response } from 'express';
 
 export const authRouter = Router();
+
+// CORS controls who may read a response; it does not stop a hostile site from
+// submitting a form. Credential-changing requests must also originate from an
+// Atlas frontend. Tests and non-production local tooling may omit Origin.
+authRouter.use((req, _res, next) => {
+  if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method) || !env.isProduction) {
+    next();
+    return;
+  }
+  const origin = req.get('origin');
+  const selfOrigin = `${req.protocol}://${req.get('host')}`;
+  if (!origin || (origin !== selfOrigin && !env.allowedOrigins.includes(origin))) {
+    next(ApiError.forbidden('Untrusted request origin.', 'CSRF_REJECTED'));
+    return;
+  }
+  next();
+});
 
 /** Brute-force protection on the credential endpoints. */
 const authLimiter = rateLimit({
@@ -180,7 +196,7 @@ async function issueSession(req: Request, res: Response, userId: string, members
   const { token, tokenHash } = createRefreshToken();
   const expiresAt = refreshTokenExpiry();
 
-  await prisma.refreshToken.create({
+  const session = await prisma.refreshToken.create({
     data: {
       userId,
       tokenHash,
@@ -194,6 +210,7 @@ async function issueSession(req: Request, res: Response, userId: string, members
     sub: userId,
     mid: membership.id,
     cid: membership.companyId,
+    sid: session.id,
     role: membership.role,
   });
 
@@ -216,6 +233,7 @@ export async function buildSessionPayload(
           avatarUrl: true,
           passwordHash: true,
           googleId: true,
+          isPlatformAdmin: true,
         },
       },
       company: true,
@@ -245,7 +263,7 @@ export async function buildSessionPayload(
       // Booleans only — the hash itself must never leave the server.
       hasPassword: membership.user.passwordHash !== null,
       hasGoogle: membership.user.googleId !== null,
-      isPlatformAdmin: isPlatformAdmin(membership.user.email),
+      isPlatformAdmin: membership.user.isPlatformAdmin,
     },
     membership: {
       id: membership.id,
@@ -843,13 +861,6 @@ authRouter.post(
     const auth = currentAuth(req);
     const input = req.body as { password?: string; confirmEmail?: string };
 
-    if (isPlatformAdmin(auth.email)) {
-      throw ApiError.forbidden(
-        'The platform administrator account cannot be deleted.',
-        'PLATFORM_ADMIN_PROTECTED',
-      );
-    }
-
     const user = await prisma.user.findUniqueOrThrow({
       where: { id: auth.userId },
       include: {
@@ -859,6 +870,12 @@ authRouter.post(
         },
       },
     });
+    if (user.isPlatformAdmin) {
+      throw ApiError.forbidden(
+        'The platform administrator account cannot be deleted.',
+        'PLATFORM_ADMIN_PROTECTED',
+      );
+    }
 
     // Prove it is really them. A password account re-enters its password; a
     // Google account has none, so it types its own address instead.

@@ -191,6 +191,7 @@ model User {
   /// Google's stable subject id. Preferred over email for matching, because a
   /// Google account can change its email address but never its subject.
   googleId     String? @unique
+  isPlatformAdmin Boolean @default(false)
 
   fullName    String
   avatarUrl   String?

@@ -91,8 +91,19 @@ async function resolveAuth(req: Request, res: Response): Promise<AuthContext | n
   if (typeof accessToken === 'string' && accessToken.length > 0) {
     const claims = verifyAccessToken(accessToken);
     if (claims) {
-      const context = await contextFromMembership(claims.mid);
-      if (context) return context;
+      const session = await prisma.refreshToken.findFirst({
+        where: {
+          id: claims.sid,
+          userId: claims.sub,
+          revokedAt: null,
+          expiresAt: { gt: new Date() },
+        },
+        select: { id: true },
+      });
+      if (session) {
+        const context = await contextFromMembership(claims.mid);
+        if (context) return context;
+      }
     }
   }
 
@@ -149,7 +160,7 @@ async function resolveAuth(req: Request, res: Response): Promise<AuthContext | n
     });
     if (revoked.count !== 1) return false;
 
-    await tx.refreshToken.create({
+    const successor = await tx.refreshToken.create({
       data: {
         userId: stored.userId,
         tokenHash: next.tokenHash,
@@ -158,7 +169,7 @@ async function resolveAuth(req: Request, res: Response): Promise<AuthContext | n
         ipAddress: req.ip ?? null,
       },
     });
-    return true;
+    return successor.id;
   });
 
   if (!rotated) {
@@ -172,6 +183,7 @@ async function resolveAuth(req: Request, res: Response): Promise<AuthContext | n
       sub: context.userId,
       mid: context.membershipId,
       cid: context.companyId,
+      sid: rotated,
       role: context.role,
     }),
     next.token,

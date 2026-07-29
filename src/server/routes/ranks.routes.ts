@@ -8,6 +8,7 @@ import { prisma } from '../prisma';
 import {
   canManageMember,
   PERMISSIONS,
+  PERMISSION_ALLOWED_SCOPES,
   SYSTEM_RANKS,
   writePermissionAudit,
 } from '../services/authorization';
@@ -39,6 +40,7 @@ ranksRouter.get('/', requirePermission(PERMISSIONS.RANKS_MANAGE), asyncHandler(a
   res.json({
     items: await listRanks(auth.companyId),
     catalog: Object.values(PERMISSIONS),
+    allowedScopes: PERMISSION_ALLOWED_SCOPES,
     scopes: Object.values(PermissionScope),
   });
 }));
@@ -140,6 +142,14 @@ ranksRouter.put(
     const known = new Set(Object.values(PERMISSIONS));
     if (input.permissions.some((permission) => !known.has(permission.key as never))) {
       throw ApiError.badRequest('One or more permission keys are not supported.', 'UNKNOWN_PERMISSION');
+    }
+    if (input.permissions.some((permission) =>
+      !PERMISSION_ALLOWED_SCOPES[permission.key as keyof typeof PERMISSION_ALLOWED_SCOPES]
+        ?.includes(permission.scope))) {
+      throw ApiError.badRequest(
+        'One or more permission scopes are not valid for that permission.',
+        'INVALID_PERMISSION_SCOPE',
+      );
     }
     const identities = input.permissions.map((permission) => `${permission.key}:${permission.scope}`);
     if (new Set(identities).size !== identities.length) {

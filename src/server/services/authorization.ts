@@ -44,6 +44,70 @@ export const PERMISSIONS = {
 } as const;
 export type PermissionKey = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
 
+const COMPANY_ONLY = [PermissionScope.COMPANY_WIDE] as const;
+export const PERMISSION_ALLOWED_SCOPES: Record<PermissionKey, readonly PermissionScope[]> = {
+  [PERMISSIONS.COMPANY_MANAGE]: COMPANY_ONLY,
+  [PERMISSIONS.RANKS_MANAGE]: COMPANY_ONLY,
+  [PERMISSIONS.INVITES_MANAGE]: COMPANY_ONLY,
+  [PERMISSIONS.ACTIVITY_VIEW]: COMPANY_ONLY,
+  [PERMISSIONS.METRICS_VIEW]: COMPANY_ONLY,
+  [PERMISSIONS.CHAT_USE]: COMPANY_ONLY,
+  [PERMISSIONS.CHAT_COMPANY_READ]: COMPANY_ONLY,
+  [PERMISSIONS.CHAT_COMPANY_POST]: COMPANY_ONLY,
+  [PERMISSIONS.ATLASY_USE]: COMPANY_ONLY,
+  [PERMISSIONS.ATLASY_BRIEFING]: COMPANY_ONLY,
+  [PERMISSIONS.PEOPLE_VIEW]: [
+    PermissionScope.OWN, PermissionScope.TEAM, PermissionScope.MANAGED_PEOPLE,
+    PermissionScope.SELECTED_TEAMS, PermissionScope.COMPANY_WIDE,
+  ],
+  [PERMISSIONS.PEOPLE_MANAGE]: [
+    PermissionScope.OWN, PermissionScope.TEAM, PermissionScope.MANAGED_PEOPLE,
+    PermissionScope.SELECTED_TEAMS, PermissionScope.COMPANY_WIDE,
+  ],
+  [PERMISSIONS.ORGANIZATION_MANAGE]: [
+    PermissionScope.TEAM, PermissionScope.SELECTED_TEAMS, PermissionScope.COMPANY_WIDE,
+  ],
+  [PERMISSIONS.TASKS_VIEW]: [
+    PermissionScope.OWN, PermissionScope.ASSIGNED, PermissionScope.TEAM,
+    PermissionScope.MANAGED_PEOPLE, PermissionScope.SELECTED_TEAMS,
+    PermissionScope.COMPANY_WIDE,
+  ],
+  [PERMISSIONS.TASKS_CREATE]: [
+    PermissionScope.OWN, PermissionScope.TEAM, PermissionScope.MANAGED_PEOPLE,
+    PermissionScope.SELECTED_TEAMS, PermissionScope.COMPANY_WIDE,
+  ],
+  [PERMISSIONS.TASKS_MANAGE]: [
+    PermissionScope.OWN, PermissionScope.ASSIGNED, PermissionScope.TEAM,
+    PermissionScope.MANAGED_PEOPLE, PermissionScope.SELECTED_TEAMS,
+    PermissionScope.COMPANY_WIDE,
+  ],
+  [PERMISSIONS.TASKS_DELETE]: [
+    PermissionScope.OWN, PermissionScope.TEAM, PermissionScope.MANAGED_PEOPLE,
+    PermissionScope.SELECTED_TEAMS, PermissionScope.COMPANY_WIDE,
+  ],
+  [PERMISSIONS.SCHEDULE_VIEW]: [
+    PermissionScope.OWN, PermissionScope.TEAM, PermissionScope.MANAGED_PEOPLE,
+    PermissionScope.SELECTED_TEAMS, PermissionScope.COMPANY_WIDE,
+  ],
+  [PERMISSIONS.SCHEDULE_MANAGE]: [
+    PermissionScope.OWN, PermissionScope.TEAM, PermissionScope.MANAGED_PEOPLE,
+    PermissionScope.SELECTED_TEAMS, PermissionScope.COMPANY_WIDE,
+  ],
+  [PERMISSIONS.AVAILABILITY_MANAGE]: [
+    PermissionScope.OWN, PermissionScope.TEAM, PermissionScope.MANAGED_PEOPLE,
+    PermissionScope.SELECTED_TEAMS, PermissionScope.COMPANY_WIDE,
+  ],
+  [PERMISSIONS.KNOWLEDGE_VIEW]: [
+    PermissionScope.OWN, PermissionScope.TEAM, PermissionScope.MANAGED_PEOPLE,
+    PermissionScope.SELECTED_TEAMS, PermissionScope.COMPANY_WIDE,
+    PermissionScope.EXPLICITLY_SHARED,
+  ],
+  [PERMISSIONS.KNOWLEDGE_MANAGE]: [
+    PermissionScope.OWN, PermissionScope.TEAM, PermissionScope.MANAGED_PEOPLE,
+    PermissionScope.SELECTED_TEAMS, PermissionScope.COMPANY_WIDE,
+  ],
+};
+
 type RankPreset = {
   key: SystemRankKey;
   name: string;
@@ -264,6 +328,47 @@ export async function canAccessTask(
   return grants.some(
     (grant) => grant.scope === PermissionScope.SELECTED_TEAMS && grant.selectedTeamIds.includes(task.teamId!),
   );
+}
+
+export async function canAccessDocument(
+  actor: Actor,
+  permissionKey: string,
+  document: {
+    ownerId: string | null;
+    teamId: string | null;
+    people?: { membershipId: string }[];
+  },
+): Promise<boolean> {
+  const grants = await hasPermission(actor, permissionKey);
+  if (grants.some((grant) => grant.scope === PermissionScope.COMPANY_WIDE)) return true;
+  if (
+    document.ownerId === actor.membershipId &&
+    grants.some((grant) => grant.scope === PermissionScope.OWN)
+  ) return true;
+  if (
+    grants.some((grant) => grant.scope === PermissionScope.EXPLICITLY_SHARED) &&
+    document.people?.some((person) => person.membershipId === actor.membershipId)
+  ) return true;
+  if (
+    document.ownerId &&
+    grants.some((grant) => grant.scope === PermissionScope.MANAGED_PEOPLE) &&
+    await canAccessMembership(actor, permissionKey, document.ownerId)
+  ) return true;
+  if (!document.teamId) return false;
+  if (
+    grants.some(
+      (grant) =>
+        grant.scope === PermissionScope.SELECTED_TEAMS &&
+        grant.selectedTeamIds.includes(document.teamId!),
+    )
+  ) return true;
+  if (grants.some((grant) => grant.scope === PermissionScope.TEAM)) {
+    return Boolean(await prisma.teamMembership.findFirst({
+      where: { membershipId: actor.membershipId, teamId: document.teamId },
+      select: { id: true },
+    }));
+  }
+  return false;
 }
 
 export async function canManageMember(actor: Actor, targetMembershipId: string): Promise<boolean> {

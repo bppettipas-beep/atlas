@@ -6,7 +6,12 @@ import { booleanQuery, parsedQuery, validateBody, validateQuery } from '../http/
 import { currentAuth, requireAuth, requirePermission } from '../middleware/authenticate';
 import { daysAgo, endOfDay, startOfDay } from '../lib/dates';
 import { prisma } from '../prisma';
-import { PERMISSIONS, rankIdForLegacyRole } from '../services/authorization';
+import {
+  canAccessMembership,
+  canManageMember,
+  PERMISSIONS,
+  rankIdForLegacyRole,
+} from '../services/authorization';
 import { emitToCompany } from '../realtime/io';
 import { recordActivity } from '../services/activity';
 import { notify, notifyLeadership } from '../services/notifications';
@@ -208,7 +213,15 @@ peopleRouter.get(
       orderBy: [{ role: 'asc' }, { createdAt: 'asc' }],
     });
 
-    const items: PersonSummary[] = memberships.map(serializePerson);
+    const visible = await Promise.all(
+      memberships.map(async (membership) => ({
+        membership,
+        allowed: await canAccessMembership(auth, PERMISSIONS.PEOPLE_VIEW, membership.id),
+      })),
+    );
+    const items: PersonSummary[] = visible
+      .filter(({ allowed }) => allowed)
+      .map(({ membership }) => serializePerson(membership));
     res.json({ items });
   }),
 );
@@ -220,7 +233,9 @@ peopleRouter.get(
   asyncHandler(async (req, res) => {
     const auth = currentAuth(req);
     const membership = await loadPersonInCompany(req.params.id, auth.companyId);
-
+    if (!(await canAccessMembership(auth, PERMISSIONS.PEOPLE_VIEW, membership.id))) {
+      throw ApiError.notFound('We could not find that person in your company.');
+    }
     const [
       full,
       activeTasks,
@@ -559,12 +574,17 @@ peopleRouter.delete(
   asyncHandler(async (req, res) => {
     const auth = currentAuth(req);
     const membership = await loadPersonInCompany(req.params.id, auth.companyId);
-
     if (!membership.isPlaceholder) {
       throw ApiError.badRequest(
         'That is a real account. Deactivate it instead of deleting it.',
         'NOT_A_PLACEHOLDER',
       );
+    }
+    if (
+      !(await canManagePerson(auth, membership.id)) ||
+      !(await canManageMember(auth, membership.id))
+    ) {
+      throw ApiError.forbidden('You cannot remove that person.');
     }
 
     // Deleting the user cascades the membership; tasks and comments they were
@@ -722,7 +742,6 @@ peopleRouter.patch(
     const auth = currentAuth(req);
     const membership = await loadPersonInCompany(req.params.id, auth.companyId);
     const { role } = req.body as { role: 'OWNER' | 'CO_OWNER' | 'MANAGER' | 'WORKER' };
-
     if (membership.role === 'OWNER' && role !== 'OWNER') {
       const owners = await prisma.membership.count({
         where: { companyId: auth.companyId, role: 'OWNER', deactivatedAt: null },
@@ -733,6 +752,9 @@ peopleRouter.patch(
           'LAST_OWNER',
         );
       }
+    }
+    if (!(await canManageMember(auth, membership.id))) {
+      throw ApiError.forbidden('You cannot change that person’s rank.', 'RANK_HIERARCHY');
     }
 
     await prisma.$transaction(async (tx) => {
@@ -831,6 +853,12 @@ peopleRouter.delete(
 
     if (membership.id === auth.membershipId) {
       throw ApiError.badRequest('You cannot remove yourself from the company.');
+    }
+    if (
+      !(await canManagePerson(auth, membership.id)) ||
+      !(await canManageMember(auth, membership.id))
+    ) {
+      throw ApiError.forbidden('You cannot remove that person.');
     }
     if (membership.role === 'OWNER') {
       const owners = await prisma.membership.count({
@@ -1043,6 +1071,19 @@ peopleRouter.post(
       throw ApiError.forbidden('You can only manage onboarding for your own team.');
     }
     const input = req.body as { title: string; documentId?: string | null; completed: boolean };
+    if (input.documentId) {
+      const document = await prisma.knowledgeDocument.findFirst({
+        where: {
+          id: input.documentId,
+          companyId: auth.companyId,
+          archivedAt: null,
+        },
+        select: { id: true },
+      });
+      if (!document) {
+        throw ApiError.badRequest('That training document is not in your company.');
+      }
+    }
 
     const record = await prisma.trainingRecord.create({
       data: {

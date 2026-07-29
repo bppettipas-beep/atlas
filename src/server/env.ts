@@ -10,6 +10,14 @@ const booleanish = z
     typeof value === 'boolean' ? value : ['1', 'true', 'yes', 'on'].includes(value.toLowerCase()),
   );
 
+function durationMilliseconds(value: string): number | null {
+  const match = value.trim().match(/^(\d+)(ms|s|m|h|d)$/i);
+  if (!match) return null;
+  const amount = Number(match[1]);
+  const units = { ms: 1, s: 1_000, m: 60_000, h: 3_600_000, d: 86_400_000 };
+  return amount * units[match[2].toLowerCase() as keyof typeof units];
+}
+
 const schema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   PORT: z.coerce.number().int().positive().default(4000),
@@ -20,7 +28,10 @@ const schema = z.object({
   CORS_ORIGINS: z.string().default(''),
   UPLOAD_DIR: z.string().default('./uploads'),
   MAX_UPLOAD_MB: z.coerce.number().int().positive().default(10),
-  ACCESS_TOKEN_TTL: z.string().default('15m'),
+  ACCESS_TOKEN_TTL: z.string().default('15m').refine((value) => {
+    const duration = durationMilliseconds(value);
+    return duration !== null && duration > 0 && duration <= 24 * 60 * 60 * 1000;
+  }, 'ACCESS_TOKEN_TTL must be a duration no longer than 24 hours'),
   REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().positive().default(30),
   COOKIE_SECURE: booleanish.default(false),
   SCHEDULER_INTERVAL_SECONDS: z.coerce.number().int().min(0).default(60),
