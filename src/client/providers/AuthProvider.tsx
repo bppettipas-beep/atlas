@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from 'react';
 import { api, ApiError } from '@/lib/api';
+import { isTabSignedOut, markTabSignedIn, markTabSignedOut } from '@/lib/tabSession';
 import type { AccountSessionDto, SessionUserDto } from '@shared/types';
 import { planHasFeature, type PlanFeature } from '@shared/plans';
 
@@ -33,29 +34,45 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [session, setSession] = useState<SessionUserDto | null>(null);
-  const [account, setAccount] = useState<AccountSessionDto | null>(null);
+  const [session, setSessionState] = useState<SessionUserDto | null>(null);
+  const [account, setAccountState] = useState<AccountSessionDto | null>(null);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
+    if (isTabSignedOut()) {
+      setSessionState(null);
+      setAccountState(null);
+      setLoading(false);
+      return;
+    }
     try {
       const nextAccount = await api.get<AccountSessionDto>('/auth/account-session');
-      setAccount(nextAccount);
+      setAccountState(nextAccount);
       try {
-        setSession(await api.get<SessionUserDto>('/auth/session'));
+        setSessionState(await api.get<SessionUserDto>('/auth/session'));
       } catch {
-        setSession(null);
+        setSessionState(null);
       }
     } catch (error) {
       // A 401 simply means "not signed in" — not an error worth surfacing.
       if (!(error instanceof ApiError && error.isUnauthorized)) {
         console.error('Could not load the session:', error);
       }
-      setSession(null);
-      setAccount(null);
+      setSessionState(null);
+      setAccountState(null);
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  const setSession = useCallback((next: SessionUserDto) => {
+    markTabSignedIn();
+    setSessionState(next);
+  }, []);
+
+  const setAccount = useCallback((next: AccountSessionDto) => {
+    markTabSignedIn();
+    setAccountState(next);
   }, []);
 
   useEffect(() => {
@@ -67,26 +84,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       email,
       password,
     });
+    markTabSignedIn();
     if ('company' in next) {
-      setSession(next);
-      setAccount(await api.get<AccountSessionDto>('/auth/account-session'));
+      setSessionState(next);
+      setAccountState(await api.get<AccountSessionDto>('/auth/account-session'));
     } else {
-      setAccount(next);
+      setAccountState(next);
     }
     return next;
   }, []);
 
   const signOut = useCallback(async () => {
-    try {
-      await api.post('/auth/logout');
-    } finally {
-      setSession(null);
-      setAccount(null);
-    }
+    // Temporary testing behavior: do not revoke or clear the shared browser
+    // cookie. sessionStorage belongs to one tab, so sibling tabs stay signed in
+    // while this tab remains signed out even if it is refreshed.
+    markTabSignedOut();
+    setSessionState(null);
+    setAccountState(null);
   }, []);
 
   const switchCompany = useCallback(async (membershipId: string) => {
-    setSession(await api.post<SessionUserDto>('/auth/switch-company', { membershipId }));
+    markTabSignedIn();
+    setSessionState(await api.post<SessionUserDto>('/auth/switch-company', { membershipId }));
   }, []);
 
   const value = useMemo<AuthContextValue>(
@@ -107,7 +126,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       hasPlanFeature: (feature) =>
         session ? planHasFeature(session.company.subscriptionPlan, feature) : false,
     }),
-    [session, account, loading, load, signIn, signOut, switchCompany],
+    [session, account, loading, load, setSession, setAccount, signIn, signOut, switchCompany],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -4,6 +4,7 @@ coverage/
 uploads/
 .pgdata/
 .pgdata-test/
+.uploads-test/
 
 .env
 .env.*

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
+import { markTabSignedIn } from '@/lib/tabSession';
 
 /**
  * Google's "G", drawn to their brand guidelines.
@@ -84,6 +85,7 @@ export function GoogleButton({
   return (
     <a
       href={`/api/auth/google/start?${params.toString()}`}
+      onClick={markTabSignedIn}
       className={cn(
         'inline-flex h-10 w-full select-none items-center justify-center gap-2.5 rounded-sm',
         'border border-edge bg-sheet text-[14px] font-medium text-ink',
