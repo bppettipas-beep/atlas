@@ -180,6 +180,11 @@ enum SubscriptionStatus {
   SUSPENDED
 }
 
+enum EmailTokenType {
+  VERIFY_EMAIL
+  RESET_PASSWORD
+}
+
 // ------------------------------- identity ----------------------------------
 
 model User {
@@ -201,6 +206,7 @@ model User {
   timezone                     String?
   bio                          String?
   lastLoginAt                  DateTime?
+  emailVerifiedAt             DateTime?
   /// A paid plan belongs to the account before its first company panel exists.
   accountPlan                  SubscriptionPlan?
   accountSubscriptionStatus    SubscriptionStatus?
@@ -210,8 +216,24 @@ model User {
 
   memberships   Membership[]
   refreshTokens RefreshToken[]
+  emailTokens   EmailToken[]
 
   @@index([email])
+}
+
+model EmailToken {
+  id        String         @id @default(cuid())
+  userId    String
+  type      EmailTokenType
+  tokenHash String         @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime       @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, type])
+  @@index([expiresAt])
 }
 
 model RefreshToken {

@@ -133,6 +133,7 @@ export interface AccountSessionDto {
     bio: string | null;
     hasPassword: boolean;
     hasGoogle: boolean;
+    emailVerified: boolean;
   };
   plan: 'STARTER' | 'GROWTH' | 'BUSINESS' | 'ENTERPRISE' | null;
   subscriptionActive: boolean;

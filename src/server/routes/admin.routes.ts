@@ -5,6 +5,7 @@ import { ApiError, asyncHandler } from '../http/errors';
 import { validateBody } from '../http/validate';
 import { requireAuth } from '../middleware/authenticate';
 import { prisma } from '../prisma';
+import { sendSubscriptionEmail } from '../services/email';
 
 export const adminRouter = Router();
 
@@ -97,7 +98,8 @@ const userInclude = {
 adminRouter.get(
   '/users',
   asyncHandler(async (req, res) => {
-    const search = typeof req.query.search === 'string' ? req.query.search.trim().slice(0, 100) : '';
+    const search =
+      typeof req.query.search === 'string' ? req.query.search.trim().slice(0, 100) : '';
     const plan = planSchema.safeParse(req.query.plan).success
       ? (req.query.plan as z.infer<typeof planSchema>)
       : undefined;
@@ -124,12 +126,20 @@ adminRouter.get(
       ...(state === 'free'
         ? { accountPlan: null }
         : state
-          ? { accountSubscriptionStatus: state === 'active' ? ('ACTIVE' as const) : ('SUSPENDED' as const) }
+          ? {
+              accountSubscriptionStatus:
+                state === 'active' ? ('ACTIVE' as const) : ('SUSPENDED' as const),
+            }
           : {}),
     };
 
     const [users, total, allUsers, paidUsers, panelUsers, activeSessions] = await Promise.all([
-      prisma.user.findMany({ where, include: userInclude, orderBy: { createdAt: 'desc' }, take: 250 }),
+      prisma.user.findMany({
+        where,
+        include: userInclude,
+        orderBy: { createdAt: 'desc' },
+        take: 250,
+      }),
       prisma.user.count({ where }),
       prisma.user.count(),
       prisma.user.count({ where: { accountPlan: { not: null } } }),
@@ -152,7 +162,10 @@ adminRouter.patch(
   '/users/:id/subscription',
   validateBody(userSubscriptionSchema),
   asyncHandler(async (req, res) => {
-    const target = await prisma.user.findUnique({ where: { id: req.params.id }, select: { id: true } });
+    const target = await prisma.user.findUnique({
+      where: { id: req.params.id },
+      select: { id: true, email: true, fullName: true },
+    });
     if (!target) throw ApiError.notFound('That account no longer exists.');
     const input = req.body as z.infer<typeof userSubscriptionSchema>;
 
@@ -211,6 +224,11 @@ adminRouter.patch(
       return user;
     });
 
+    void sendSubscriptionEmail(
+      target,
+      updated.accountPlan,
+      updated.accountSubscriptionStatus === 'ACTIVE',
+    );
     res.json(serializeUser(updated));
   }),
 );

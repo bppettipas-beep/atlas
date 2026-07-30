@@ -42,6 +42,13 @@ import { ensureOrganizationNodes, broadcastOrganizationChange } from '../service
 import { attachmentUrl, serializeCompany } from '../services/serializers';
 import { assertEmployeeCapacity } from '../services/subscriptions';
 import { emitToCompany } from '../realtime/io';
+import {
+  consumeEmailToken,
+  sendPasswordResetEmail,
+  sendSecurityEmail,
+  sendVerificationEmail,
+  sendWelcomeEmail,
+} from '../services/email';
 import type { AccountSessionDto, SessionUserDto } from '../../shared/types';
 import type { Request, Response } from 'express';
 import { planHasFeature } from '../../shared/plans';
@@ -131,6 +138,10 @@ const workerJoinSchema = z.object({
 const loginSchema = z.object({
   email,
   password: z.string().min(1, 'Enter your password'),
+});
+
+const emailTokenSchema = z.object({
+  token: z.string().trim().min(20, 'That link is not valid.').max(200),
 });
 
 /** The account fields to create, from whichever way the person proved who they are. */
@@ -269,6 +280,7 @@ async function buildAccountPayload(userId: string): Promise<AccountSessionDto> {
       bio: user.bio,
       hasPassword: user.passwordHash !== null,
       hasGoogle: user.googleId !== null,
+      emailVerified: user.emailVerifiedAt !== null,
     },
     plan: subscriptionActive ? user.accountPlan : null,
     subscriptionActive,
@@ -513,6 +525,7 @@ authRouter.post(
     const user = await prisma.user.create({
       data: {
         ...account,
+        emailVerifiedAt: account.googleId ? new Date() : null,
         // The platform owner keeps access even when the database was created
         // before their account. Authorization still relies on this immutable
         // flag, never on an email comparison inside admin requests.
@@ -521,6 +534,8 @@ authRouter.post(
     });
     clearGoogleCookies(res);
     await issueAccountSession(req, res, user.id);
+    if (user.emailVerifiedAt) void sendWelcomeEmail(user);
+    else void sendVerificationEmail(user);
     res.status(201).json(await buildAccountPayload(user.id));
   }),
 );
@@ -728,7 +743,9 @@ authRouter.post(
     await assertEmployeeCapacity(invite.companyId);
 
     const membershipId = await prisma.$transaction(async (tx) => {
-      const user = await tx.user.create({ data: account });
+      const user = await tx.user.create({
+        data: { ...account, emailVerifiedAt: account.googleId ? new Date() : null },
+      });
 
       // A new worker reports to the lead of the team they were invited into,
       // falling back to the company owner so nobody is orphaned on the map.
@@ -832,6 +849,12 @@ authRouter.post(
 
     broadcastOrganizationChange(invite.companyId);
     emitToCompany(invite.companyId, 'people:updated', {});
+    const joinedUser = await prisma.user.findUniqueOrThrow({
+      where: { email: account.email },
+      select: { id: true, email: true, fullName: true, emailVerifiedAt: true },
+    });
+    if (joinedUser.emailVerifiedAt) void sendWelcomeEmail(joinedUser);
+    else void sendVerificationEmail(joinedUser);
 
     const created = await prisma.membership.findUniqueOrThrow({
       where: { id: membershipId },
@@ -966,11 +989,86 @@ authRouter.patch(
       }
     }
 
-    await prisma.user.update({
+    const emailChanged = input.email !== signedInUser.email;
+    const updated = await prisma.user.update({
       where: { id: signedInUser.id },
-      data: input,
+      data: { ...input, ...(emailChanged ? { emailVerifiedAt: null } : {}) },
     });
+    if (emailChanged) {
+      void sendSecurityEmail(
+        { email: signedInUser.email, fullName: signedInUser.fullName },
+        'Your Atlas email address changed',
+        `your sign-in email was changed to ${updated.email}.`,
+      );
+      void sendVerificationEmail(updated);
+    }
     res.json(await buildAccountPayload(signedInUser.id));
+  }),
+);
+
+authRouter.post(
+  '/resend-verification',
+  authLimiter,
+  asyncHandler(async (req, res) => {
+    const user = await accountFromRequest(req);
+    if (!user) throw ApiError.unauthorized('You are not signed in.');
+    if (!user.emailVerifiedAt) await sendVerificationEmail(user);
+    res.json({ ok: true });
+  }),
+);
+
+authRouter.post(
+  '/verify-email',
+  authLimiter,
+  validateBody(emailTokenSchema),
+  asyncHandler(async (req, res) => {
+    const { token } = req.body as z.infer<typeof emailTokenSchema>;
+    const user = await consumeEmailToken(token, 'VERIFY_EMAIL');
+    if (!user)
+      throw ApiError.badRequest('That verification link is invalid or expired.', 'INVALID_TOKEN');
+    await prisma.user.update({ where: { id: user.id }, data: { emailVerifiedAt: new Date() } });
+    void sendWelcomeEmail(user);
+    res.json({ ok: true });
+  }),
+);
+
+authRouter.post(
+  '/forgot-password',
+  authLimiter,
+  validateBody(z.object({ email })),
+  asyncHandler(async (req, res) => {
+    const { email: address } = req.body as { email: string };
+    const user = await prisma.user.findUnique({ where: { email: address } });
+    // Always return the same response to avoid revealing which addresses have accounts.
+    if (user?.passwordHash) await sendPasswordResetEmail(user);
+    res.json({ ok: true });
+  }),
+);
+
+authRouter.post(
+  '/reset-password',
+  authLimiter,
+  validateBody(emailTokenSchema.extend({ password })),
+  asyncHandler(async (req, res) => {
+    const input = req.body as z.infer<typeof emailTokenSchema> & { password: string };
+    const user = await consumeEmailToken(input.token, 'RESET_PASSWORD');
+    if (!user) throw ApiError.badRequest('That reset link is invalid or expired.', 'INVALID_TOKEN');
+    await prisma.$transaction([
+      prisma.user.update({
+        where: { id: user.id },
+        data: { passwordHash: await hashPassword(input.password) },
+      }),
+      prisma.refreshToken.updateMany({
+        where: { userId: user.id, revokedAt: null },
+        data: { revokedAt: new Date() },
+      }),
+    ]);
+    void sendSecurityEmail(
+      user,
+      'Your Atlas password was reset',
+      'your password was reset successfully.',
+    );
+    res.json({ ok: true });
   }),
 );
 
@@ -1216,6 +1314,11 @@ authRouter.patch(
       await issueAccountSession(req, res, user.id);
     }
 
+    void sendSecurityEmail(
+      user,
+      'Your Atlas password changed',
+      'your password was changed successfully.',
+    );
     res.json({ ok: true });
   }),
 );

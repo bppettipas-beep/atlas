@@ -52,6 +52,19 @@ function AccountSettings({ account }: { account: AccountSessionDto }) {
   const [confirmText, setConfirmText] = useState('');
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [sendingVerification, setSendingVerification] = useState(false);
+
+  const resendVerification = async () => {
+    setSendingVerification(true);
+    try {
+      await api.post('/auth/resend-verification');
+      toast.success('Verification email sent.');
+    } catch (error) {
+      setProfileError(errorMessage(error));
+    } finally {
+      setSendingVerification(false);
+    }
+  };
 
   const saveProfile = async (event: FormEvent) => {
     event.preventDefault();
@@ -149,6 +162,19 @@ function AccountSettings({ account }: { account: AccountSessionDto }) {
       description="Personal details, sign-in security, and account controls. These settings do not require a plan or belong to a company."
     >
       <div className="space-y-8">
+        {!account.user.emailVerified && (
+          <Notice tone="pending">
+            <span className="mr-2">Your email address is not verified yet.</span>
+            <Button
+              type="button"
+              size="sm"
+              loading={sendingVerification}
+              onClick={() => void resendVerification()}
+            >
+              Send verification email
+            </Button>
+          </Notice>
+        )}
         <section>
           <div className="mb-4 flex items-center justify-between border-b border-rule pb-2">
             <h2 className="edge">Personal profile</h2>

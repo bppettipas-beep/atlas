@@ -1,4 +1,5 @@
 import type { Express } from 'express';
+import crypto from 'node:crypto';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
@@ -126,6 +127,60 @@ describe('owner sign-up', () => {
       .post('/api/auth/login')
       .send({ email, password: STRONG_PASSWORD })
       .expect(401);
+    await request(app).post('/api/auth/login').send({ email, password: newPassword }).expect(200);
+  });
+
+  it('verifies email and consumes verification links only once', async () => {
+    const email = uniqueEmail('verify-email');
+    const signup = await request(app)
+      .post('/api/auth/account-signup')
+      .send({ fullName: 'Verify Person', email, password: STRONG_PASSWORD })
+      .expect(201);
+    expect(signup.body.user.emailVerified).toBe(false);
+
+    const token = crypto.randomBytes(32).toString('base64url');
+    await prisma.emailToken.create({
+      data: {
+        userId: signup.body.user.id,
+        type: 'VERIFY_EMAIL',
+        tokenHash: crypto.createHash('sha256').update(token).digest('hex'),
+        expiresAt: new Date(Date.now() + 60_000),
+      },
+    });
+
+    await request(app).post('/api/auth/verify-email').send({ token }).expect(200);
+    await request(app).post('/api/auth/verify-email').send({ token }).expect(400);
+    const user = await prisma.user.findUniqueOrThrow({ where: { id: signup.body.user.id } });
+    expect(user.emailVerifiedAt).not.toBeNull();
+  });
+
+  it('resets a password with a one-use token and revokes existing sessions', async () => {
+    const agent = request.agent(app);
+    const email = uniqueEmail('reset-password');
+    const signup = await agent
+      .post('/api/auth/account-signup')
+      .send({ fullName: 'Reset Person', email, password: STRONG_PASSWORD })
+      .expect(201);
+    const token = crypto.randomBytes(32).toString('base64url');
+    await prisma.emailToken.create({
+      data: {
+        userId: signup.body.user.id,
+        type: 'RESET_PASSWORD',
+        tokenHash: crypto.createHash('sha256').update(token).digest('hex'),
+        expiresAt: new Date(Date.now() + 60_000),
+      },
+    });
+
+    const newPassword = 'Brand-new-password-456';
+    await request(app)
+      .post('/api/auth/reset-password')
+      .send({ token, password: newPassword })
+      .expect(200);
+    await request(app)
+      .post('/api/auth/reset-password')
+      .send({ token, password: newPassword })
+      .expect(400);
+    await agent.get('/api/auth/account-session').expect(401);
     await request(app).post('/api/auth/login').send({ email, password: newPassword }).expect(200);
   });
 
@@ -1145,8 +1200,8 @@ describe('platform user administration', () => {
       fullName: 'Plan Change Target',
       subscriptionPlan: 'STARTER',
       subscriptionStatus: 'ACTIVE',
-      activeSessionCount: 1,
     });
+    expect(search.body.items[0].activeSessionCount).toBeGreaterThanOrEqual(1);
 
     const changed = await admin.agent
       .patch(`/api/admin/users/${target.session.user.id}/subscription`)

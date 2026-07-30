@@ -106,6 +106,14 @@ export function SignInPage() {
         >
           Sign in
         </Button>
+        <div className="text-center">
+          <Link
+            to="/forgot-password"
+            className="text-[12.5px] text-ink-3 underline decoration-edge underline-offset-4 hover:text-ink"
+          >
+            Forgot your password?
+          </Link>
+        </div>
       </form>
     </AuthLayout>
   );

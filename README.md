@@ -447,8 +447,10 @@ Every variable is documented in `.env.example`. The ones that matter:
 | `AUTH_RATE_LIMIT`            | no          | Credential attempts per IP per 15 min, default 40                   |
 | `GOOGLE_CLIENT_ID`           | no          | Enables Google sign-in. See below                                   |
 | `GOOGLE_CLIENT_SECRET`       | no          | Enables Google sign-in. See below                                   |
-| `RESEND_API_KEY`             | no          | Enables email copies of in-app notifications. See below             |
+| `RESEND_API_KEY`             | no          | Enables transactional email through Resend. See below               |
 | `EMAIL_FROM`                 | no          | Verified Resend sender, e.g. `Atlas <notifications@example.com>`    |
+| `EMAIL_REPLY_TO`             | no          | Optional real inbox used for replies                                |
+| `SUPPORT_EMAIL`              | no          | Enables the contact form and receives its messages                  |
 | `ASSISTANT_API_KEY`          | no          | Enables Atlasy, the in-app assistant. See below                     |
 | `ASSISTANT_BASE_URL`         | no          | OpenAI-compatible endpoint. Defaults to Anthropic                   |
 | `ASSISTANT_MODEL`            | no          | Model name, default `claude-haiku-4-5-20251001`                     |
@@ -535,13 +537,12 @@ rendered at all — the app never offers a route it cannot complete.
 
 ---
 
-## Notification email
+## Transactional email
 
-Optional, and off until both variables are set. Everything that reaches the
-notification bell is also emailed: assignments, mentions, comments, blockers,
-deadline changes, announcements, and — for owners and managers — the company
-activity feed. Each email links straight to the task, document or person it is
-about, not just to the app.
+Optional, and off until `RESEND_API_KEY` and `EMAIL_FROM` are set. Atlas uses
+Resend for email verification, password recovery, welcome and security notices,
+subscription changes, direct panel invitations, contact acknowledgements, and
+email copies of in-app notifications.
 
 ### Setting it up
 
@@ -556,12 +557,16 @@ about, not just to the app.
    ```
    RESEND_API_KEY="re_..."
    EMAIL_FROM="Atlas <notifications@yourdomain.com>"
+   EMAIL_REPLY_TO="support@yourdomain.com"
+   SUPPORT_EMAIL="support@yourdomain.com"
    ```
 
    `EMAIL_FROM` must be on the domain you verified in step 1. **Never commit
    the key.**
 
-4. Make sure `APP_ORIGIN` is your real public URL. Every link in the email is
+4. Set `SUPPORT_EMAIL` if you want the public Contact form enabled.
+   `EMAIL_REPLY_TO` is optional but gives normal email replies a real inbox.
+5. Make sure `APP_ORIGIN` is your real public URL. Every link in the email is
    built from it, so a wrong value sends your staff to localhost.
 
 Without a domain of your own, Resend's `onboarding@resend.dev` sender works for
@@ -569,6 +574,9 @@ testing but only delivers to the address that owns the Resend account.
 
 ### What it does
 
+- **Secure account links.** Verification links expire after 24 hours; password
+  reset links expire after one hour. Tokens are random, hashed in the database,
+  and accepted only once. Password resets revoke existing sessions.
 - **One email per notification**, sent after the notification is committed. The
   send is never awaited by the request that triggered it, so a slow or failing
   mail provider cannot make Atlas feel slow, and cannot lose the in-app copy.
@@ -578,8 +586,9 @@ testing but only delivers to the address that owns the Resend account.
   Every email carries a link back to that screen.
 - **Never writes to a placeholder.** People added without an email address hold
   a `@placeholder.atlas.invalid` address, which is skipped rather than bounced.
-- **Fails quietly.** A provider outage is logged, never surfaced as a request
-  error, and never blocks the notification itself.
+- **Fails safely.** Background notices are best-effort and never roll back the
+  product action. The Contact form reports a delivery failure so a visitor is
+  never falsely told that Atlas received a message.
 
 ---
 
@@ -612,8 +621,6 @@ component classes) and `src/client/components/ui/index.tsx` (every primitive).
 
 Honest list of what a real deployment would want next:
 
-- **Password reset.** Notification email is delivered through Resend, but a
-  password-reset flow has not been added yet.
 - **Object storage for uploads.** Files go to local disk. S3 or Cloudflare R2
   would remove the volume requirement.
 - **Mobile app / offline mode.** The web app is responsive and works well on a

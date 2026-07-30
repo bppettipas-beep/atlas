@@ -11,6 +11,15 @@ import type { PlanFeature } from '@shared/plans';
 const AccountPage = lazy(() =>
   import('@/pages/AccountPage').then((m) => ({ default: m.AccountPage })),
 );
+const ForgotPasswordPage = lazy(() =>
+  import('@/pages/AccountEmailPage').then((m) => ({ default: m.ForgotPasswordPage })),
+);
+const ResetPasswordPage = lazy(() =>
+  import('@/pages/AccountEmailPage').then((m) => ({ default: m.ResetPasswordPage })),
+);
+const VerifyEmailPage = lazy(() =>
+  import('@/pages/AccountEmailPage').then((m) => ({ default: m.VerifyEmailPage })),
+);
 const AdminPage = lazy(() => import('@/pages/AdminPage').then((m) => ({ default: m.AdminPage })));
 const ActivityPage = lazy(() =>
   import('@/pages/ActivityPage').then((m) => ({ default: m.ActivityPage })),
@@ -19,6 +28,9 @@ const CompanySettingsPage = lazy(() =>
   import('@/pages/CompanySettingsPage').then((m) => ({ default: m.CompanySettingsPage })),
 );
 const ChatPage = lazy(() => import('@/pages/ChatPage').then((m) => ({ default: m.ChatPage })));
+const ContactPage = lazy(() =>
+  import('@/pages/ContactPage').then((m) => ({ default: m.ContactPage })),
+);
 const HomePage = lazy(() => import('@/pages/HomePage').then((m) => ({ default: m.HomePage })));
 const InvitationsPage = lazy(() =>
   import('@/pages/InvitationsPage').then((m) => ({ default: m.InvitationsPage })),
@@ -139,8 +151,12 @@ export function App() {
                 <Route path="/" element={<LandingPage />} />
                 <Route path="/explore/:section" element={<MarketingRoute />} />
                 <Route path="/legal/:document" element={<LegalPage />} />
+                <Route path="/contact" element={<ContactPage />} />
                 <Route path="/start" element={<StartPage />} />
                 <Route path="/signin" element={<SignInPage />} />
+                <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+                <Route path="/reset-password" element={<ResetPasswordPage />} />
+                <Route path="/verify-email" element={<VerifyEmailPage />} />
                 <Route path="/signup/owner" element={<OwnerSignupPage />} />
                 <Route path="/setup-panel" element={<PanelSetupPage />} />
                 <Route path="/account-settings" element={<PublicAccountPage />} />

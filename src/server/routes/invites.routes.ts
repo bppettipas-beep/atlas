@@ -9,6 +9,7 @@ import { recordActivity } from '../services/activity';
 import { serializeInviteCode } from '../services/serializers';
 import type { CompanyRole, DirectInviteDto } from '../../shared/types';
 import { PERMISSIONS } from '../services/authorization';
+import { sendInvitationEmail } from '../services/email';
 
 export const invitesRouter = Router();
 
@@ -291,6 +292,16 @@ invitesRouter.post(
       visibility: 'MANAGERS',
     });
 
+    const company = await prisma.company.findUniqueOrThrow({
+      where: { id: auth.companyId },
+      select: { name: true },
+    });
+    void sendInvitationEmail({
+      to: invite.email,
+      inviterName: auth.fullName,
+      companyName: company.name,
+      code: invite.inviteCode!.code,
+    });
     res.status(201).json(serializeDirectInvite(invite));
   }),
 );

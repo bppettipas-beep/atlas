@@ -28,10 +28,13 @@ const schema = z.object({
   CORS_ORIGINS: z.string().default(''),
   UPLOAD_DIR: z.string().default('./uploads'),
   MAX_UPLOAD_MB: z.coerce.number().int().positive().default(10),
-  ACCESS_TOKEN_TTL: z.string().default('15m').refine((value) => {
-    const duration = durationMilliseconds(value);
-    return duration !== null && duration > 0 && duration <= 24 * 60 * 60 * 1000;
-  }, 'ACCESS_TOKEN_TTL must be a duration no longer than 24 hours'),
+  ACCESS_TOKEN_TTL: z
+    .string()
+    .default('15m')
+    .refine((value) => {
+      const duration = durationMilliseconds(value);
+      return duration !== null && duration > 0 && duration <= 24 * 60 * 60 * 1000;
+    }, 'ACCESS_TOKEN_TTL must be a duration no longer than 24 hours'),
   REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().positive().default(30),
   COOKIE_SECURE: booleanish.default(false),
   SCHEDULER_INTERVAL_SECONDS: z.coerce.number().int().min(0).default(60),
@@ -46,6 +49,8 @@ const schema = z.object({
   // continues to deliver in-app notifications, but does not attempt email.
   RESEND_API_KEY: z.string().default(''),
   EMAIL_FROM: z.string().default(''),
+  EMAIL_REPLY_TO: z.string().default(''),
+  SUPPORT_EMAIL: z.string().default(''),
   // Atlasy, the in-app assistant. The key is the only thing that has to be
   // set; the defaults below point at Anthropic's OpenAI-compatible endpoint,
   // which takes the same request shape the rest of this file assumes. Haiku is

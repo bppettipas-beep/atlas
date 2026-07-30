@@ -14,6 +14,7 @@ import { activityRouter } from './routes/activity.routes';
 import { adminRouter } from './routes/admin.routes';
 import { authRouter } from './routes/auth.routes';
 import { companiesRouter } from './routes/companies.routes';
+import { contactRouter } from './routes/contact.routes';
 import { chatRouter } from './routes/chat.routes';
 import { assistantRouter } from './routes/assistant.routes';
 import { invitesRouter } from './routes/invites.routes';
@@ -90,6 +91,7 @@ export function createApp(): Express {
   app.use(express.json({ limit: '2mb' }));
   app.use(express.urlencoded({ extended: true }));
   app.use(cookieParser());
+  app.use('/api/contact', contactRouter);
 
   // --------------------------------- health --------------------------------
   app.get('/api/health', async (_req, res) => {
