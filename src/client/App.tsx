@@ -37,6 +37,9 @@ const MarketingDetailPage = lazy(() =>
   import('@/pages/MarketingDetailPage').then((m) => ({ default: m.MarketingDetailPage })),
 );
 const MyDayPage = lazy(() => import('@/pages/MyDayPage').then((m) => ({ default: m.MyDayPage })));
+const MockCheckoutPage = lazy(() =>
+  import('@/pages/MockCheckoutPage').then((m) => ({ default: m.MockCheckoutPage })),
+);
 const NotFoundPage = lazy(() =>
   import('@/pages/NotFoundPage').then((m) => ({ default: m.NotFoundPage })),
 );
@@ -135,6 +138,7 @@ export function App() {
                 <Route path="/signup/owner" element={<OwnerSignupPage />} />
                 <Route path="/setup-panel" element={<PanelSetupPage />} />
                 <Route path="/account-settings" element={<PublicAccountPage />} />
+                <Route path="/checkout" element={<MockCheckoutPage />} />
                 <Route path="/join" element={<WorkerJoinPage />} />
 
                 <Route

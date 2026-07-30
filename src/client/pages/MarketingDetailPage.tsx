@@ -496,7 +496,7 @@ function PricingContent({ account }: { account: AccountSessionDto | null }) {
                   : 'Included'
                 : 'Upgrade';
           const actionHref = account
-            ? `/account-settings?plan=${plan.key}`
+            ? `/checkout?plan=${plan.key}`
             : `/signup/owner?plan=${plan.key}`;
 
           return (

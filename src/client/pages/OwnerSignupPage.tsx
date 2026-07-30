@@ -39,7 +39,10 @@ export function OwnerSignupPage() {
         grant ? { useGoogle: true } : form,
       );
       setAccount(next);
-      navigate('/', { replace: true });
+      const selectedPlan = params.get('plan')?.toUpperCase();
+      navigate(selectedPlan ? `/checkout?plan=${encodeURIComponent(selectedPlan)}` : '/', {
+        replace: true,
+      });
     } catch (caught) {
       if (caught instanceof ApiError) {
         setError(caught.message);
