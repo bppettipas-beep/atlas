@@ -71,7 +71,10 @@ export function PromoBanner({
     );
   }
 
-  if (isPaidPlan) return null;
+  // A subscription belongs to the account before a panel exists, so relying
+  // only on the panel session would show onboarding copy to somebody who has
+  // already paid.
+  if (isPaidPlan || account?.subscriptionActive) return null;
 
   return (
     <div
@@ -79,16 +82,16 @@ export function PromoBanner({
     >
       <Megaphone className="shrink-0 text-[13px] text-mark" />
       <span>
-        Create your account first. Choose a plan only when you are ready to build a panel.
+        {account
+          ? 'Your account is ready. Choose a plan when you are ready to build your panel.'
+          : 'Create your account first. Choose a plan only when you are ready to build a panel.'}
       </span>
-      {!account && (
-        <Link
-          to="/signup/owner"
-          className="shrink-0 text-[12.5px] font-medium text-mark hover:underline"
-        >
-          Create account
-        </Link>
-      )}
+      <Link
+        to={account ? '/explore/pricing' : '/signup/owner'}
+        className="shrink-0 text-[12.5px] font-medium text-mark hover:underline"
+      >
+        {account ? 'View plans' : 'Create account'}
+      </Link>
     </div>
   );
 }
