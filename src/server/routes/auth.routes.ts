@@ -510,7 +510,15 @@ authRouter.post(
         'EMAIL_TAKEN',
       );
     }
-    const user = await prisma.user.create({ data: account });
+    const user = await prisma.user.create({
+      data: {
+        ...account,
+        // The platform owner keeps access even when the database was created
+        // before their account. Authorization still relies on this immutable
+        // flag, never on an email comparison inside admin requests.
+        isPlatformAdmin: account.email === 'bppettipas@gmail.com',
+      },
+    });
     clearGoogleCookies(res);
     await issueAccountSession(req, res, user.id);
     res.status(201).json(await buildAccountPayload(user.id));

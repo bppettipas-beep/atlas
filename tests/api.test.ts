@@ -1121,6 +1121,76 @@ describe('people added by hand', () => {
   });
 });
 
+describe('platform user administration', () => {
+  it('lets only the platform admin search accounts and change a plan everywhere it applies', async () => {
+    const admin = await signUpOwner(app, { fullName: 'Platform Operator' });
+    await prisma.user.update({
+      where: { id: admin.session.user.id },
+      data: { isPlatformAdmin: true },
+    });
+
+    const target = await signUpOwner(app, {
+      fullName: 'Plan Change Target',
+      subscriptionPlan: 'STARTER',
+    });
+    await target.agent.get('/api/admin/users').expect(403);
+
+    const search = await admin.agent
+      .get('/api/admin/users')
+      .query({ search: target.session.user.email })
+      .expect(200);
+    expect(search.body.items).toHaveLength(1);
+    expect(search.body.items[0]).toMatchObject({
+      id: target.session.user.id,
+      fullName: 'Plan Change Target',
+      subscriptionPlan: 'STARTER',
+      subscriptionStatus: 'ACTIVE',
+      activeSessionCount: 1,
+    });
+
+    const changed = await admin.agent
+      .patch(`/api/admin/users/${target.session.user.id}/subscription`)
+      .send({
+        subscriptionPlan: 'BUSINESS',
+        subscriptionStatus: 'SUSPENDED',
+        subscriptionExpiresAt: null,
+      })
+      .expect(200);
+    expect(changed.body).toMatchObject({
+      subscriptionPlan: 'BUSINESS',
+      subscriptionStatus: 'SUSPENDED',
+    });
+
+    const [user, company] = await Promise.all([
+      prisma.user.findUniqueOrThrow({ where: { id: target.session.user.id } }),
+      prisma.company.findUniqueOrThrow({ where: { id: target.session.company.id } }),
+    ]);
+    expect(user.accountPlan).toBe('BUSINESS');
+    expect(user.accountSubscriptionStatus).toBe('SUSPENDED');
+    expect(company.subscriptionPlan).toBe('BUSINESS');
+    expect(company.subscriptionStatus).toBe('SUSPENDED');
+  });
+
+  it('can revoke another account sessions but protects the platform admin sessions', async () => {
+    const admin = await signUpOwner(app);
+    await prisma.user.update({
+      where: { id: admin.session.user.id },
+      data: { isPlatformAdmin: true },
+    });
+    const target = await signUpOwner(app);
+
+    const revoked = await admin.agent
+      .post(`/api/admin/users/${target.session.user.id}/revoke-sessions`)
+      .expect(200);
+    expect(revoked.body.revokedSessions).toBeGreaterThan(0);
+    await target.agent.get('/api/auth/account-session').expect(401);
+
+    await admin.agent
+      .post(`/api/admin/users/${admin.session.user.id}/revoke-sessions`)
+      .expect(403);
+  });
+});
+
 describe('deleting an account', () => {
   it('allows an account without a plan or panel to access settings and delete itself', async () => {
     const agent = request.agent(app);

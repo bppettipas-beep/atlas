@@ -8,73 +8,229 @@ import { prisma } from '../prisma';
 
 export const adminRouter = Router();
 
-// This router is deliberately separate from company administration. It is
-// protected by the hard-coded platform-admin email at the server boundary.
 adminRouter.use(requireAuth, requirePlatformAdmin);
 
+const planSchema = z.enum(['STARTER', 'GROWTH', 'BUSINESS', 'ENTERPRISE']);
+const statusSchema = z.enum(['ACTIVE', 'SUSPENDED']);
+
+const userSubscriptionSchema = z
+  .object({
+    subscriptionPlan: planSchema.nullable(),
+    subscriptionStatus: statusSchema.nullable(),
+    subscriptionExpiresAt: z.coerce.date().nullable().optional(),
+  })
+  .superRefine((value, context) => {
+    if (value.subscriptionPlan === null && value.subscriptionStatus !== null) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['subscriptionStatus'],
+        message: 'An account without a plan cannot have a subscription status.',
+      });
+    }
+    if (value.subscriptionPlan !== null && value.subscriptionStatus === null) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['subscriptionStatus'],
+        message: 'Choose a status for this plan.',
+      });
+    }
+  });
+
+function serializeUser(user: {
+  id: string;
+  email: string;
+  fullName: string;
+  avatarUrl: string | null;
+  phone: string | null;
+  location: string | null;
+  isPlatformAdmin: boolean;
+  accountPlan: 'STARTER' | 'GROWTH' | 'BUSINESS' | 'ENTERPRISE' | null;
+  accountSubscriptionStatus: 'ACTIVE' | 'SUSPENDED' | null;
+  accountSubscriptionExpiresAt: Date | null;
+  createdAt: Date;
+  lastLoginAt: Date | null;
+  memberships: {
+    id: string;
+    role: 'OWNER' | 'CO_OWNER' | 'MANAGER' | 'WORKER';
+    company: { id: string; name: string; slug: string };
+  }[];
+  refreshTokens: { id: string }[];
+}) {
+  return {
+    id: user.id,
+    email: user.email,
+    fullName: user.fullName,
+    avatarUrl: user.avatarUrl,
+    phone: user.phone,
+    location: user.location,
+    isPlatformAdmin: user.isPlatformAdmin,
+    subscriptionPlan: user.accountPlan,
+    subscriptionStatus: user.accountSubscriptionStatus,
+    subscriptionExpiresAt: user.accountSubscriptionExpiresAt?.toISOString() ?? null,
+    createdAt: user.createdAt.toISOString(),
+    lastLoginAt: user.lastLoginAt?.toISOString() ?? null,
+    activeSessionCount: user.refreshTokens.length,
+    companies: user.memberships.map((membership) => ({
+      membershipId: membership.id,
+      role: membership.role,
+      ...membership.company,
+    })),
+  };
+}
+
+const userInclude = {
+  memberships: {
+    where: { status: 'ACTIVE' as const, deactivatedAt: null },
+    select: {
+      id: true,
+      role: true,
+      company: { select: { id: true, name: true, slug: true } },
+    },
+    orderBy: { createdAt: 'asc' as const },
+  },
+  refreshTokens: {
+    where: { revokedAt: null, expiresAt: { gt: new Date() } },
+    select: { id: true },
+  },
+};
+
 adminRouter.get(
-  '/companies',
-  asyncHandler(async (_req, res) => {
-    const companies = await prisma.company.findMany({
-      include: {
-        memberships: {
-          where: { status: 'ACTIVE', deactivatedAt: null },
-          select: { role: true, user: { select: { fullName: true, email: true } } },
-        },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+  '/users',
+  asyncHandler(async (req, res) => {
+    const search = typeof req.query.search === 'string' ? req.query.search.trim().slice(0, 100) : '';
+    const plan = planSchema.safeParse(req.query.plan).success
+      ? (req.query.plan as z.infer<typeof planSchema>)
+      : undefined;
+    const state =
+      req.query.state === 'free' || req.query.state === 'active' || req.query.state === 'suspended'
+        ? req.query.state
+        : undefined;
+
+    const where = {
+      ...(search
+        ? {
+            OR: [
+              { fullName: { contains: search, mode: 'insensitive' as const } },
+              { email: { contains: search, mode: 'insensitive' as const } },
+              {
+                memberships: {
+                  some: { company: { name: { contains: search, mode: 'insensitive' as const } } },
+                },
+              },
+            ],
+          }
+        : {}),
+      ...(plan ? { accountPlan: plan } : {}),
+      ...(state === 'free'
+        ? { accountPlan: null }
+        : state
+          ? { accountSubscriptionStatus: state === 'active' ? ('ACTIVE' as const) : ('SUSPENDED' as const) }
+          : {}),
+    };
+
+    const [users, total, allUsers, paidUsers, panelUsers, activeSessions] = await Promise.all([
+      prisma.user.findMany({ where, include: userInclude, orderBy: { createdAt: 'desc' }, take: 250 }),
+      prisma.user.count({ where }),
+      prisma.user.count(),
+      prisma.user.count({ where: { accountPlan: { not: null } } }),
+      prisma.user.count({
+        where: { memberships: { some: { status: 'ACTIVE', deactivatedAt: null } } },
+      }),
+      prisma.refreshToken.count({ where: { revokedAt: null, expiresAt: { gt: new Date() } } }),
+    ]);
 
     res.json({
-      items: companies.map((company) => {
-        const owner = company.memberships.find(
-          (membership) => membership.role === 'OWNER' || membership.role === 'CO_OWNER',
-        );
-        return {
-          id: company.id,
-          name: company.name,
-          slug: company.slug,
-          createdAt: company.createdAt.toISOString(),
-          memberCount: company.memberships.length,
-          owner: owner ? { fullName: owner.user.fullName, email: owner.user.email } : null,
-          subscriptionPlan: company.subscriptionPlan,
-          subscriptionStatus: company.subscriptionStatus,
-          subscriptionExpiresAt: company.subscriptionExpiresAt?.toISOString() ?? null,
-        };
-      }),
+      items: users.map(serializeUser),
+      total,
+      limited: total > users.length,
+      metrics: { allUsers, paidUsers, freeUsers: allUsers - paidUsers, panelUsers, activeSessions },
     });
   }),
 );
 
-const subscriptionSchema = z.object({
-  subscriptionPlan: z.enum(['STARTER', 'GROWTH', 'BUSINESS', 'ENTERPRISE']),
-  subscriptionStatus: z.enum(['ACTIVE', 'SUSPENDED']),
-  subscriptionExpiresAt: z.coerce.date().nullable().optional(),
-});
-
 adminRouter.patch(
-  '/companies/:id/subscription',
-  validateBody(subscriptionSchema),
+  '/users/:id/subscription',
+  validateBody(userSubscriptionSchema),
   asyncHandler(async (req, res) => {
-    const company = await prisma.company.findUnique({ where: { id: req.params.id } });
-    if (!company) throw ApiError.notFound('That company no longer exists.');
+    const target = await prisma.user.findUnique({ where: { id: req.params.id }, select: { id: true } });
+    if (!target) throw ApiError.notFound('That account no longer exists.');
+    const input = req.body as z.infer<typeof userSubscriptionSchema>;
 
-    const input = req.body as z.infer<typeof subscriptionSchema>;
-    const updated = await prisma.company.update({
-      where: { id: company.id },
-      data: {
-        subscriptionPlan: input.subscriptionPlan,
-        subscriptionStatus: input.subscriptionStatus,
-        ...(input.subscriptionExpiresAt !== undefined
-          ? { subscriptionExpiresAt: input.subscriptionExpiresAt }
-          : {}),
-      },
+    const updated = await prisma.$transaction(async (tx) => {
+      const user = await tx.user.update({
+        where: { id: target.id },
+        data: {
+          accountPlan: input.subscriptionPlan,
+          accountSubscriptionStatus: input.subscriptionStatus,
+          accountSubscriptionExpiresAt:
+            input.subscriptionPlan === null ? null : (input.subscriptionExpiresAt ?? null),
+        },
+        include: userInclude,
+      });
+
+      if (input.subscriptionPlan !== null && input.subscriptionStatus !== null) {
+        await tx.company.updateMany({
+          where: {
+            memberships: {
+              some: {
+                userId: target.id,
+                role: 'OWNER',
+                status: 'ACTIVE',
+                deactivatedAt: null,
+              },
+            },
+          },
+          data: {
+            subscriptionPlan: input.subscriptionPlan,
+            subscriptionStatus: input.subscriptionStatus,
+            subscriptionExpiresAt: input.subscriptionExpiresAt ?? null,
+          },
+        });
+      } else {
+        // A company row must always carry a plan enum, so removing the
+        // account's paid plan parks owned panels on suspended Starter access.
+        // The panel remains recoverable if the account subscribes again.
+        await tx.company.updateMany({
+          where: {
+            memberships: {
+              some: {
+                userId: target.id,
+                role: 'OWNER',
+                status: 'ACTIVE',
+                deactivatedAt: null,
+              },
+            },
+          },
+          data: {
+            subscriptionPlan: 'STARTER',
+            subscriptionStatus: 'SUSPENDED',
+            subscriptionExpiresAt: null,
+          },
+        });
+      }
+      return user;
     });
-    res.json({
-      id: updated.id,
-      subscriptionPlan: updated.subscriptionPlan,
-      subscriptionStatus: updated.subscriptionStatus,
-      subscriptionExpiresAt: updated.subscriptionExpiresAt?.toISOString() ?? null,
+
+    res.json(serializeUser(updated));
+  }),
+);
+
+adminRouter.post(
+  '/users/:id/revoke-sessions',
+  asyncHandler(async (req, res) => {
+    const target = await prisma.user.findUnique({
+      where: { id: req.params.id },
+      select: { id: true, isPlatformAdmin: true },
     });
+    if (!target) throw ApiError.notFound('That account no longer exists.');
+    if (target.isPlatformAdmin) {
+      throw ApiError.forbidden('The platform administrator cannot revoke their own sessions here.');
+    }
+
+    const result = await prisma.refreshToken.updateMany({
+      where: { userId: target.id, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+    res.json({ ok: true, revokedSessions: result.count });
   }),
 );
