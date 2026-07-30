@@ -196,6 +196,10 @@ model User {
 
   fullName                     String
   avatarUrl                    String?
+  phone                        String?
+  location                     String?
+  timezone                     String?
+  bio                          String?
   lastLoginAt                  DateTime?
   /// A paid plan belongs to the account before its first company panel exists.
   accountPlan                  SubscriptionPlan?

@@ -127,6 +127,10 @@ export interface AccountSessionDto {
     email: string;
     fullName: string;
     avatarUrl: string | null;
+    phone: string | null;
+    location: string | null;
+    timezone: string | null;
+    bio: string | null;
     hasPassword: boolean;
     hasGoogle: boolean;
   };

@@ -31,6 +31,7 @@ import {
 } from '../auth/tokens';
 import { ApiError, asyncHandler } from '../http/errors';
 import { validateBody, validateQuery, parsedQuery } from '../http/validate';
+import { deleteUploadedFile, upload } from '../lib/uploads';
 import { currentAuth, requireAuth } from '../middleware/authenticate';
 import { prisma } from '../prisma';
 import { createCompanyRanks, rankIdForLegacyRole } from '../services/authorization';
@@ -38,7 +39,7 @@ import { uniqueSlug } from '../lib/ids';
 import { recordActivity } from '../services/activity';
 import { ensureNotificationPreference, notify, notifyLeadership } from '../services/notifications';
 import { ensureOrganizationNodes, broadcastOrganizationChange } from '../services/organization';
-import { serializeCompany } from '../services/serializers';
+import { attachmentUrl, serializeCompany } from '../services/serializers';
 import { assertEmployeeCapacity } from '../services/subscriptions';
 import { emitToCompany } from '../realtime/io';
 import type { AccountSessionDto, SessionUserDto } from '../../shared/types';
@@ -262,6 +263,10 @@ async function buildAccountPayload(userId: string): Promise<AccountSessionDto> {
       email: user.email,
       fullName: user.fullName,
       avatarUrl: user.avatarUrl,
+      phone: user.phone,
+      location: user.location,
+      timezone: user.timezone,
+      bio: user.bio,
       hasPassword: user.passwordHash !== null,
       hasGoogle: user.googleId !== null,
     },
@@ -920,6 +925,67 @@ authRouter.get(
   }),
 );
 
+authRouter.patch(
+  '/account',
+  validateBody(
+    z.object({
+      fullName,
+      email,
+      phone: z.string().trim().max(40).nullable(),
+      location: z.string().trim().max(120).nullable(),
+      timezone: z.string().trim().max(80).nullable(),
+      bio: z.string().trim().max(1000).nullable(),
+      avatarUrl: z.string().trim().max(500).nullable(),
+    }),
+  ),
+  asyncHandler(async (req, res) => {
+    const signedInUser = await accountFromRequest(req);
+    if (!signedInUser) throw ApiError.unauthorized('You are not signed in.');
+    const input = req.body as {
+      fullName: string;
+      email: string;
+      phone: string | null;
+      location: string | null;
+      timezone: string | null;
+      bio: string | null;
+      avatarUrl: string | null;
+    };
+
+    if (input.email !== signedInUser.email) {
+      const taken = await prisma.user.findUnique({ where: { email: input.email } });
+      if (taken) {
+        throw ApiError.conflict('Another account already uses that email address.', 'EMAIL_TAKEN');
+      }
+    }
+
+    await prisma.user.update({
+      where: { id: signedInUser.id },
+      data: input,
+    });
+    res.json(await buildAccountPayload(signedInUser.id));
+  }),
+);
+
+authRouter.post(
+  '/account/avatar',
+  asyncHandler(async (req, _res, next) => {
+    if (!(await accountFromRequest(req))) throw ApiError.unauthorized('You are not signed in.');
+    next();
+  }),
+  upload.single('file'),
+  asyncHandler(async (req, res) => {
+    const signedInUser = await accountFromRequest(req);
+    if (!signedInUser) throw ApiError.unauthorized('You are not signed in.');
+    const file = req.file;
+    if (!file) throw ApiError.badRequest('Choose an image to upload.', 'NO_FILE');
+    if (!file.mimetype.startsWith('image/')) {
+      void deleteUploadedFile(file.filename);
+      throw ApiError.badRequest('Profile pictures must be image files.', 'INVALID_AVATAR');
+    }
+    res.status(201).json({ url: attachmentUrl(file.filename) });
+  }),
+);
+
 authRouter.get(
   '/session',
   asyncHandler(async (req, res) => {
@@ -1102,7 +1168,6 @@ authRouter.post(
 
 authRouter.patch(
   '/password',
-  requireAuth,
   validateBody(
     z.object({
       // Optional: a Google-only account is setting its first password, and has
@@ -1112,10 +1177,11 @@ authRouter.patch(
     }),
   ),
   asyncHandler(async (req, res) => {
-    const auth = currentAuth(req);
+    const signedInUser = await accountFromRequest(req);
+    if (!signedInUser) throw ApiError.unauthorized('You are not signed in.');
     const input = req.body as { currentPassword?: string; newPassword: string };
 
-    const user = await prisma.user.findUniqueOrThrow({ where: { id: auth.userId } });
+    const user = await prisma.user.findUniqueOrThrow({ where: { id: signedInUser.id } });
 
     if (user.passwordHash) {
       if (!input.currentPassword) {
@@ -1135,8 +1201,12 @@ authRouter.patch(
       where: { userId: user.id, revokedAt: null },
       data: { revokedAt: new Date() },
     });
-    await issueSession(req, res, user.id, auth.membershipId);
-    await ensureNotificationPreference(auth.membershipId);
+    if (req.auth) {
+      await issueSession(req, res, user.id, req.auth.membershipId);
+      await ensureNotificationPreference(req.auth.membershipId);
+    } else {
+      await issueAccountSession(req, res, user.id);
+    }
 
     res.json({ ok: true });
   }),

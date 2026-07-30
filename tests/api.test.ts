@@ -61,6 +61,74 @@ describe('owner sign-up', () => {
     });
   });
 
+  it('lets a free account manage personal details without creating a company', async () => {
+    const agent = request.agent(app);
+    const originalEmail = uniqueEmail('personal-settings');
+    const nextEmail = uniqueEmail('personal-settings-updated');
+    await agent
+      .post('/api/auth/account-signup')
+      .send({ fullName: 'Original Name', email: originalEmail, password: STRONG_PASSWORD })
+      .expect(201);
+
+    const avatar = await agent
+      .post('/api/auth/account/avatar')
+      .attach('file', Buffer.from('mock image bytes'), {
+        filename: 'account-photo.png',
+        contentType: 'image/png',
+      })
+      .expect(201);
+
+    const updated = await agent
+      .patch('/api/auth/account')
+      .send({
+        fullName: 'Updated Name',
+        email: nextEmail,
+        phone: '+1 506 555 0101',
+        location: 'Moncton, NB',
+        timezone: 'America/Moncton',
+        bio: 'Building a better operation.',
+        avatarUrl: avatar.body.url,
+      })
+      .expect(200);
+
+    expect(updated.body).toMatchObject({
+      user: {
+        fullName: 'Updated Name',
+        email: nextEmail,
+        phone: '+1 506 555 0101',
+        location: 'Moncton, NB',
+        timezone: 'America/Moncton',
+        bio: 'Building a better operation.',
+        avatarUrl: avatar.body.url,
+      },
+      plan: null,
+      hasPanel: false,
+    });
+    await agent.get('/api/auth/session').expect(401);
+  });
+
+  it('lets a free account change its password and keeps its account session', async () => {
+    const agent = request.agent(app);
+    const email = uniqueEmail('free-password');
+    const newPassword = 'Another-strong-password-456';
+    await agent
+      .post('/api/auth/account-signup')
+      .send({ fullName: 'Password Person', email, password: STRONG_PASSWORD })
+      .expect(201);
+
+    await agent
+      .patch('/api/auth/password')
+      .send({ currentPassword: STRONG_PASSWORD, newPassword })
+      .expect(200);
+    await agent.get('/api/auth/account-session').expect(200);
+
+    await request(app)
+      .post('/api/auth/login')
+      .send({ email, password: STRONG_PASSWORD })
+      .expect(401);
+    await request(app).post('/api/auth/login').send({ email, password: newPassword }).expect(200);
+  });
+
   it('creates the user, the company, an owner membership and a Leadership team', async () => {
     const email = uniqueEmail('founder');
     const { session } = await signUpOwner(app, { email, companyName: 'Northwind Facilities' });
@@ -1090,10 +1158,7 @@ describe('deleting an account', () => {
       .send({ fullName: 'Too Soon', email, password: STRONG_PASSWORD })
       .expect(409);
 
-    await first
-      .post('/api/auth/account/delete')
-      .send({ password: STRONG_PASSWORD })
-      .expect(200);
+    await first.post('/api/auth/account/delete').send({ password: STRONG_PASSWORD }).expect(200);
 
     const reused = await request(app)
       .post('/api/auth/account-signup')
