@@ -75,11 +75,17 @@ const WorkerJoinPage = lazy(() =>
 
 /** Blocks a route until the session is known, then redirects if signed out. */
 function RequireAuth({ children }: { children: ReactNode }) {
-  const { session, loading } = useAuth();
+  const { session, account, loading } = useAuth();
   const location = useLocation();
 
   if (loading) return <LoadingState className="h-screen" label="Loading your workspace" />;
-  if (!session) return <Navigate to="/signin" replace state={{ from: location.pathname }} />;
+  if (!session) {
+    return account ? (
+      <Navigate to="/" replace />
+    ) : (
+      <Navigate to="/signin" replace state={{ from: location.pathname }} />
+    );
+  }
   return <>{children}</>;
 }
 

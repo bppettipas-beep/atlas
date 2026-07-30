@@ -321,7 +321,7 @@ function AccountSettings({ account }: { account: AccountSessionDto }) {
                   Set up panel
                 </Link>
               )}
-              {account.hasPanel && (
+              {account.hasPanel && account.subscriptionActive && (
                 <Link
                   to="/app"
                   className="inline-flex h-8 items-center rounded-sm bg-ink px-3 text-[13px] font-medium text-white hover:bg-ink-2"

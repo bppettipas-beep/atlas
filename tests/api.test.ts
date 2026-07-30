@@ -1169,6 +1169,25 @@ describe('platform user administration', () => {
     expect(user.accountSubscriptionStatus).toBe('SUSPENDED');
     expect(company.subscriptionPlan).toBe('BUSINESS');
     expect(company.subscriptionStatus).toBe('SUSPENDED');
+
+    const removed = await admin.agent
+      .patch(`/api/admin/users/${target.session.user.id}/subscription`)
+      .send({
+        subscriptionPlan: null,
+        subscriptionStatus: null,
+        subscriptionExpiresAt: null,
+      })
+      .expect(200);
+    expect(removed.body).toMatchObject({
+      subscriptionPlan: null,
+      subscriptionStatus: null,
+    });
+    expect(
+      await prisma.company.findUniqueOrThrow({
+        where: { id: target.session.company.id },
+        select: { subscriptionPlan: true, subscriptionStatus: true },
+      }),
+    ).toMatchObject({ subscriptionPlan: 'STARTER', subscriptionStatus: 'SUSPENDED' });
   });
 
   it('can revoke another account sessions but protects the platform admin sessions', async () => {
@@ -1185,9 +1204,7 @@ describe('platform user administration', () => {
     expect(revoked.body.revokedSessions).toBeGreaterThan(0);
     await target.agent.get('/api/auth/account-session').expect(401);
 
-    await admin.agent
-      .post(`/api/admin/users/${admin.session.user.id}/revoke-sessions`)
-      .expect(403);
+    await admin.agent.post(`/api/admin/users/${admin.session.user.id}/revoke-sessions`).expect(403);
   });
 });
 

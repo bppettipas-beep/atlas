@@ -49,7 +49,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const nextAccount = await api.get<AccountSessionDto>('/auth/account-session');
       setAccountState(nextAccount);
       try {
-        setSessionState(await api.get<SessionUserDto>('/auth/session'));
+        const nextSession = await api.get<SessionUserDto>('/auth/session');
+        // A preserved panel is not an accessible panel once its subscription
+        // has been removed. Keep the account signed in, but present the public
+        // account experience until an admin restores paid access.
+        setSessionState(nextSession.company.subscriptionStatus === 'ACTIVE' ? nextSession : null);
       } catch {
         setSessionState(null);
       }
@@ -86,8 +90,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
     markTabSignedIn();
     if ('company' in next) {
+      const nextAccount = await api.get<AccountSessionDto>('/auth/account-session');
+      setAccountState(nextAccount);
+      if (next.company.subscriptionStatus === 'SUSPENDED') {
+        setSessionState(null);
+        return nextAccount;
+      }
       setSessionState(next);
-      setAccountState(await api.get<AccountSessionDto>('/auth/account-session'));
     } else {
       setAccountState(next);
     }

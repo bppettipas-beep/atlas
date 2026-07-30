@@ -36,7 +36,8 @@ export function LandingPage() {
 
   if (loading) return <LoadingState className="h-screen" label="Loading Atlas" />;
   const signedIn = Boolean(account);
-  const primaryHref = account?.hasPanel
+  const hasAccessiblePanel = Boolean(account?.hasPanel && account.subscriptionActive);
+  const primaryHref = hasAccessiblePanel
     ? '/app'
     : account?.subscriptionActive
       ? '/setup-panel'
@@ -97,7 +98,7 @@ export function LandingPage() {
                 to={primaryHref}
                 className="group inline-flex h-11 items-center gap-2.5 rounded-sm bg-ink px-5 text-[14px] font-medium text-white transition-colors hover:bg-ink-2"
               >
-                {account?.hasPanel
+                {hasAccessiblePanel
                   ? 'Open your panel'
                   : account?.subscriptionActive
                     ? 'Set up your panel'
@@ -157,7 +158,7 @@ export function LandingPage() {
             Stop being the only person who knows.
           </h2>
           <p className="mx-auto mt-5 max-w-[46ch] text-[15px] leading-relaxed text-ink-2">
-            {account?.hasPanel
+            {hasAccessiblePanel
               ? 'Your company is already running. Pick up where you left off.'
               : 'Create an account, choose a plan, then build your company panel.'}
           </p>
@@ -165,7 +166,7 @@ export function LandingPage() {
             to={primaryHref}
             className="group mt-9 inline-flex h-11 items-center gap-2.5 rounded-sm bg-ink px-5 text-[14px] font-medium text-white transition-colors hover:bg-ink-2"
           >
-            {account?.hasPanel ? 'Open your panel' : signedIn ? 'Choose a plan' : 'Get started'}
+            {hasAccessiblePanel ? 'Open your panel' : signedIn ? 'Choose a plan' : 'Get started'}
             <ArrowRight className="text-[14px] transition-transform group-hover:translate-x-1" />
           </Link>
         </section>

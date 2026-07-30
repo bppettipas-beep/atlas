@@ -27,7 +27,7 @@ export function MarketingAccountNav() {
   }
 
   const panelHref = account.hasPanel ? '/app' : '/setup-panel';
-  const showPanelAction = account.hasPanel || account.subscriptionActive;
+  const showPanelAction = account.subscriptionActive;
 
   return (
     <>
