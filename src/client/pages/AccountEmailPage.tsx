@@ -169,8 +169,10 @@ export function ResetPasswordPage() {
 export function VerifyEmailPage() {
   const [params] = useSearchParams();
   const navigate = useNavigate();
-  const { account, loading, refresh } = useAuth();
+  const { account, loading, refresh, setAccount } = useAuth();
   const token = params.get('token') ?? '';
+  const verificationId = params.get('id') ?? '';
+  const pendingEmail = params.get('email') ?? '';
   const requestedNext = params.get('next') ?? '/';
   const next =
     requestedNext.startsWith('/') && !requestedNext.startsWith('//') ? requestedNext : '/';
@@ -198,8 +200,12 @@ export function VerifyEmailPage() {
     setStatus('working');
     setMessage('');
     try {
-      await api.post('/auth/verify-email-code', { code });
-      await refresh();
+      const verified = await api.post<import('@shared/types').AccountSessionDto>(
+        '/auth/verify-email-code',
+        { code, ...(verificationId ? { verificationId } : {}) },
+      );
+      setAccount(verified);
+      if (!verificationId) await refresh();
       setStatus('done');
       window.setTimeout(() => navigate(next, { replace: true }), 500);
     } catch (caught) {
@@ -213,7 +219,9 @@ export function VerifyEmailPage() {
     setMessage('');
     setResent(false);
     try {
-      await api.post('/auth/resend-verification');
+      await api.post('/auth/resend-verification', {
+        ...(verificationId ? { verificationId } : {}),
+      });
       setResent(true);
       setCode('');
       setStatus('idle');
@@ -225,7 +233,9 @@ export function VerifyEmailPage() {
     }
   };
 
-  if (!token && !loading && !account) return <Navigate to="/signin" replace />;
+  if (!token && !loading && !account && !verificationId) {
+    return <Navigate to="/signup/owner" replace />;
+  }
   if (!token && account?.user.emailVerified && status !== 'done') {
     return <Navigate to={next} replace />;
   }
@@ -250,7 +260,7 @@ export function VerifyEmailPage() {
           ? 'Your Atlas account email is confirmed.'
           : linkMode
             ? message || 'This should only take a moment.'
-            : `Enter the six-digit code sent to ${account?.user.email ?? 'your email address'}.`
+            : `Enter the six-digit code sent to ${account?.user.email ?? (pendingEmail || 'your email address')}.`
       }
       footer={
         linkMode ? (

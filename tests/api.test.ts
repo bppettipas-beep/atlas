@@ -4,6 +4,7 @@ import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   STRONG_PASSWORD,
+  completePendingSignup,
   createInviteCode,
   joinWithCode,
   signUpOwner,
@@ -41,15 +42,19 @@ describe('owner sign-up', () => {
         email: uniqueEmail('account-only'),
         password: STRONG_PASSWORD,
       })
-      .expect(201);
+      .expect(202);
 
-    expect(account.body).toMatchObject({ hasPanel: false, subscriptionActive: false });
+    await agent.get('/api/auth/account-session').expect(401);
+    const verified = await completePendingSignup(agent, account);
+    expect(verified.status).toBe(200);
+
+    expect(verified.body).toMatchObject({ hasPanel: false, subscriptionActive: false });
     await agent.get('/api/auth/account-session').expect(200);
     await agent.get('/api/auth/session').expect(401);
     await agent.post('/api/auth/owner-signup').send({ companyName: 'Too Early' }).expect(402);
 
     await prisma.user.update({
-      where: { id: account.body.user.id },
+      where: { id: verified.body.user.id },
       data: {
         emailVerifiedAt: new Date(),
         accountPlan: 'GROWTH',
@@ -70,10 +75,10 @@ describe('owner sign-up', () => {
     const agent = request.agent(app);
     const originalEmail = uniqueEmail('personal-settings');
     const nextEmail = uniqueEmail('personal-settings-updated');
-    await agent
+    const pending = await agent
       .post('/api/auth/account-signup')
-      .send({ fullName: 'Original Name', email: originalEmail, password: STRONG_PASSWORD })
-      .expect(201);
+      .send({ fullName: 'Original Name', email: originalEmail, password: STRONG_PASSWORD });
+    expect((await completePendingSignup(agent, pending)).status).toBe(200);
 
     const avatar = await agent
       .post('/api/auth/account/avatar')
@@ -116,10 +121,10 @@ describe('owner sign-up', () => {
     const agent = request.agent(app);
     const email = uniqueEmail('free-password');
     const newPassword = 'Another-strong-password-456';
-    await agent
+    const pending = await agent
       .post('/api/auth/account-signup')
-      .send({ fullName: 'Password Person', email, password: STRONG_PASSWORD })
-      .expect(201);
+      .send({ fullName: 'Password Person', email, password: STRONG_PASSWORD });
+    expect((await completePendingSignup(agent, pending)).status).toBe(200);
 
     await agent
       .patch('/api/auth/password')
@@ -139,13 +144,13 @@ describe('owner sign-up', () => {
     const signup = await request(app)
       .post('/api/auth/account-signup')
       .send({ fullName: 'Verify Person', email, password: STRONG_PASSWORD })
-      .expect(201);
-    expect(signup.body.user.emailVerified).toBe(false);
+      .expect(202);
+    expect(signup.body).toMatchObject({ verificationRequired: true, email });
 
     const token = crypto.randomBytes(32).toString('base64url');
     await prisma.emailToken.create({
       data: {
-        userId: signup.body.user.id,
+        userId: signup.body.verificationId,
         type: 'VERIFY_EMAIL',
         tokenHash: crypto.createHash('sha256').update(token).digest('hex'),
         expiresAt: new Date(Date.now() + 60_000),
@@ -154,11 +159,11 @@ describe('owner sign-up', () => {
 
     await request(app).post('/api/auth/verify-email').send({ token }).expect(200);
     await request(app).post('/api/auth/verify-email').send({ token }).expect(400);
-    const user = await prisma.user.findUniqueOrThrow({ where: { id: signup.body.user.id } });
+    const user = await prisma.user.findUniqueOrThrow({ where: { id: signup.body.verificationId } });
     expect(user.emailVerifiedAt).not.toBeNull();
   });
 
-  it('requires the signed-in user to enter their one-use six-digit email code', async () => {
+  it('creates no session until the user enters their one-use six-digit email code', async () => {
     const agent = request.agent(app);
     const signup = await agent
       .post('/api/auth/account-signup')
@@ -167,24 +172,31 @@ describe('owner sign-up', () => {
         email: uniqueEmail('verify-code'),
         password: STRONG_PASSWORD,
       })
-      .expect(201);
+      .expect(202);
     const code = '482913';
     await prisma.emailToken.deleteMany({
-      where: { userId: signup.body.user.id, type: 'VERIFY_EMAIL' },
+      where: { userId: signup.body.verificationId, type: 'VERIFY_EMAIL' },
     });
     await prisma.emailToken.create({
       data: {
-        userId: signup.body.user.id,
+        userId: signup.body.verificationId,
         type: 'VERIFY_EMAIL',
         tokenHash: crypto.createHash('sha256').update(code).digest('hex'),
         expiresAt: new Date(Date.now() + 60_000),
       },
     });
 
-    await agent.post('/api/auth/verify-email-code').send({ code: '000000' }).expect(400);
+    await agent.get('/api/auth/account-session').expect(401);
+    await agent
+      .post('/api/auth/verify-email-code')
+      .send({ verificationId: signup.body.verificationId, code: '000000' })
+      .expect(400);
+    await agent
+      .post('/api/auth/verify-email-code')
+      .send({ verificationId: signup.body.verificationId, code })
+      .expect(200);
     await agent.post('/api/auth/verify-email-code').send({ code }).expect(200);
-    await agent.post('/api/auth/verify-email-code').send({ code }).expect(200);
-    const user = await prisma.user.findUniqueOrThrow({ where: { id: signup.body.user.id } });
+    const user = await prisma.user.findUniqueOrThrow({ where: { id: signup.body.verificationId } });
     expect(user.emailVerifiedAt).not.toBeNull();
   });
 
@@ -194,11 +206,12 @@ describe('owner sign-up', () => {
     const signup = await agent
       .post('/api/auth/account-signup')
       .send({ fullName: 'Reset Person', email, password: STRONG_PASSWORD })
-      .expect(201);
+      .expect(202);
+    expect((await completePendingSignup(agent, signup)).status).toBe(200);
     const token = crypto.randomBytes(32).toString('base64url');
     await prisma.emailToken.create({
       data: {
-        userId: signup.body.user.id,
+        userId: signup.body.verificationId,
         type: 'RESET_PASSWORD',
         tokenHash: crypto.createHash('sha256').update(token).digest('hex'),
         expiresAt: new Date(Date.now() + 60_000),
@@ -1362,10 +1375,10 @@ describe('deleting an account', () => {
   it('allows an account without a plan or panel to access settings and delete itself', async () => {
     const agent = request.agent(app);
     const email = uniqueEmail('free-delete');
-    const created = await agent
+    const pending = await agent
       .post('/api/auth/account-signup')
-      .send({ fullName: 'Free Account', email, password: STRONG_PASSWORD })
-      .expect(201);
+      .send({ fullName: 'Free Account', email, password: STRONG_PASSWORD });
+    const created = await completePendingSignup(agent, pending);
 
     expect(created.body).toMatchObject({
       user: { email, hasPassword: true, hasGoogle: false },
@@ -1385,10 +1398,10 @@ describe('deleting an account', () => {
   it('releases a deleted email for a new account but rejects it while still in use', async () => {
     const first = request.agent(app);
     const email = uniqueEmail('reusable');
-    await first
+    const firstPending = await first
       .post('/api/auth/account-signup')
-      .send({ fullName: 'First Person', email, password: STRONG_PASSWORD })
-      .expect(201);
+      .send({ fullName: 'First Person', email, password: STRONG_PASSWORD });
+    expect((await completePendingSignup(first, firstPending)).status).toBe(200);
 
     await request(app)
       .post('/api/auth/account-signup')
@@ -1397,10 +1410,12 @@ describe('deleting an account', () => {
 
     await first.post('/api/auth/account/delete').send({ password: STRONG_PASSWORD }).expect(200);
 
-    const reused = await request(app)
+    const second = request.agent(app);
+    const reusedPending = await second
       .post('/api/auth/account-signup')
       .send({ fullName: 'Second Person', email, password: STRONG_PASSWORD })
-      .expect(201);
+      .expect(202);
+    const reused = await completePendingSignup(second, reusedPending);
     expect(reused.body.user.email).toBe(email);
   });
 

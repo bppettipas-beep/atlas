@@ -28,6 +28,11 @@ export function SignInPage() {
     setSubmitting(true);
     try {
       const next = await signIn(email, password);
+      if ('verificationRequired' in next) {
+        const verify = new URLSearchParams({ id: next.verificationId, email: next.email });
+        navigate(`/verify-email?${verify.toString()}`, { replace: true });
+        return;
+      }
       navigate('company' in next ? '/app' : next.user.emailVerified ? '/' : '/verify-email', {
         replace: true,
       });

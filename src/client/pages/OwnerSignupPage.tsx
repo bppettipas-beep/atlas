@@ -11,7 +11,7 @@ import { AuthLayout } from '@/components/layout/AuthLayout';
 import { Button, Field, InlineError, Input, LoadingState } from '@/components/ui';
 import { ApiError, api } from '@/lib/api';
 import { useAuth } from '@/providers/AuthProvider';
-import type { AccountSessionDto } from '@shared/types';
+import type { AccountSessionDto, PendingAccountSignupDto } from '@shared/types';
 
 /** Account creation deliberately stops before company or panel creation. */
 export function OwnerSignupPage() {
@@ -34,19 +34,23 @@ export function OwnerSignupPage() {
     setError(null);
     setFieldErrors({});
     try {
-      const next = await api.post<AccountSessionDto>(
+      const next = await api.post<AccountSessionDto | PendingAccountSignupDto>(
         '/auth/account-signup',
         grant ? { useGoogle: true } : form,
       );
-      setAccount(next);
       const selectedPlan = params.get('plan')?.toUpperCase();
       const nextPath = selectedPlan ? `/checkout?plan=${encodeURIComponent(selectedPlan)}` : '/';
-      navigate(
-        next.user.emailVerified ? nextPath : `/verify-email?next=${encodeURIComponent(nextPath)}`,
-        {
-          replace: true,
-        },
-      );
+      if ('verificationRequired' in next) {
+        const verify = new URLSearchParams({
+          id: next.verificationId,
+          email: next.email,
+          next: nextPath,
+        });
+        navigate(`/verify-email?${verify.toString()}`, { replace: true });
+      } else {
+        setAccount(next);
+        navigate(nextPath, { replace: true });
+      }
     } catch (caught) {
       if (caught instanceof ApiError) {
         setError(caught.message);

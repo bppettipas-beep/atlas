@@ -9,7 +9,7 @@ import {
 } from 'react';
 import { api, ApiError } from '@/lib/api';
 import { isTabSignedOut, markTabSignedIn, markTabSignedOut } from '@/lib/tabSession';
-import type { AccountSessionDto, SessionUserDto } from '@shared/types';
+import type { AccountSessionDto, PendingAccountSignupDto, SessionUserDto } from '@shared/types';
 import { planHasFeature, type PlanFeature } from '@shared/plans';
 
 interface AuthContextValue {
@@ -20,7 +20,10 @@ interface AuthContextValue {
   refresh: () => Promise<void>;
   setSession: (session: SessionUserDto) => void;
   setAccount: (account: AccountSessionDto) => void;
-  signIn: (email: string, password: string) => Promise<SessionUserDto | AccountSessionDto>;
+  signIn: (
+    email: string,
+    password: string,
+  ) => Promise<SessionUserDto | AccountSessionDto | PendingAccountSignupDto>;
   signOut: () => Promise<void>;
   switchCompany: (membershipId: string) => Promise<void>;
   isOwner: boolean;
@@ -88,10 +91,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [load]);
 
   const signIn = useCallback(async (email: string, password: string) => {
-    const next = await api.post<SessionUserDto | AccountSessionDto>('/auth/login', {
-      email,
-      password,
-    });
+    const next = await api.post<SessionUserDto | AccountSessionDto | PendingAccountSignupDto>(
+      '/auth/login',
+      { email, password },
+    );
+    if ('verificationRequired' in next) return next;
     markTabSignedIn();
     if ('company' in next) {
       const nextAccount = await api.get<AccountSessionDto>('/auth/account-session');

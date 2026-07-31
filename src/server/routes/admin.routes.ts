@@ -16,7 +16,10 @@ adminRouter.get(
   '/broadcast/recipients',
   asyncHandler(async (_req, res) => {
     const count = await prisma.user.count({
-      where: { NOT: { email: { endsWith: '@placeholder.atlas.invalid' } } },
+      where: {
+        emailVerifiedAt: { not: null },
+        NOT: { email: { endsWith: '@placeholder.atlas.invalid' } },
+      },
     });
     res.json({ count, emailConfigured: env.emailEnabled });
   }),
@@ -37,7 +40,10 @@ adminRouter.post(
     }
     const input = req.body as { title: string; body: string; broadcastId: string };
     const recipients = await prisma.user.findMany({
-      where: { NOT: { email: { endsWith: '@placeholder.atlas.invalid' } } },
+      where: {
+        emailVerifiedAt: { not: null },
+        NOT: { email: { endsWith: '@placeholder.atlas.invalid' } },
+      },
       select: { email: true },
       orderBy: { createdAt: 'asc' },
     });
@@ -144,6 +150,7 @@ adminRouter.get(
         : undefined;
 
     const where = {
+      emailVerifiedAt: { not: null },
       ...(search
         ? {
             OR: [
@@ -176,10 +183,15 @@ adminRouter.get(
         take: 250,
       }),
       prisma.user.count({ where }),
-      prisma.user.count(),
-      prisma.user.count({ where: { accountPlan: { not: null } } }),
+      prisma.user.count({ where: { emailVerifiedAt: { not: null } } }),
       prisma.user.count({
-        where: { memberships: { some: { status: 'ACTIVE', deactivatedAt: null } } },
+        where: { emailVerifiedAt: { not: null }, accountPlan: { not: null } },
+      }),
+      prisma.user.count({
+        where: {
+          emailVerifiedAt: { not: null },
+          memberships: { some: { status: 'ACTIVE', deactivatedAt: null } },
+        },
       }),
       prisma.refreshToken.count({ where: { revokedAt: null, expiresAt: { gt: new Date() } } }),
     ]);

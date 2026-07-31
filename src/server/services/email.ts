@@ -319,6 +319,10 @@ export async function consumeEmailTokenForUser(
 
 export async function sendVerificationEmail(user: { id: string; email: string; fullName: string }) {
   const code = await createEmailVerificationCode(user.id);
+  return sendVerificationCodeEmail(user, code);
+}
+
+export function sendVerificationCodeEmail(user: { email: string; fullName: string }, code: string) {
   return sendEmail({
     to: user.email,
     subject: `${code} is your Atlas verification code`,

@@ -45,12 +45,18 @@ import { emitToCompany } from '../realtime/io';
 import {
   consumeEmailToken,
   consumeEmailTokenForUser,
+  createEmailVerificationCode,
   sendPasswordResetEmail,
   sendSecurityEmail,
   sendVerificationEmail,
+  sendVerificationCodeEmail,
   sendWelcomeEmail,
 } from '../services/email';
-import type { AccountSessionDto, SessionUserDto } from '../../shared/types';
+import type {
+  AccountSessionDto,
+  PendingAccountSignupDto,
+  SessionUserDto,
+} from '../../shared/types';
 import type { Request, Response } from 'express';
 import { planHasFeature } from '../../shared/plans';
 
@@ -146,6 +152,7 @@ const emailTokenSchema = z.object({
 });
 
 const emailCodeSchema = z.object({
+  verificationId: z.string().trim().min(1).optional(),
   code: z
     .string()
     .trim()
@@ -524,27 +531,48 @@ authRouter.post(
   asyncHandler(async (req, res) => {
     const input = req.body as z.infer<typeof accountSignupSchema>;
     const account = await resolveNewAccount(req, input);
-    if (await prisma.user.findUnique({ where: { email: account.email } })) {
+    const existing = await prisma.user.findUnique({
+      where: { email: account.email },
+      include: { memberships: { take: 1 } },
+    });
+    if (existing?.emailVerifiedAt || existing?.memberships.length || existing?.googleId) {
       throw ApiError.conflict(
         'An account already uses that email address. Sign in instead.',
         'EMAIL_TAKEN',
       );
     }
-    const user = await prisma.user.create({
-      data: {
-        ...account,
-        emailVerifiedAt: account.googleId ? new Date() : null,
-        // The platform owner keeps access even when the database was created
-        // before their account. Authorization still relies on this immutable
-        // flag, never on an email comparison inside admin requests.
-        isPlatformAdmin: account.email === 'bppettipas@gmail.com',
-      },
-    });
+    const user = existing
+      ? await prisma.user.update({
+          where: { id: existing.id },
+          data: { ...account, emailVerifiedAt: null },
+        })
+      : await prisma.user.create({
+          data: {
+            ...account,
+            emailVerifiedAt: account.googleId ? new Date() : null,
+            // The platform owner keeps access even when the database was created
+            // before their account. Authorization still relies on this immutable
+            // flag, never on an email comparison inside admin requests.
+            isPlatformAdmin: account.email === 'bppettipas@gmail.com',
+          },
+        });
     clearGoogleCookies(res);
-    await issueAccountSession(req, res, user.id);
-    if (user.emailVerifiedAt) void sendWelcomeEmail(user);
-    else void sendVerificationEmail(user);
-    res.status(201).json(await buildAccountPayload(user.id));
+    if (user.emailVerifiedAt) {
+      await issueAccountSession(req, res, user.id);
+      void sendWelcomeEmail(user);
+      res.status(201).json(await buildAccountPayload(user.id));
+      return;
+    }
+    await prisma.refreshToken.deleteMany({ where: { userId: user.id } });
+    const code = await createEmailVerificationCode(user.id);
+    void sendVerificationCodeEmail(user, code);
+    const pending: PendingAccountSignupDto = {
+      verificationRequired: true,
+      verificationId: user.id,
+      email: user.email,
+      ...(env.isTest ? { testCode: code } : {}),
+    };
+    res.status(202).json(pending);
   }),
 );
 
@@ -929,6 +957,19 @@ authRouter.post(
       throw ApiError.unauthorized('That email or password is not correct.', 'INVALID_CREDENTIALS');
     }
 
+    if (!user.emailVerifiedAt) {
+      const code = await createEmailVerificationCode(user.id);
+      void sendVerificationCodeEmail(user, code);
+      const pending: PendingAccountSignupDto = {
+        verificationRequired: true,
+        verificationId: user.id,
+        email: user.email,
+        ...(env.isTest ? { testCode: code } : {}),
+      };
+      res.status(202).json(pending);
+      return;
+    }
+
     const membership = user.memberships[0];
     if (!membership) {
       await issueAccountSession(req, res, user.id);
@@ -1023,8 +1064,16 @@ authRouter.patch(
 authRouter.post(
   '/resend-verification',
   authLimiter,
+  validateBody(z.object({ verificationId: z.string().trim().min(1).optional() }).default({})),
   asyncHandler(async (req, res) => {
-    const user = await accountFromRequest(req);
+    const pendingId = (req.body as { verificationId?: string }).verificationId;
+    const user =
+      (await accountFromRequest(req)) ??
+      (pendingId
+        ? await prisma.user.findFirst({
+            where: { id: pendingId, emailVerifiedAt: null, memberships: { none: {} } },
+          })
+        : null);
     if (!user) throw ApiError.unauthorized('You are not signed in.');
     if (!user.emailVerifiedAt) await sendVerificationEmail(user);
     res.json({ ok: true });
@@ -1036,20 +1085,25 @@ authRouter.post(
   authLimiter,
   validateBody(emailCodeSchema),
   asyncHandler(async (req, res) => {
+    const { code, verificationId } = req.body as z.infer<typeof emailCodeSchema>;
     const signedIn = await accountFromRequest(req);
-    if (!signedIn) throw ApiError.unauthorized('You are not signed in.');
-    if (signedIn.emailVerifiedAt) {
+    const targetId = signedIn?.id ?? verificationId;
+    if (!targetId) throw ApiError.unauthorized('This verification request is missing.');
+    const target = signedIn ?? (await prisma.user.findUnique({ where: { id: targetId } }));
+    if (!target)
+      throw ApiError.badRequest('That code is incorrect or has expired.', 'INVALID_CODE');
+    if (target.emailVerifiedAt) {
       res.json({ ok: true });
       return;
     }
-    const { code } = req.body as z.infer<typeof emailCodeSchema>;
-    const user = await consumeEmailTokenForUser(code, 'VERIFY_EMAIL', signedIn.id);
+    const user = await consumeEmailTokenForUser(code, 'VERIFY_EMAIL', targetId);
     if (!user) {
       throw ApiError.badRequest('That code is incorrect or has expired.', 'INVALID_CODE');
     }
     await prisma.user.update({ where: { id: user.id }, data: { emailVerifiedAt: new Date() } });
+    if (!signedIn) await issueAccountSession(req, res, user.id);
     void sendWelcomeEmail(user);
-    res.json({ ok: true });
+    res.json(await buildAccountPayload(user.id));
   }),
 );
 

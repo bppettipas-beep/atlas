@@ -142,6 +142,14 @@ export interface AccountSessionDto {
   panelMembershipId: string | null;
 }
 
+export interface PendingAccountSignupDto {
+  verificationRequired: true;
+  verificationId: string;
+  email: string;
+  /** Present only in automated tests; never returned outside NODE_ENV=test. */
+  testCode?: string;
+}
+
 /**
  * A company's own named role. Position, not permission — see `CompanyRole`
  * for the three tiers that actually decide what somebody may do.

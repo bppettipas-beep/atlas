@@ -1,4 +1,4 @@
-import request from 'supertest';
+import request, { type Response } from 'supertest';
 import type { Express } from 'express';
 import type { SessionUserDto } from '../src/shared/types';
 import type { SubscriptionPlanKey } from '../src/shared/plans';
@@ -22,6 +22,19 @@ export const uniqueEmail = (prefix: string) => {
 };
 
 export const STRONG_PASSWORD = 'CorrectHorseBattery9';
+
+export async function completePendingSignup(
+  agent: ReturnType<typeof request.agent>,
+  pending: Response,
+) {
+  if (pending.status !== 202 || !pending.body.verificationId || !pending.body.testCode) {
+    throw new Error(`Expected pending sign-up: ${JSON.stringify(pending.body)}`);
+  }
+  return agent.post('/api/auth/verify-email-code').send({
+    verificationId: pending.body.verificationId,
+    code: pending.body.testCode,
+  });
+}
 
 export async function signUpOwner(
   app: Express,
@@ -50,12 +63,16 @@ export async function signUpOwner(
     email: payload.email,
     password: payload.password,
   });
-  if (account.status !== 201) {
+  if (account.status !== 202) {
     throw new Error(`Account sign-up failed (${account.status}): ${JSON.stringify(account.body)}`);
+  }
+  const verified = await completePendingSignup(agent, account);
+  if (verified.status !== 200) {
+    throw new Error(`Account verification failed: ${JSON.stringify(verified.body)}`);
   }
   const subscriptionPlan = overrides.subscriptionPlan ?? 'ENTERPRISE';
   await prisma.user.update({
-    where: { id: account.body.user.id },
+    where: { id: verified.body.user.id },
     data: {
       emailVerifiedAt: new Date(),
       accountPlan: subscriptionPlan,
