@@ -23,7 +23,7 @@ interface InvitePreview {
 }
 
 export function WorkerJoinPage() {
-  const { session, loading, setSession } = useAuth();
+  const { session, account, loading, setSession, setAccount } = useAuth();
   const navigate = useNavigate();
   const [params] = useSearchParams();
 
@@ -81,6 +81,9 @@ export function WorkerJoinPage() {
 
   if (loading || grantLoading) return <LoadingState className="h-screen" label="Loading…" />;
   if (session) return <Navigate to="/app" replace />;
+  if (account && !account.user.emailVerified) {
+    return <Navigate to="/verify-email?next=%2Fapp" replace />;
+  }
 
   const update = (key: keyof typeof form) => (value: string) =>
     setForm((current) => ({ ...current, [key]: value }));
@@ -93,12 +96,15 @@ export function WorkerJoinPage() {
     try {
       // With a Google grant the identity comes from the signed cookie; only the
       // invitation code and job title are the person's to supply.
-      const body = grant
-        ? { useGoogle: true, code: form.code, jobTitle: form.jobTitle }
-        : form;
+      const body = grant ? { useGoogle: true, code: form.code, jobTitle: form.jobTitle } : form;
       const next = await api.post<SessionUserDto>('/auth/worker-join', body);
       setSession(next);
-      navigate('/app', { replace: true });
+      const nextAccount =
+        await api.get<import('@shared/types').AccountSessionDto>('/auth/account-session');
+      setAccount(nextAccount);
+      navigate(nextAccount.user.emailVerified ? '/app' : '/verify-email?next=%2Fapp', {
+        replace: true,
+      });
     } catch (caught) {
       if (caught instanceof ApiError) {
         setError(caught.message);

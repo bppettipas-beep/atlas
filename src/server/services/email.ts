@@ -238,6 +238,32 @@ export async function createEmailToken(userId: string, type: EmailTokenType, lif
   return token;
 }
 
+/** Creates a human-friendly one-use code without storing the code itself. */
+export async function createEmailVerificationCode(userId: string) {
+  // A token hash is globally unique. Retry the very unlikely case where two
+  // active users receive the same six-digit code at once.
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const code = crypto.randomInt(0, 1_000_000).toString().padStart(6, '0');
+    try {
+      await prisma.$transaction([
+        prisma.emailToken.deleteMany({ where: { userId, type: 'VERIFY_EMAIL' } }),
+        prisma.emailToken.create({
+          data: {
+            userId,
+            type: 'VERIFY_EMAIL',
+            tokenHash: hashToken(code),
+            expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+          },
+        }),
+      ]);
+      return code;
+    } catch (error) {
+      if (attempt === 4) throw error;
+    }
+  }
+  throw new Error('Could not create an email verification code.');
+}
+
 export async function consumeEmailToken(rawToken: string, type: EmailTokenType) {
   const record = await prisma.emailToken.findUnique({
     where: { tokenHash: hashToken(rawToken) },
@@ -252,15 +278,31 @@ export async function consumeEmailToken(rawToken: string, type: EmailTokenType) 
   return claimed.count === 1 ? record.user : null;
 }
 
+export async function consumeEmailTokenForUser(
+  rawToken: string,
+  type: EmailTokenType,
+  userId: string,
+) {
+  const record = await prisma.emailToken.findFirst({
+    where: { tokenHash: hashToken(rawToken), type, userId },
+    include: { user: true },
+  });
+  if (!record || record.usedAt || record.expiresAt <= new Date()) return null;
+  const claimed = await prisma.emailToken.updateMany({
+    where: { id: record.id, userId, usedAt: null, expiresAt: { gt: new Date() } },
+    data: { usedAt: new Date() },
+  });
+  return claimed.count === 1 ? record.user : null;
+}
+
 export async function sendVerificationEmail(user: { id: string; email: string; fullName: string }) {
-  const token = await createEmailToken(user.id, 'VERIFY_EMAIL', 24 * 60 * 60 * 1000);
+  const code = await createEmailVerificationCode(user.id);
   return sendEmail({
     to: user.email,
-    subject: 'Verify your Atlas email',
-    preheader: 'Confirm this email belongs to you.',
-    heading: `Welcome, ${user.fullName}.`,
-    body: 'Confirm your email address to finish securing your Atlas account. This link expires in 24 hours.',
-    action: { label: 'Verify email', url: `${appOrigin()}/verify-email?token=${token}` },
+    subject: `${code} is your Atlas verification code`,
+    preheader: `Your Atlas verification code is ${code}.`,
+    heading: 'Verify your email.',
+    body: `Hi ${user.fullName}, enter this code in Atlas to finish creating your account:\n\n${code}\n\nThe code expires in 10 minutes and can only be used once.`,
     footer: 'If you did not create this account, you can ignore this message.',
   });
 }

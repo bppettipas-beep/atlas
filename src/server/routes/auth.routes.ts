@@ -44,6 +44,7 @@ import { assertEmployeeCapacity } from '../services/subscriptions';
 import { emitToCompany } from '../realtime/io';
 import {
   consumeEmailToken,
+  consumeEmailTokenForUser,
   sendPasswordResetEmail,
   sendSecurityEmail,
   sendVerificationEmail,
@@ -142,6 +143,13 @@ const loginSchema = z.object({
 
 const emailTokenSchema = z.object({
   token: z.string().trim().min(20, 'That link is not valid.').max(200),
+});
+
+const emailCodeSchema = z.object({
+  code: z
+    .string()
+    .trim()
+    .regex(/^\d{6}$/, 'Enter the six-digit code from your email.'),
 });
 
 /** The account fields to create, from whichever way the person proved who they are. */
@@ -558,6 +566,12 @@ authRouter.post(
         402,
         'SUBSCRIPTION_REQUIRED',
         'Choose and pay for a plan before setting up your company panel.',
+      );
+    }
+    if (!signedIn.emailVerifiedAt) {
+      throw ApiError.forbidden(
+        'Verify your email address before setting up your company panel.',
+        'EMAIL_NOT_VERIFIED',
       );
     }
     if (
@@ -1013,6 +1027,28 @@ authRouter.post(
     const user = await accountFromRequest(req);
     if (!user) throw ApiError.unauthorized('You are not signed in.');
     if (!user.emailVerifiedAt) await sendVerificationEmail(user);
+    res.json({ ok: true });
+  }),
+);
+
+authRouter.post(
+  '/verify-email-code',
+  authLimiter,
+  validateBody(emailCodeSchema),
+  asyncHandler(async (req, res) => {
+    const signedIn = await accountFromRequest(req);
+    if (!signedIn) throw ApiError.unauthorized('You are not signed in.');
+    if (signedIn.emailVerifiedAt) {
+      res.json({ ok: true });
+      return;
+    }
+    const { code } = req.body as z.infer<typeof emailCodeSchema>;
+    const user = await consumeEmailTokenForUser(code, 'VERIFY_EMAIL', signedIn.id);
+    if (!user) {
+      throw ApiError.badRequest('That code is incorrect or has expired.', 'INVALID_CODE');
+    }
+    await prisma.user.update({ where: { id: user.id }, data: { emailVerifiedAt: new Date() } });
+    void sendWelcomeEmail(user);
     res.json({ ok: true });
   }),
 );

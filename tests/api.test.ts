@@ -50,7 +50,11 @@ describe('owner sign-up', () => {
 
     await prisma.user.update({
       where: { id: account.body.user.id },
-      data: { accountPlan: 'GROWTH', accountSubscriptionStatus: 'ACTIVE' },
+      data: {
+        emailVerifiedAt: new Date(),
+        accountPlan: 'GROWTH',
+        accountSubscriptionStatus: 'ACTIVE',
+      },
     });
     const panel = await agent
       .post('/api/auth/owner-signup')
@@ -150,6 +154,36 @@ describe('owner sign-up', () => {
 
     await request(app).post('/api/auth/verify-email').send({ token }).expect(200);
     await request(app).post('/api/auth/verify-email').send({ token }).expect(400);
+    const user = await prisma.user.findUniqueOrThrow({ where: { id: signup.body.user.id } });
+    expect(user.emailVerifiedAt).not.toBeNull();
+  });
+
+  it('requires the signed-in user to enter their one-use six-digit email code', async () => {
+    const agent = request.agent(app);
+    const signup = await agent
+      .post('/api/auth/account-signup')
+      .send({
+        fullName: 'Code Person',
+        email: uniqueEmail('verify-code'),
+        password: STRONG_PASSWORD,
+      })
+      .expect(201);
+    const code = '482913';
+    await prisma.emailToken.deleteMany({
+      where: { userId: signup.body.user.id, type: 'VERIFY_EMAIL' },
+    });
+    await prisma.emailToken.create({
+      data: {
+        userId: signup.body.user.id,
+        type: 'VERIFY_EMAIL',
+        tokenHash: crypto.createHash('sha256').update(code).digest('hex'),
+        expiresAt: new Date(Date.now() + 60_000),
+      },
+    });
+
+    await agent.post('/api/auth/verify-email-code').send({ code: '000000' }).expect(400);
+    await agent.post('/api/auth/verify-email-code').send({ code }).expect(200);
+    await agent.post('/api/auth/verify-email-code').send({ code }).expect(200);
     const user = await prisma.user.findUniqueOrThrow({ where: { id: signup.body.user.id } });
     expect(user.emailVerifiedAt).not.toBeNull();
   });

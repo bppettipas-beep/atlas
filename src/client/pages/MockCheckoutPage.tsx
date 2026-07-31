@@ -78,6 +78,14 @@ export function MockCheckoutPage() {
   if (!account) {
     return <Navigate to={plan ? `/signup/owner?plan=${plan}` : '/explore/pricing'} replace />;
   }
+  if (!account.user.emailVerified) {
+    return (
+      <Navigate
+        to={`/verify-email?next=${encodeURIComponent(`/checkout?plan=${plan ?? ''}`)}`}
+        replace
+      />
+    );
+  }
   if (!plan) return <Navigate to="/explore/pricing" replace />;
 
   const details = PLAN_DETAILS[plan];

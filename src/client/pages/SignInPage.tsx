@@ -28,7 +28,9 @@ export function SignInPage() {
     setSubmitting(true);
     try {
       const next = await signIn(email, password);
-      navigate('company' in next ? '/app' : '/', { replace: true });
+      navigate('company' in next ? '/app' : next.user.emailVerified ? '/' : '/verify-email', {
+        replace: true,
+      });
     } catch (caught) {
       if (caught instanceof ApiError) {
         setError(caught.message);

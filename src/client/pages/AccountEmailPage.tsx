@@ -1,8 +1,9 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { AuthLayout } from '@/components/layout/AuthLayout';
 import { Button, Field, InlineError, Input, Notice } from '@/components/ui';
 import { api, errorMessage } from '@/lib/api';
+import { useAuth } from '@/providers/AuthProvider';
 
 export function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
@@ -167,11 +168,19 @@ export function ResetPasswordPage() {
 
 export function VerifyEmailPage() {
   const [params] = useSearchParams();
+  const navigate = useNavigate();
+  const { account, loading, refresh } = useAuth();
   const token = params.get('token') ?? '';
-  const [status, setStatus] = useState<'working' | 'done' | 'error'>(token ? 'working' : 'error');
-  const [message, setMessage] = useState(
-    token ? '' : 'This verification link is missing its token.',
+  const requestedNext = params.get('next') ?? '/';
+  const next =
+    requestedNext.startsWith('/') && !requestedNext.startsWith('//') ? requestedNext : '/';
+  const [code, setCode] = useState('');
+  const [status, setStatus] = useState<'idle' | 'working' | 'done' | 'error'>(
+    token ? 'working' : 'idle',
   );
+  const [message, setMessage] = useState('');
+  const [resending, setResending] = useState(false);
+  const [resent, setResent] = useState(false);
 
   useEffect(() => {
     if (!token) return;
@@ -184,6 +193,45 @@ export function VerifyEmailPage() {
       });
   }, [token]);
 
+  const submitCode = async (event: FormEvent) => {
+    event.preventDefault();
+    setStatus('working');
+    setMessage('');
+    try {
+      await api.post('/auth/verify-email-code', { code });
+      await refresh();
+      setStatus('done');
+      window.setTimeout(() => navigate(next, { replace: true }), 500);
+    } catch (caught) {
+      setMessage(errorMessage(caught));
+      setStatus('error');
+    }
+  };
+
+  const resend = async () => {
+    setResending(true);
+    setMessage('');
+    setResent(false);
+    try {
+      await api.post('/auth/resend-verification');
+      setResent(true);
+      setCode('');
+      setStatus('idle');
+    } catch (caught) {
+      setMessage(errorMessage(caught));
+      setStatus('error');
+    } finally {
+      setResending(false);
+    }
+  };
+
+  if (!token && !loading && !account) return <Navigate to="/signin" replace />;
+  if (!token && account?.user.emailVerified && status !== 'done') {
+    return <Navigate to={next} replace />;
+  }
+
+  const linkMode = Boolean(token);
+
   return (
     <AuthLayout
       sheet="Email verification"
@@ -191,37 +239,82 @@ export function VerifyEmailPage() {
       title={
         status === 'done'
           ? 'Email verified.'
-          : status === 'working'
-            ? 'Verifying your email…'
-            : 'That link did not work.'
+          : linkMode
+            ? status === 'error'
+              ? 'That link did not work.'
+              : 'Verifying your email…'
+            : 'Check your email.'
       }
       description={
         status === 'done'
           ? 'Your Atlas account email is confirmed.'
-          : status === 'working'
-            ? 'This should only take a moment.'
-            : message
+          : linkMode
+            ? message || 'This should only take a moment.'
+            : `Enter the six-digit code sent to ${account?.user.email ?? 'your email address'}.`
       }
       footer={
-        <Link to="/account-settings" className="underline underline-offset-4">
-          Open account settings
-        </Link>
+        linkMode ? (
+          <Link to="/account-settings" className="underline underline-offset-4">
+            Open account settings
+          </Link>
+        ) : (
+          <button
+            type="button"
+            onClick={() => void resend()}
+            disabled={resending}
+            className="underline underline-offset-4 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {resending ? 'Sending a new code…' : 'Send a new code'}
+          </button>
+        )
       }
     >
-      <Notice>
-        <strong>
+      {linkMode || status === 'done' ? (
+        <Notice>
+          <strong>{status === 'done' ? 'All set. ' : 'Checking verification. '}</strong>
           {status === 'done'
-            ? 'All set. '
-            : status === 'working'
-              ? 'Checking link. '
-              : 'Request another link. '}
-        </strong>
-        {status === 'done'
-          ? 'You can safely close this page or continue to Atlas.'
-          : status === 'working'
-            ? 'Atlas is validating this one-use link.'
-            : 'Sign in and request a fresh verification email from Account Settings.'}
-      </Notice>
+            ? 'Continuing to Atlas.'
+            : message || 'Atlas is validating this one-use link.'}
+        </Notice>
+      ) : (
+        <form onSubmit={submitCode} className="space-y-5" noValidate>
+          {message && <InlineError message={message} />}
+          {resent && (
+            <Notice>
+              <strong>New code sent.</strong> Check your inbox and spam folder.
+            </Notice>
+          )}
+          <Field
+            label="Verification code"
+            htmlFor="email-code"
+            hint="The code expires in 10 minutes."
+            required
+          >
+            <Input
+              id="email-code"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              autoFocus
+              maxLength={6}
+              pattern="[0-9]{6}"
+              value={code}
+              onChange={(event) => setCode(event.target.value.replace(/\D/g, '').slice(0, 6))}
+              className="text-center font-mono text-[1.25rem] tracking-[0.35em]"
+              required
+            />
+          </Field>
+          <Button
+            type="submit"
+            variant="primary"
+            size="lg"
+            className="w-full justify-center"
+            loading={status === 'working'}
+            disabled={code.length !== 6}
+          >
+            Verify email
+          </Button>
+        </form>
+      )}
     </AuthLayout>
   );
 }

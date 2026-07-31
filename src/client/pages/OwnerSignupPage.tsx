@@ -40,9 +40,13 @@ export function OwnerSignupPage() {
       );
       setAccount(next);
       const selectedPlan = params.get('plan')?.toUpperCase();
-      navigate(selectedPlan ? `/checkout?plan=${encodeURIComponent(selectedPlan)}` : '/', {
-        replace: true,
-      });
+      const nextPath = selectedPlan ? `/checkout?plan=${encodeURIComponent(selectedPlan)}` : '/';
+      navigate(
+        next.user.emailVerified ? nextPath : `/verify-email?next=${encodeURIComponent(nextPath)}`,
+        {
+          replace: true,
+        },
+      );
     } catch (caught) {
       if (caught instanceof ApiError) {
         setError(caught.message);

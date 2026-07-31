@@ -57,6 +57,7 @@ export async function signUpOwner(
   await prisma.user.update({
     where: { id: account.body.user.id },
     data: {
+      emailVerifiedAt: new Date(),
       accountPlan: subscriptionPlan,
       accountSubscriptionStatus: 'ACTIVE',
     },
