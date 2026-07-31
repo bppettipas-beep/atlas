@@ -109,7 +109,7 @@ export function PromoPopup() {
                 className="h-[280px] w-full object-cover object-[36%_42%] md:absolute md:inset-0 md:h-full md:object-center"
               />
 
-              <div className="relative bg-paper px-6 py-7 sm:px-8 md:ml-[57%] md:flex md:min-h-[560px] md:flex-col md:bg-transparent md:px-9 md:pb-9 md:pt-14">
+              <div className="relative bg-paper px-6 py-7 sm:px-8 md:top-8 md:ml-[54%] md:mr-8 md:flex md:min-h-[496px] md:flex-col md:border md:border-white/70 md:bg-paper/95 md:px-9 md:pb-8 md:pt-10 md:shadow-[0_20px_60px_rgba(0,0,0,0.24)] md:backdrop-blur-xl">
                 <p className="edge-sm text-mark">Atlas Growth promotion</p>
                 <h2
                   id="atlas26-title"
