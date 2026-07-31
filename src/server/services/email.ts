@@ -212,6 +212,7 @@ export async function sendEmail(input: Mail): Promise<boolean> {
       headers: {
         Authorization: `Bearer ${env.RESEND_API_KEY}`,
         'Content-Type': 'application/json',
+        'User-Agent': 'Atlas/1.0',
       },
       body: JSON.stringify({
         from: env.EMAIL_FROM,
@@ -325,7 +326,7 @@ export async function sendVerificationEmail(user: { id: string; email: string; f
 export function sendVerificationCodeEmail(user: { email: string; fullName: string }, code: string) {
   return sendEmail({
     to: user.email,
-    subject: `${code} is your Atlas verification code`,
+    subject: 'Your Atlas verification code',
     preheader: `Your Atlas verification code is ${code}.`,
     heading: 'Verify your email.',
     body: `Hi ${user.fullName}, enter this code in Atlas to finish creating your account.\n\nThe code expires in 10 minutes and can only be used once.`,

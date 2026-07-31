@@ -30,7 +30,15 @@ import {
   type SelectHTMLAttributes,
   type TextareaHTMLAttributes,
 } from 'react';
-import { CaretDown, Check, Info, Spinner as SpinnerGlyph, Warning, X } from '@/components/icons';
+import {
+  CaretDown,
+  Check,
+  CheckCircle,
+  Info,
+  Spinner as SpinnerGlyph,
+  Warning,
+  X,
+} from '@/components/icons';
 import { avatarTint, cn, initials } from '@/lib/utils';
 
 /* -------------------------------------------------------------------------- */
@@ -534,7 +542,7 @@ export function Notice({
   children,
   className,
 }: {
-  tone?: 'alert' | 'pending' | 'info';
+  tone?: 'alert' | 'pending' | 'info' | 'success';
   children: ReactNode;
   className?: string;
 }) {
@@ -542,11 +550,12 @@ export function Notice({
     alert: 'border-alert/30 bg-alert-wash text-alert',
     pending: 'border-pending/30 bg-pending-wash text-pending',
     info: 'border-rule bg-paper text-ink-2',
+    success: 'border-done/30 bg-done-wash text-done',
   };
-  const Glyph = tone === 'info' ? Info : Warning;
+  const Glyph = tone === 'success' ? CheckCircle : tone === 'info' ? Info : Warning;
   return (
     <div
-      role="alert"
+      role={tone === 'alert' || tone === 'pending' ? 'alert' : 'status'}
       className={cn(
         'flex items-start gap-2 border px-3 py-2.5 text-[13px] leading-snug',
         tones[tone],

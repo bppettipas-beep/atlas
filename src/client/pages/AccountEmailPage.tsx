@@ -38,7 +38,7 @@ export function ForgotPasswordPage() {
       }
     >
       {sent ? (
-        <Notice>
+        <Notice tone="success">
           <strong>Check your inbox.</strong> If an eligible Atlas account uses that address, its
           reset link is on the way. It expires in one hour.
         </Notice>
@@ -115,7 +115,7 @@ export function ResetPasswordPage() {
       }
     >
       {done ? (
-        <Notice>
+        <Notice tone={status === 'done' ? 'success' : 'info'}>
           <strong>You’re ready.</strong> Sign in with your new password.
         </Notice>
       ) : (
@@ -290,7 +290,7 @@ export function VerifyEmailPage() {
         <form onSubmit={submitCode} className="space-y-5" noValidate>
           {message && <InlineError message={message} />}
           {resent && (
-            <Notice>
+            <Notice tone="success">
               <strong>New code sent.</strong> Check your inbox and spam folder.
             </Notice>
           )}
