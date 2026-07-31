@@ -9,6 +9,8 @@ interface Mail {
   preheader: string;
   heading: string;
   body: string;
+  /** Sanitized HTML produced by Atlas itself, never raw caller input. */
+  bodyHtml?: string;
   action?: { label: string; url: string };
   footer?: string;
 }
@@ -40,7 +42,142 @@ function emailHtml(input: Mail) {
   const action = input.action
     ? `<p style="margin:28px 0"><a href="${escapeHtml(input.action.url)}" style="display:inline-block;background:#171717;color:#fff;text-decoration:none;padding:12px 18px;border-radius:3px;font-weight:600">${escapeHtml(input.action.label)}</a></p><p style="font-size:12px;color:#777;word-break:break-all">Or copy this link: ${escapeHtml(input.action.url)}</p>`
     : '';
-  return `<!doctype html><html><body style="margin:0;background:#f5f3ee;color:#171717"><div style="display:none;max-height:0;overflow:hidden">${escapeHtml(input.preheader)}</div><main style="font-family:Arial,sans-serif;line-height:1.55;max-width:600px;margin:32px auto;background:#fff;border:1px solid #dedbd3;padding:36px"><p style="font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:#777">Atlas</p><h1 style="font-size:25px;line-height:1.15;margin:20px 0">${escapeHtml(input.heading)}</h1><p style="white-space:pre-wrap">${escapeHtml(input.body)}</p>${action}<hr style="border:0;border-top:1px solid #e6e3dc;margin:30px 0"><p style="font-size:12px;color:#777">${escapeHtml(input.footer ?? 'This is an automated message from Atlas.')}</p></main></body></html>`;
+  const body = input.bodyHtml ?? `<p style="white-space:pre-wrap">${escapeHtml(input.body)}</p>`;
+  return `<!doctype html><html><body style="margin:0;background:#f5f3ee;color:#171717"><div style="display:none;max-height:0;overflow:hidden">${escapeHtml(input.preheader)}</div><main style="font-family:Arial,sans-serif;line-height:1.55;max-width:600px;margin:32px auto;background:#fff;border:1px solid #dedbd3;padding:36px"><p style="font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:#777">Atlas</p><h1 style="font-size:25px;line-height:1.15;margin:20px 0">${escapeHtml(input.heading)}</h1><div style="font-size:15px;line-height:1.65">${body}</div>${action}<hr style="border:0;border-top:1px solid #e6e3dc;margin:30px 0"><p style="font-size:12px;color:#777">${escapeHtml(input.footer ?? 'This is an automated message from Atlas.')}</p></main></body></html>`;
+}
+
+/** Small Markdown subset shared conceptually with the in-app preview. Input is escaped first. */
+function renderBroadcastMarkdown(source: string): string {
+  const inline = (value: string) =>
+    value
+      .replace(/`([^`]+)`/g, '<code style="background:#f1efe9;padding:2px 4px">$1</code>')
+      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+      .replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>')
+      .replace(/(^|\s)_([^_\n]+)_/g, '$1<em>$2</em>')
+      .replace(
+        /\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g,
+        '<a href="$2" style="color:#315c47">$1</a>',
+      );
+  const lines = escapeHtml(source).split(/\r?\n/);
+  const html: string[] = [];
+  let list: 'ul' | 'ol' | null = null;
+  let paragraph: string[] = [];
+  const closeList = () => {
+    if (list) html.push(`</${list}>`);
+    list = null;
+  };
+  const flush = () => {
+    if (paragraph.length)
+      html.push(`<p style="margin:0 0 16px">${inline(paragraph.join(' '))}</p>`);
+    paragraph = [];
+  };
+
+  for (const line of lines) {
+    if (!line.trim()) {
+      flush();
+      closeList();
+      continue;
+    }
+    const heading = /^(#{1,3})\s+(.*)$/.exec(line);
+    if (heading) {
+      flush();
+      closeList();
+      const size = heading[1].length === 1 ? 21 : heading[1].length === 2 ? 18 : 16;
+      html.push(
+        `<h${heading[1].length + 1} style="font-size:${size}px;margin:24px 0 10px">${inline(heading[2])}</h${heading[1].length + 1}>`,
+      );
+      continue;
+    }
+    const quote = /^&gt;\s?(.*)$/.exec(line.trim());
+    if (quote) {
+      flush();
+      closeList();
+      html.push(
+        `<blockquote style="border-left:3px solid #c8c4ba;margin:18px 0;padding:2px 0 2px 14px;color:#555">${inline(quote[1])}</blockquote>`,
+      );
+      continue;
+    }
+    const ordered = /^\s*\d+\.\s+(.*)$/.exec(line);
+    const unordered = /^\s*[-*+]\s+(.*)$/.exec(line);
+    if (ordered || unordered) {
+      flush();
+      const wanted = ordered ? 'ol' : 'ul';
+      if (list !== wanted) {
+        closeList();
+        html.push(`<${wanted} style="margin:0 0 16px;padding-left:22px">`);
+        list = wanted;
+      }
+      html.push(`<li style="margin:5px 0">${inline((ordered ?? unordered)![1])}</li>`);
+      continue;
+    }
+    if (/^\s*(---|\*\*\*)\s*$/.test(line)) {
+      flush();
+      closeList();
+      html.push('<hr style="border:0;border-top:1px solid #dedbd3;margin:24px 0">');
+      continue;
+    }
+    paragraph.push(line.trim());
+  }
+  flush();
+  closeList();
+  return html.join('');
+}
+
+export async function sendBroadcastEmails(input: {
+  recipients: { email: string }[];
+  title: string;
+  body: string;
+  broadcastId: string;
+}) {
+  if (!env.emailEnabled) return { sent: 0, failed: input.recipients.length, configured: false };
+  const bodyHtml = renderBroadcastMarkdown(input.body);
+  let sent = 0;
+  let failed = 0;
+
+  for (let offset = 0; offset < input.recipients.length; offset += 100) {
+    const recipients = input.recipients.slice(offset, offset + 100);
+    const message: Mail = {
+      to: '',
+      subject: input.title,
+      preheader: input.body.replace(/[#*_>`[\]]/g, '').slice(0, 140),
+      heading: input.title,
+      body: input.body,
+      bodyHtml,
+      action: { label: 'Open Atlas', url: appOrigin() },
+      footer: 'This platform announcement was sent to every Atlas account.',
+    };
+    try {
+      const response = await fetch('https://api.resend.com/emails/batch', {
+        method: 'POST',
+        signal: AbortSignal.timeout(20_000),
+        headers: {
+          Authorization: `Bearer ${env.RESEND_API_KEY}`,
+          'Content-Type': 'application/json',
+          'User-Agent': 'Atlas/1.0',
+          'Idempotency-Key': `platform-broadcast/${input.broadcastId}/${offset / 100}`,
+        },
+        body: JSON.stringify(
+          recipients.map((recipient) => ({
+            from: env.EMAIL_FROM,
+            reply_to: env.EMAIL_REPLY_TO || undefined,
+            to: [recipient.email],
+            subject: input.title,
+            text: `${input.title}\n\n${input.body}\n\nOpen Atlas: ${appOrigin()}`,
+            html: emailHtml(message),
+          })),
+        ),
+      });
+      if (response.ok) sent += recipients.length;
+      else {
+        failed += recipients.length;
+        console.error(`Atlas could not send broadcast batch (${response.status}).`);
+      }
+    } catch (error) {
+      failed += recipients.length;
+      console.error('Atlas could not send broadcast batch.', error);
+    }
+  }
+  return { sent, failed, configured: true };
 }
 
 /** Best-effort delivery. Product actions never roll back because an email provider is unavailable. */

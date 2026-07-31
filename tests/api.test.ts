@@ -1,7 +1,7 @@
 import type { Express } from 'express';
 import crypto from 'node:crypto';
 import request from 'supertest';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   STRONG_PASSWORD,
   createInviteCode,
@@ -1177,6 +1177,67 @@ describe('people added by hand', () => {
 });
 
 describe('platform user administration', () => {
+  it('broadcasts sanitized formatted email only through platform-admin access', async () => {
+    const admin = await signUpOwner(app, { fullName: 'Broadcast Operator' });
+    await prisma.user.update({
+      where: { id: admin.session.user.id },
+      data: { isPlatformAdmin: true },
+    });
+    const ordinary = await signUpOwner(app);
+    await ordinary.agent.get('/api/admin/broadcast/recipients').expect(403);
+    await ordinary.agent
+      .post('/api/admin/broadcast')
+      .send({ title: 'No', body: 'Not allowed', broadcastId: crypto.randomUUID() })
+      .expect(403);
+
+    const audience = await admin.agent.get('/api/admin/broadcast/recipients').expect(200);
+    expect(audience.body.count).toBeGreaterThanOrEqual(2);
+
+    const { env } = await import('../src/server/env');
+    const previous = {
+      emailEnabled: env.emailEnabled,
+      RESEND_API_KEY: env.RESEND_API_KEY,
+      EMAIL_FROM: env.EMAIL_FROM,
+    };
+    env.emailEnabled = true;
+    env.RESEND_API_KEY = 're_test_only';
+    env.EMAIL_FROM = 'Atlas <notifications@mail.atlas.test>';
+    const send = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(
+        new Response(JSON.stringify({ data: [{ id: 'email-id' }] }), { status: 200 }),
+      );
+
+    try {
+      const response = await admin.agent
+        .post('/api/admin/broadcast')
+        .send({
+          title: 'Platform update',
+          body: '## What changed\n\nThis is **important**.\n\n<script>alert(1)</script>',
+          broadcastId: crypto.randomUUID(),
+        })
+        .expect(200);
+      expect(response.body).toMatchObject({
+        sent: audience.body.count,
+        failed: 0,
+        total: audience.body.count,
+      });
+      expect(send).toHaveBeenCalled();
+      const payload = JSON.parse(String(send.mock.calls[0][1]?.body)) as { html: string }[];
+      expect(payload[0].html).toContain('<strong>important</strong>');
+      expect(payload[0].html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
+      expect(payload[0].html).not.toContain('<script>alert(1)</script>');
+      expect(send.mock.calls[0][1]?.headers).toMatchObject({
+        'Idempotency-Key': expect.stringContaining('platform-broadcast/'),
+      });
+    } finally {
+      send.mockRestore();
+      env.emailEnabled = previous.emailEnabled;
+      env.RESEND_API_KEY = previous.RESEND_API_KEY;
+      env.EMAIL_FROM = previous.EMAIL_FROM;
+    }
+  });
+
   it('lets only the platform admin search accounts and change a plan everywhere it applies', async () => {
     const admin = await signUpOwner(app, { fullName: 'Platform Operator' });
     await prisma.user.update({

@@ -4,14 +4,28 @@ import {
   Check,
   Clock,
   Search,
+  Megaphone,
+  PaperPlane,
   ShieldCheck,
   SignOut,
   User,
   Users,
 } from '@/components/icons';
-import { Avatar, Button, Input, LoadingState, Notice, Select, useToast } from '@/components/ui';
+import {
+  Avatar,
+  Button,
+  Field,
+  Input,
+  LoadingState,
+  Modal,
+  Notice,
+  Select,
+  Textarea,
+  useToast,
+} from '@/components/ui';
 import { api, errorMessage } from '@/lib/api';
 import { useDebounced, useQuery } from '@/lib/useQuery';
+import { Markdown } from '@/components/knowledge/Markdown';
 
 type Plan = 'STARTER' | 'GROWTH' | 'BUSINESS' | 'ENTERPRISE';
 type Status = 'ACTIVE' | 'SUSPENDED';
@@ -75,6 +89,13 @@ export function AdminPage() {
   const [state, setState] = useState<AccountState>('');
   const [savingId, setSavingId] = useState<string | null>(null);
   const [revokingId, setRevokingId] = useState<string | null>(null);
+  const [broadcastOpen, setBroadcastOpen] = useState(false);
+  const [broadcastTitle, setBroadcastTitle] = useState('');
+  const [broadcastBody, setBroadcastBody] = useState('');
+  const [broadcastId, setBroadcastId] = useState(() => crypto.randomUUID());
+  const [broadcastView, setBroadcastView] = useState<'write' | 'preview'>('write');
+  const [confirmBroadcast, setConfirmBroadcast] = useState(false);
+  const [sendingBroadcast, setSendingBroadcast] = useState(false);
   const debouncedSearch = useDebounced(search);
   const query = useQuery<UsersResponse>(
     (signal) =>
@@ -85,6 +106,41 @@ export function AdminPage() {
       ),
     [debouncedSearch, plan, state],
   );
+  const recipients = useQuery<{ count: number; emailConfigured: boolean }>(
+    (signal) => api.get('/admin/broadcast/recipients', undefined, signal),
+    [],
+  );
+
+  const sendBroadcast = async () => {
+    setSendingBroadcast(true);
+    try {
+      const result = await api.post<{ sent: number; failed: number; total: number }>(
+        '/admin/broadcast',
+        {
+          title: broadcastTitle,
+          body: broadcastBody,
+          broadcastId,
+        },
+      );
+      setConfirmBroadcast(false);
+      if (result.failed) {
+        toast.error(
+          `${result.sent} sent; ${result.failed} could not be queued. Check Resend usage and logs.`,
+        );
+      } else {
+        toast.success(`Announcement queued for ${result.sent} Atlas accounts.`);
+        setBroadcastOpen(false);
+        setBroadcastTitle('');
+        setBroadcastBody('');
+        setBroadcastId(crypto.randomUUID());
+        setBroadcastView('write');
+      }
+    } catch (error) {
+      toast.error(errorMessage(error));
+    } finally {
+      setSendingBroadcast(false);
+    }
+  };
 
   const updateUser = async (
     user: AdminUser,
@@ -216,6 +272,149 @@ export function AdminPage() {
             ))}
           </section>
         )}
+
+        <section className="mt-6 border border-edge bg-sheet">
+          <div className="flex flex-wrap items-center justify-between gap-4 px-5 py-5 sm:px-6">
+            <div className="flex min-w-0 items-start gap-3.5">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center border border-edge bg-paper">
+                <Megaphone className="text-[17px] text-mark" />
+              </span>
+              <div>
+                <p className="edge-sm text-mark">Platform email</p>
+                <h2 className="title mt-1 text-[17px]">Broadcast an announcement</h2>
+                <p className="mt-1 max-w-[65ch] text-[12.5px] leading-relaxed text-ink-3">
+                  Send one formatted announcement to every Atlas account with a real email address.
+                  Each recipient receives a private, individual message.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="font-mono text-[11px] text-ink-3">
+                {recipients.loading ? 'Counting…' : `${recipients.data?.count ?? 0} recipients`}
+              </span>
+              <Button
+                variant="primary"
+                icon={<Megaphone />}
+                disabled={!recipients.data?.emailConfigured}
+                onClick={() => setBroadcastOpen((current) => !current)}
+              >
+                {broadcastOpen ? 'Close composer' : 'Compose announcement'}
+              </Button>
+            </div>
+          </div>
+
+          {recipients.data && !recipients.data.emailConfigured && (
+            <Notice className="mx-5 mb-5 sm:mx-6" tone="alert">
+              Resend is not configured in this deployment, so broadcasts cannot be sent.
+            </Notice>
+          )}
+
+          {broadcastOpen && (
+            <div className="grid border-t border-edge lg:grid-cols-[minmax(0,1.15fr)_minmax(300px,.85fr)]">
+              <div className="p-5 sm:p-6 lg:border-r lg:border-edge">
+                <Field
+                  label="Email title"
+                  htmlFor="broadcast-title"
+                  hint={`${broadcastTitle.length}/150 characters`}
+                  required
+                >
+                  <Input
+                    id="broadcast-title"
+                    value={broadcastTitle}
+                    maxLength={150}
+                    placeholder="What every Atlas account should know"
+                    onChange={(event) => setBroadcastTitle(event.target.value)}
+                  />
+                </Field>
+
+                <div className="mt-5 flex items-end justify-between gap-3">
+                  <label htmlFor="broadcast-body" className="edge">
+                    Announcement body <span className="text-mark">*</span>
+                  </label>
+                  <div className="flex border border-edge" role="group" aria-label="Body view">
+                    {(['write', 'preview'] as const).map((view) => (
+                      <button
+                        key={view}
+                        type="button"
+                        onClick={() => setBroadcastView(view)}
+                        className={`px-3 py-1.5 text-[11px] font-medium capitalize ${
+                          broadcastView === view
+                            ? 'bg-ink text-white'
+                            : 'bg-paper text-ink-3 hover:text-ink'
+                        }`}
+                      >
+                        {view}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {broadcastView === 'write' ? (
+                  <Textarea
+                    id="broadcast-body"
+                    value={broadcastBody}
+                    maxLength={10_000}
+                    rows={12}
+                    className="mt-1.5 min-h-[260px] font-mono text-[13px]"
+                    placeholder={
+                      'Write the announcement here.\n\nUse **bold**, *italic*, headings, lists, quotes, and [links](https://example.com).'
+                    }
+                    onChange={(event) => setBroadcastBody(event.target.value)}
+                  />
+                ) : (
+                  <div className="mt-1.5 min-h-[260px] border border-edge bg-paper px-5 py-4">
+                    {broadcastBody.trim() ? (
+                      <Markdown source={broadcastBody} />
+                    ) : (
+                      <p className="text-[13px] text-ink-4">Write something to preview it here.</p>
+                    )}
+                  </div>
+                )}
+                <p className="mt-2 text-[11.5px] leading-relaxed text-ink-3">
+                  Formatting supports headings, bold, italics, links, quotes, numbered lists, and
+                  bullet lists. Raw HTML is always escaped.
+                </p>
+              </div>
+
+              <aside className="bg-paper/50 p-5 sm:p-6">
+                <p className="edge-sm">Delivery review</p>
+                <dl className="mt-5 divide-y divide-rule border-y border-rule text-[12.5px]">
+                  <div className="flex items-center justify-between gap-4 py-3">
+                    <dt className="text-ink-3">Audience</dt>
+                    <dd className="font-mono text-ink">{recipients.data?.count ?? 0} accounts</dd>
+                  </div>
+                  <div className="flex items-center justify-between gap-4 py-3">
+                    <dt className="text-ink-3">Privacy</dt>
+                    <dd className="text-right text-ink">Individual delivery</dd>
+                  </div>
+                  <div className="flex items-center justify-between gap-4 py-3">
+                    <dt className="text-ink-3">Sender</dt>
+                    <dd className="text-right text-ink">Atlas notifications</dd>
+                  </div>
+                </dl>
+                <Notice className="mt-5" tone="pending">
+                  Sending is irreversible. Resend’s daily quota still applies; on its free tier,
+                  other Atlas emails sent today reduce the remaining broadcast capacity.
+                </Notice>
+                <Button
+                  variant="primary"
+                  size="lg"
+                  className="mt-5 w-full justify-center"
+                  icon={<PaperPlane />}
+                  disabled={
+                    !broadcastTitle.trim() ||
+                    !broadcastBody.trim() ||
+                    !recipients.data?.count ||
+                    !recipients.data.emailConfigured
+                  }
+                  onClick={() => setConfirmBroadcast(true)}
+                >
+                  Review and send
+                </Button>
+              </aside>
+            </div>
+          )}
+        </section>
 
         <section className="mt-6 border border-edge bg-sheet">
           <div className="grid gap-3 border-b border-edge p-4 sm:grid-cols-[minmax(260px,1fr)_180px_180px] sm:p-5">
@@ -419,6 +618,36 @@ export function AdminPage() {
           </div>
         </section>
       </div>
+
+      <Modal
+        open={confirmBroadcast}
+        onClose={() => !sendingBroadcast && setConfirmBroadcast(false)}
+        title="Send this announcement?"
+        description={`This will email ${recipients.data?.count ?? 0} Atlas accounts and cannot be recalled.`}
+        footer={
+          <>
+            <Button disabled={sendingBroadcast} onClick={() => setConfirmBroadcast(false)}>
+              Go back
+            </Button>
+            <Button
+              variant="primary"
+              icon={<PaperPlane />}
+              loading={sendingBroadcast}
+              onClick={() => void sendBroadcast()}
+            >
+              Send to every account
+            </Button>
+          </>
+        }
+      >
+        <div className="border border-edge bg-paper p-4">
+          <p className="edge-sm">Subject</p>
+          <p className="title mt-1 text-[16px]">{broadcastTitle}</p>
+          <div className="mt-4 border-t border-rule pt-4">
+            <Markdown source={broadcastBody} />
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

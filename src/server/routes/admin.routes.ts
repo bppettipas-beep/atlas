@@ -5,11 +5,46 @@ import { ApiError, asyncHandler } from '../http/errors';
 import { validateBody } from '../http/validate';
 import { requireAuth } from '../middleware/authenticate';
 import { prisma } from '../prisma';
-import { sendSubscriptionEmail } from '../services/email';
+import { sendBroadcastEmails, sendSubscriptionEmail } from '../services/email';
+import { env } from '../env';
 
 export const adminRouter = Router();
 
 adminRouter.use(requireAuth, requirePlatformAdmin);
+
+adminRouter.get(
+  '/broadcast/recipients',
+  asyncHandler(async (_req, res) => {
+    const count = await prisma.user.count({
+      where: { NOT: { email: { endsWith: '@placeholder.atlas.invalid' } } },
+    });
+    res.json({ count, emailConfigured: env.emailEnabled });
+  }),
+);
+
+adminRouter.post(
+  '/broadcast',
+  validateBody(
+    z.object({
+      title: z.string().trim().min(1, 'Add a title.').max(150),
+      body: z.string().trim().min(1, 'Write the announcement.').max(10_000),
+      broadcastId: z.string().uuid(),
+    }),
+  ),
+  asyncHandler(async (req, res) => {
+    if (!env.emailEnabled) {
+      throw new ApiError(503, 'EMAIL_UNAVAILABLE', 'Resend is not configured for Atlas yet.');
+    }
+    const input = req.body as { title: string; body: string; broadcastId: string };
+    const recipients = await prisma.user.findMany({
+      where: { NOT: { email: { endsWith: '@placeholder.atlas.invalid' } } },
+      select: { email: true },
+      orderBy: { createdAt: 'asc' },
+    });
+    const result = await sendBroadcastEmails({ ...input, recipients });
+    res.json({ ...result, total: recipients.length });
+  }),
+);
 
 const planSchema = z.enum(['STARTER', 'GROWTH', 'BUSINESS', 'ENTERPRISE']);
 const statusSchema = z.enum(['ACTIVE', 'SUSPENDED']);
