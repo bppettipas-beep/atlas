@@ -3,7 +3,7 @@ import { env } from '../env';
 import { prisma } from '../prisma';
 import type { EmailTokenType, SubscriptionPlan } from '@prisma/client';
 
-interface Mail {
+export interface Mail {
   to: string;
   subject: string;
   preheader: string;
@@ -11,6 +11,8 @@ interface Mail {
   body: string;
   /** Sanitized HTML produced by Atlas itself, never raw caller input. */
   bodyHtml?: string;
+  /** Optional short code displayed as the primary piece of information. */
+  code?: string;
   action?: { label: string; url: string };
   footer?: string;
 }
@@ -38,25 +40,41 @@ function escapeHtml(value: string) {
   });
 }
 
-function emailHtml(input: Mail) {
+export function renderEmailHtml(input: Mail) {
+  const safeUrl = input.action ? escapeHtml(input.action.url) : '';
   const action = input.action
-    ? `<p style="margin:28px 0"><a href="${escapeHtml(input.action.url)}" style="display:inline-block;background:#171717;color:#fff;text-decoration:none;padding:12px 18px;border-radius:3px;font-weight:600">${escapeHtml(input.action.label)}</a></p><p style="font-size:12px;color:#777;word-break:break-all">Or copy this link: ${escapeHtml(input.action.url)}</p>`
+    ? `<table role="presentation" border="0" cellpadding="0" cellspacing="0" style="margin:32px 0 0"><tr><td bgcolor="#191919" style="border-radius:4px"><a href="${safeUrl}" style="display:inline-block;padding:13px 20px;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:20px;font-weight:700;color:#ffffff;text-decoration:none">${escapeHtml(input.action.label)}</a></td></tr></table><p style="margin:24px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:17px;color:#7a7a76">Button not working? <a href="${safeUrl}" style="color:#50504d;text-decoration:underline;word-break:break-all">Copy this link</a>.</p>`
     : '';
-  const body = input.bodyHtml ?? `<p style="white-space:pre-wrap">${escapeHtml(input.body)}</p>`;
-  return `<!doctype html><html><body style="margin:0;background:#f5f3ee;color:#171717"><div style="display:none;max-height:0;overflow:hidden">${escapeHtml(input.preheader)}</div><main style="font-family:Arial,sans-serif;line-height:1.55;max-width:600px;margin:32px auto;background:#fff;border:1px solid #dedbd3;padding:36px"><p style="font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:#777">Atlas</p><h1 style="font-size:25px;line-height:1.15;margin:20px 0">${escapeHtml(input.heading)}</h1><div style="font-size:15px;line-height:1.65">${body}</div>${action}<hr style="border:0;border-top:1px solid #e6e3dc;margin:30px 0"><p style="font-size:12px;color:#777">${escapeHtml(input.footer ?? 'This is an automated message from Atlas.')}</p></main></body></html>`;
+  const body =
+    input.bodyHtml ??
+    escapeHtml(input.body)
+      .split(/\n{2,}/)
+      .map(
+        (paragraph) =>
+          `<p style="margin:0 0 18px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:24px;color:#4c4c48;white-space:pre-line">${paragraph}</p>`,
+      )
+      .join('');
+  const code = input.code
+    ? `<div style="margin:28px 0 26px;padding:22px 20px;background:#f4f4f0;border-radius:4px;text-align:center"><p style="margin:0;font-family:'Courier New',Courier,monospace;font-size:32px;line-height:38px;font-weight:700;letter-spacing:8px;color:#191919">${escapeHtml(input.code)}</p></div>`
+    : '';
+  const footer = escapeHtml(
+    input.footer ?? 'You received this automated message because you have an Atlas account.',
+  );
+
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><meta name="supported-color-schemes" content="light"><title>${escapeHtml(input.subject)}</title></head><body style="margin:0;padding:0;background:#f4f4f0;color:#191919;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%"><div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent">${escapeHtml(input.preheader)}&#847;&zwnj;&nbsp;&#8199;&#65279;&nbsp;</div><table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0" bgcolor="#f4f4f0"><tr><td align="center" style="padding:40px 16px"><table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0" style="width:100%;max-width:560px"><tr><td style="padding:0 0 22px;border-bottom:1px solid #d8d8d2"><p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:20px;font-weight:800;letter-spacing:2.4px;color:#191919">ATLAS</p></td></tr><tr><td style="padding:38px 0 40px"><h1 style="margin:0 0 20px;font-family:Arial,Helvetica,sans-serif;font-size:30px;line-height:36px;letter-spacing:-0.7px;font-weight:700;color:#191919">${escapeHtml(input.heading)}</h1><div>${body}</div>${code}${action}</td></tr><tr><td style="padding:22px 0 0;border-top:1px solid #d8d8d2"><p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:18px;color:#7a7a76">${footer}</p><p style="margin:10px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:18px;color:#9a9a95">Atlas<br>atlasworkmap.com</p></td></tr></table></td></tr></table></body></html>`;
 }
 
 /** Small Markdown subset shared conceptually with the in-app preview. Input is escaped first. */
 function renderBroadcastMarkdown(source: string): string {
   const inline = (value: string) =>
     value
-      .replace(/`([^`]+)`/g, '<code style="background:#f1efe9;padding:2px 4px">$1</code>')
+      .replace(/`([^`]+)`/g, '<code style="background:#e9e9e4;padding:2px 4px">$1</code>')
       .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
       .replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>')
       .replace(/(^|\s)_([^_\n]+)_/g, '$1<em>$2</em>')
       .replace(
         /\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g,
-        '<a href="$2" style="color:#315c47">$1</a>',
+        '<a href="$2" style="color:#343432;text-decoration:underline">$1</a>',
       );
   const lines = escapeHtml(source).split(/\r?\n/);
   const html: string[] = [];
@@ -68,7 +86,9 @@ function renderBroadcastMarkdown(source: string): string {
   };
   const flush = () => {
     if (paragraph.length)
-      html.push(`<p style="margin:0 0 16px">${inline(paragraph.join(' '))}</p>`);
+      html.push(
+        `<p style="margin:0 0 18px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:24px;color:#4c4c48">${inline(paragraph.join(' '))}</p>`,
+      );
     paragraph = [];
   };
 
@@ -84,7 +104,7 @@ function renderBroadcastMarkdown(source: string): string {
       closeList();
       const size = heading[1].length === 1 ? 21 : heading[1].length === 2 ? 18 : 16;
       html.push(
-        `<h${heading[1].length + 1} style="font-size:${size}px;margin:24px 0 10px">${inline(heading[2])}</h${heading[1].length + 1}>`,
+        `<h${heading[1].length + 1} style="font-family:Arial,Helvetica,sans-serif;font-size:${size}px;line-height:1.3;color:#191919;margin:26px 0 10px">${inline(heading[2])}</h${heading[1].length + 1}>`,
       );
       continue;
     }
@@ -93,7 +113,7 @@ function renderBroadcastMarkdown(source: string): string {
       flush();
       closeList();
       html.push(
-        `<blockquote style="border-left:3px solid #c8c4ba;margin:18px 0;padding:2px 0 2px 14px;color:#555">${inline(quote[1])}</blockquote>`,
+        `<blockquote style="border-left:2px solid #b7b7b1;margin:20px 0;padding:2px 0 2px 16px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:24px;color:#5e5e5a">${inline(quote[1])}</blockquote>`,
       );
       continue;
     }
@@ -104,7 +124,9 @@ function renderBroadcastMarkdown(source: string): string {
       const wanted = ordered ? 'ol' : 'ul';
       if (list !== wanted) {
         closeList();
-        html.push(`<${wanted} style="margin:0 0 16px;padding-left:22px">`);
+        html.push(
+          `<${wanted} style="margin:0 0 18px;padding-left:22px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:24px;color:#4c4c48">`,
+        );
         list = wanted;
       }
       html.push(`<li style="margin:5px 0">${inline((ordered ?? unordered)![1])}</li>`);
@@ -113,7 +135,7 @@ function renderBroadcastMarkdown(source: string): string {
     if (/^\s*(---|\*\*\*)\s*$/.test(line)) {
       flush();
       closeList();
-      html.push('<hr style="border:0;border-top:1px solid #dedbd3;margin:24px 0">');
+      html.push('<hr style="border:0;border-top:1px solid #d8d8d2;margin:26px 0">');
       continue;
     }
     paragraph.push(line.trim());
@@ -163,7 +185,7 @@ export async function sendBroadcastEmails(input: {
             to: [recipient.email],
             subject: input.title,
             text: `${input.title}\n\n${input.body}\n\nOpen Atlas: ${appOrigin()}`,
-            html: emailHtml(message),
+            html: renderEmailHtml(message),
           })),
         ),
       });
@@ -204,7 +226,7 @@ export async function sendEmail(input: Mail): Promise<boolean> {
           '',
           input.footer ?? 'This is an automated message from Atlas.',
         ].join('\n'),
-        html: emailHtml(input),
+        html: renderEmailHtml(input),
       }),
     });
     if (!response.ok) {
@@ -302,7 +324,8 @@ export async function sendVerificationEmail(user: { id: string; email: string; f
     subject: `${code} is your Atlas verification code`,
     preheader: `Your Atlas verification code is ${code}.`,
     heading: 'Verify your email.',
-    body: `Hi ${user.fullName}, enter this code in Atlas to finish creating your account:\n\n${code}\n\nThe code expires in 10 minutes and can only be used once.`,
+    body: `Hi ${user.fullName}, enter this code in Atlas to finish creating your account.\n\nThe code expires in 10 minutes and can only be used once.`,
+    code,
     footer: 'If you did not create this account, you can ignore this message.',
   });
 }
