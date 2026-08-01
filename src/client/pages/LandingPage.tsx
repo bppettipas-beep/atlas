@@ -127,13 +127,13 @@ export function LandingPage() {
                 fetchPriority="high"
                 className="absolute inset-0 h-full w-full object-cover object-center transition-transform duration-700 hover:scale-[1.025]"
               />
-              <div className="absolute inset-x-0 top-0 flex items-center justify-between px-6 py-5 font-mono text-[10px] uppercase tracking-[0.16em] text-white/75">
+              <div className="absolute right-5 top-5 flex items-center gap-3 bg-ink/80 px-3 py-2 font-mono text-[9px] uppercase tracking-[0.14em] text-white/80 backdrop-blur-sm sm:right-6 sm:top-6 sm:text-[10px]">
                 <span>Atlas field study</span>
-                <span>System / 001</span>
+                <span className="border-l border-white/30 pl-3">System / 001</span>
               </div>
               <div
                 aria-hidden="true"
-                className="display absolute bottom-10 right-[-0.04em] text-[4.6rem] leading-none tracking-[-0.06em] text-white/90 sm:text-[6.5rem]"
+                className="display absolute bottom-20 right-6 text-[3.8rem] leading-none tracking-[-0.045em] text-white/90 sm:bottom-20 sm:right-8 sm:text-[5.25rem]"
               >
                 ORDER
               </div>
