@@ -118,7 +118,7 @@ export function LandingPage() {
                 )}
               </div>
             </div>
-            <figure className="relative min-h-[360px] overflow-hidden border border-edge bg-sheet shadow-[14px_14px_0_var(--color-ink)] sm:min-h-[460px] lg:-mr-10">
+            <figure className="group relative min-h-[360px] overflow-hidden rounded-br-[5rem] rounded-tl-[5rem] bg-ink shadow-[14px_14px_0_var(--color-mark)] sm:min-h-[460px] lg:-mr-10">
               <img
                 src="/editorial/atlas-home-hero.jpg"
                 alt="A cobalt modular filing machine organizing paper through trays and metal rails"
@@ -127,7 +127,17 @@ export function LandingPage() {
                 fetchPriority="high"
                 className="absolute inset-0 h-full w-full object-cover object-center transition-transform duration-700 hover:scale-[1.025]"
               />
-              <figcaption className="absolute bottom-0 left-0 border-r border-t border-white/35 bg-ink/90 px-4 py-3 font-mono text-[10px] uppercase tracking-[0.12em] text-white/75 backdrop-blur-md">
+              <div className="absolute inset-x-0 top-0 flex items-center justify-between px-6 py-5 font-mono text-[10px] uppercase tracking-[0.16em] text-white/75">
+                <span>Atlas field study</span>
+                <span>System / 001</span>
+              </div>
+              <div
+                aria-hidden="true"
+                className="display absolute bottom-10 right-[-0.04em] text-[4.6rem] leading-none tracking-[-0.06em] text-white/90 sm:text-[6.5rem]"
+              >
+                ORDER
+              </div>
+              <figcaption className="absolute bottom-0 left-0 bg-mark px-4 py-3 font-mono text-[10px] uppercase tracking-[0.12em] text-white">
                 Turn moving parts into one system
               </figcaption>
             </figure>

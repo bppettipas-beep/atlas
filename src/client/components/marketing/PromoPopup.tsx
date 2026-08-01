@@ -102,12 +102,21 @@ export function PromoPopup() {
 
             <div className="relative md:min-h-[560px]">
               <img
-                src="/campaigns/atlas26-growth-promo.jpg"
-                alt="Folded operational maps with cobalt routes and a chrome compass"
+                src="/campaigns/atlas26-metal-ribbon.jpg"
+                alt="A cobalt metal ribbon bursts through black paper around a luminous gift cube"
                 width="1536"
                 height="1024"
                 className="h-[280px] w-full object-cover object-[36%_42%] md:absolute md:inset-0 md:h-full md:object-center"
               />
+              <div className="pointer-events-none absolute left-5 top-5 hidden font-mono text-[10px] uppercase tracking-[0.17em] text-white/65 md:block">
+                Limited release · 2026
+              </div>
+              <div
+                aria-hidden="true"
+                className="display pointer-events-none absolute bottom-5 left-5 hidden text-[4.8rem] leading-none tracking-[-0.06em] text-white/90 md:block"
+              >
+                ATLAS26
+              </div>
 
               <div className="relative bg-paper px-6 py-7 sm:px-8 md:top-8 md:ml-[54%] md:mr-8 md:flex md:min-h-[496px] md:flex-col md:border md:border-white/70 md:bg-paper/95 md:px-9 md:pb-8 md:pt-10 md:shadow-[0_20px_60px_rgba(0,0,0,0.24)] md:backdrop-blur-xl">
                 <p className="edge-sm text-mark">Atlas Growth promotion</p>
