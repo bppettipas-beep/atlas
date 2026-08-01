@@ -337,36 +337,42 @@ const PAGE_EDITORIAL = {
     src: '/editorial/atlas-problem-chaos.jpg',
     alt: 'Folders, cables, notes, and clips suspended around one clear cobalt beam',
     label: 'The cost of invisible work',
+    word: 'CHAOS',
     frame: '[clip-path:polygon(0_0,100%_0,100%_84%,82%_100%,0_100%)]',
   },
   product: {
     src: '/editorial/atlas-product-system.jpg',
     alt: 'A modular field of tactile controls representing a connected operating system',
     label: 'One connected operating layer',
+    word: 'SYSTEM',
     frame: 'rounded-tl-[6rem] rounded-br-[1.5rem]',
   },
   roles: {
     src: '/editorial/atlas-teams-glass.jpg',
     alt: 'Distinct glass forms gathered around a cobalt table',
     label: 'Different roles · shared truth',
+    word: 'TOGETHER',
     frame: 'rounded-t-[12rem]',
   },
   details: {
     src: '/editorial/atlas-details-mechanism.jpg',
     alt: 'Precision metal components and cobalt levers working together',
     label: 'Reliability lives in the details',
+    word: 'EXACT',
     frame: '[clip-path:polygon(8%_0,100%_0,92%_100%,0_100%)]',
   },
   pricing: {
     src: '/editorial/atlas-pricing-staircase.jpg',
     alt: 'Chrome spheres progressing upward along a monumental cobalt staircase',
     label: 'Plans built for forward motion',
+    word: 'GROW',
     frame: '',
   },
   'getting-started': {
     src: '/editorial/atlas-getting-started-kit.jpg',
     alt: 'An open cobalt toolkit ready beside a bright doorway',
     label: 'Everything needed to begin',
+    word: 'START',
     frame: 'rounded-bl-[1.5rem] rounded-tr-[7rem]',
   },
 } as const;
@@ -452,6 +458,9 @@ export function MarketingDetailPage() {
                   <span>{editorial.label}</span>
                   <span>{page.index} / 06</span>
                 </div>
+                <div className="display absolute bottom-5 left-5 max-w-[calc(100%_-_2.5rem)] border-2 border-ink bg-paper px-3 py-2 text-[2rem] leading-none tracking-[-0.035em] text-ink shadow-[5px_5px_0_var(--color-mark)] sm:text-[2.65rem]">
+                  {editorial.word}
+                </div>
               </figure>
             </div>
             <section className="mt-14 border-t border-edge">
@@ -532,6 +541,9 @@ function PricingContent({ account }: { account: AccountSessionDto | null }) {
           className="absolute inset-y-0 right-0 h-full w-[58%] object-cover object-center [clip-path:polygon(14%_0,100%_0,100%_100%,0_100%)]"
         />
         <div className="absolute inset-y-0 left-0 w-full bg-paper/95 sm:w-[64%] lg:w-[57%]" />
+        <div className="display absolute bottom-6 right-6 z-10 border-2 border-white bg-ink px-4 py-2 text-[2.6rem] leading-none tracking-[-0.04em] text-white shadow-[6px_6px_0_var(--color-mark)] sm:text-[3.5rem]">
+          GROW
+        </div>
         <div className="relative max-w-[650px]">
           <p className="edge text-mark">05 · Pricing</p>
           <h1 className="display mt-5 max-w-[14ch] text-[2.8rem] leading-[0.95] sm:text-[4.5rem]">

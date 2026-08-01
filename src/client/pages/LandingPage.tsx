@@ -131,6 +131,9 @@ export function LandingPage() {
                 <span>Atlas field study</span>
                 <span className="border-l border-white/30 pl-3">System / 001</span>
               </div>
+              <div className="display absolute bottom-16 right-6 border-2 border-ink bg-paper px-4 py-2 text-[2.3rem] leading-none tracking-[-0.04em] text-ink shadow-[6px_6px_0_var(--color-ink)] sm:bottom-16 sm:right-8 sm:text-[3.15rem]">
+                ORDER
+              </div>
               <figcaption className="absolute bottom-0 left-0 bg-mark px-4 py-3 font-mono text-[10px] uppercase tracking-[0.12em] text-white">
                 Turn moving parts into one system
               </figcaption>

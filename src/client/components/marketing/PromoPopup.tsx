@@ -111,6 +111,9 @@ export function PromoPopup() {
               <div className="pointer-events-none absolute left-5 top-5 hidden bg-ink px-3 py-2 font-mono text-[10px] uppercase tracking-[0.17em] text-white md:block">
                 Limited release · 2026
               </div>
+              <div className="display pointer-events-none absolute bottom-6 left-5 hidden border-2 border-white bg-mark px-4 py-2 text-[2.7rem] leading-none tracking-[-0.04em] text-white shadow-[6px_6px_0_rgba(255,255,255,0.9)] md:block">
+                ATLAS26
+              </div>
 
               <div className="relative bg-paper px-6 py-7 sm:px-8 md:top-8 md:ml-[54%] md:mr-8 md:flex md:min-h-[496px] md:flex-col md:border md:border-white/70 md:bg-paper/95 md:px-9 md:pb-8 md:pt-10 md:shadow-[0_20px_60px_rgba(0,0,0,0.24)] md:backdrop-blur-xl">
                 <p className="edge-sm text-mark">Atlas Growth promotion</p>
