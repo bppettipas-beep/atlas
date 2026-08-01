@@ -407,8 +407,8 @@ export function MarketingDetailPage() {
                   src={editorialImage}
                   alt={
                     section === 'getting-started'
-                      ? 'A blue route climbs through growing paper business districts toward a compass'
-                      : 'An operational paper network linking work, teams, and destinations'
+                      ? 'Chrome spheres progress upward along a monumental cobalt staircase'
+                      : 'A modular field of tactile controls representing a connected operating system'
                   }
                   width="1536"
                   height="1024"
@@ -488,7 +488,7 @@ function PricingContent({ account }: { account: AccountSessionDto | null }) {
       <section className="relative min-h-[500px] overflow-hidden border border-edge bg-sheet px-6 py-10 sm:px-10 sm:py-14">
         <img
           src="/editorial/atlas-growth-journey.jpg"
-          alt="A blue route rises across paper terraces toward a polished compass"
+          alt="Chrome spheres progress upward along a monumental cobalt staircase"
           width="1536"
           height="1024"
           className="absolute inset-0 h-full w-full object-cover object-center"
