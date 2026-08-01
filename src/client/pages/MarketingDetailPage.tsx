@@ -332,6 +332,33 @@ Object.assign(PAGES.pricing, {
   inPractice: PAGES.pricing.updatedInPractice,
 });
 
+const PAGE_EDITORIAL = {
+  problem: {
+    src: '/editorial/atlas-problem-chaos.jpg',
+    alt: 'Folders, cables, notes, and clips suspended around one clear cobalt beam',
+  },
+  product: {
+    src: '/editorial/atlas-product-system.jpg',
+    alt: 'A modular field of tactile controls representing a connected operating system',
+  },
+  roles: {
+    src: '/editorial/atlas-teams-glass.jpg',
+    alt: 'Distinct glass forms gathered around a cobalt table',
+  },
+  details: {
+    src: '/editorial/atlas-details-mechanism.jpg',
+    alt: 'Precision metal components and cobalt levers working together',
+  },
+  pricing: {
+    src: '/editorial/atlas-pricing-staircase.jpg',
+    alt: 'Chrome spheres progressing upward along a monumental cobalt staircase',
+  },
+  'getting-started': {
+    src: '/editorial/atlas-getting-started-kit.jpg',
+    alt: 'An open cobalt toolkit ready beside a bright doorway',
+  },
+} as const;
+
 export function MarketingDetailPage() {
   const { section } = useParams();
   const { session, account } = useAuth();
@@ -346,10 +373,7 @@ export function MarketingDetailPage() {
   }, [section]);
   if (!page) return <Navigate to="/" replace />;
   const Icon = page.icon;
-  const editorialImage =
-    section === 'getting-started'
-      ? '/editorial/atlas-growth-journey.jpg'
-      : '/editorial/atlas-operations-network.jpg';
+  const editorial = PAGE_EDITORIAL[section as keyof typeof PAGE_EDITORIAL];
 
   return (
     <div className="min-h-full bg-paper">
@@ -404,12 +428,8 @@ export function MarketingDetailPage() {
               </div>
               <figure className="relative min-h-[300px] overflow-hidden border-t border-edge lg:min-h-0 lg:border-l lg:border-t-0">
                 <img
-                  src={editorialImage}
-                  alt={
-                    section === 'getting-started'
-                      ? 'Chrome spheres progress upward along a monumental cobalt staircase'
-                      : 'A modular field of tactile controls representing a connected operating system'
-                  }
+                  src={editorial.src}
+                  alt={editorial.alt}
                   width="1536"
                   height="1024"
                   className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 hover:scale-[1.025]"
@@ -487,7 +507,7 @@ function PricingContent({ account }: { account: AccountSessionDto | null }) {
     <>
       <section className="relative min-h-[500px] overflow-hidden border border-edge bg-sheet px-6 py-10 sm:px-10 sm:py-14">
         <img
-          src="/editorial/atlas-growth-journey.jpg"
+          src="/editorial/atlas-pricing-staircase.jpg"
           alt="Chrome spheres progress upward along a monumental cobalt staircase"
           width="1536"
           height="1024"

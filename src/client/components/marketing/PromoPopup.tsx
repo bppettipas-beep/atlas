@@ -89,7 +89,7 @@ export function PromoPopup() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 18, scale: 0.985 }}
             transition={{ duration: 0.42, ease: [0.16, 1, 0.3, 1] }}
-            className="relative max-h-[94dvh] w-full max-w-[920px] overflow-y-auto border border-white/25 bg-paper shadow-[0_32px_90px_rgba(0,0,0,0.34)] sm:max-h-[88dvh]"
+            className="relative max-h-[94dvh] w-full max-w-[920px] overflow-y-auto border border-white/25 bg-paper shadow-[0_32px_90px_rgba(0,0,0,0.34)] sm:max-h-[88dvh] md:overflow-y-hidden"
           >
             <button
               type="button"
