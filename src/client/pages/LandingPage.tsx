@@ -127,15 +127,9 @@ export function LandingPage() {
                 fetchPriority="high"
                 className="absolute inset-0 h-full w-full object-cover object-center transition-transform duration-700 hover:scale-[1.025]"
               />
-              <div className="absolute right-5 top-5 flex items-center gap-3 bg-ink/80 px-3 py-2 font-mono text-[9px] uppercase tracking-[0.14em] text-white/80 backdrop-blur-sm sm:right-6 sm:top-6 sm:text-[10px]">
+              <div className="absolute right-5 top-5 flex items-center gap-3 bg-ink px-3 py-2 font-mono text-[9px] uppercase tracking-[0.14em] text-white sm:right-6 sm:top-6 sm:text-[10px]">
                 <span>Atlas field study</span>
                 <span className="border-l border-white/30 pl-3">System / 001</span>
-              </div>
-              <div
-                aria-hidden="true"
-                className="display absolute bottom-20 right-6 text-[3.8rem] leading-none tracking-[-0.045em] text-white/90 sm:bottom-20 sm:right-8 sm:text-[5.25rem]"
-              >
-                ORDER
               </div>
               <figcaption className="absolute bottom-0 left-0 bg-mark px-4 py-3 font-mono text-[10px] uppercase tracking-[0.12em] text-white">
                 Turn moving parts into one system

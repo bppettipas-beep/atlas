@@ -337,49 +337,37 @@ const PAGE_EDITORIAL = {
     src: '/editorial/atlas-problem-chaos.jpg',
     alt: 'Folders, cables, notes, and clips suspended around one clear cobalt beam',
     label: 'The cost of invisible work',
-    word: 'CHAOS',
     frame: '[clip-path:polygon(0_0,100%_0,100%_84%,82%_100%,0_100%)]',
-    wordClass: 'bottom-4 right-3 text-white/90',
   },
   product: {
     src: '/editorial/atlas-product-system.jpg',
     alt: 'A modular field of tactile controls representing a connected operating system',
     label: 'One connected operating layer',
-    word: 'SYSTEM',
     frame: 'rounded-tl-[6rem] rounded-br-[1.5rem]',
-    wordClass: 'bottom-4 left-5 text-ink/80',
   },
   roles: {
     src: '/editorial/atlas-teams-glass.jpg',
     alt: 'Distinct glass forms gathered around a cobalt table',
     label: 'Different roles · shared truth',
-    word: 'TOGETHER',
     frame: 'rounded-t-[12rem]',
-    wordClass: 'bottom-5 left-1/2 -translate-x-1/2 text-white/90',
   },
   details: {
     src: '/editorial/atlas-details-mechanism.jpg',
     alt: 'Precision metal components and cobalt levers working together',
     label: 'Reliability lives in the details',
-    word: 'EXACT',
     frame: '[clip-path:polygon(8%_0,100%_0,92%_100%,0_100%)]',
-    wordClass: 'bottom-4 right-8 text-white/90',
   },
   pricing: {
     src: '/editorial/atlas-pricing-staircase.jpg',
     alt: 'Chrome spheres progressing upward along a monumental cobalt staircase',
     label: 'Plans built for forward motion',
-    word: 'GROW',
     frame: '',
-    wordClass: '',
   },
   'getting-started': {
     src: '/editorial/atlas-getting-started-kit.jpg',
     alt: 'An open cobalt toolkit ready beside a bright doorway',
     label: 'Everything needed to begin',
-    word: 'START',
     frame: 'rounded-bl-[1.5rem] rounded-tr-[7rem]',
-    wordClass: 'bottom-4 right-5 text-ink/80',
   },
 } as const;
 
@@ -460,15 +448,9 @@ export function MarketingDetailPage() {
                   height="1024"
                   className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 hover:scale-[1.025]"
                 />
-                <div className="absolute inset-x-0 top-0 flex items-center justify-between bg-ink/80 px-4 py-3 font-mono text-[9px] uppercase tracking-[0.15em] text-white backdrop-blur-sm">
+                <div className="absolute inset-x-0 top-0 flex items-center justify-between bg-ink px-4 py-3 font-mono text-[9px] uppercase tracking-[0.15em] text-white">
                   <span>{editorial.label}</span>
                   <span>{page.index} / 06</span>
-                </div>
-                <div
-                  aria-hidden="true"
-                  className={`display absolute whitespace-nowrap text-[3.25rem] leading-none tracking-[-0.055em] sm:text-[4.25rem] ${editorial.wordClass}`}
-                >
-                  {editorial.word}
                 </div>
               </figure>
             </div>
@@ -550,9 +532,6 @@ function PricingContent({ account }: { account: AccountSessionDto | null }) {
           className="absolute inset-y-0 right-0 h-full w-[58%] object-cover object-center [clip-path:polygon(14%_0,100%_0,100%_100%,0_100%)]"
         />
         <div className="absolute inset-y-0 left-0 w-full bg-paper/95 sm:w-[64%] lg:w-[57%]" />
-        <div className="display absolute bottom-5 right-3 z-10 text-[4rem] leading-none tracking-[-0.06em] text-white/90 sm:right-7 sm:text-[6rem]">
-          GROW
-        </div>
         <div className="relative max-w-[650px]">
           <p className="edge text-mark">05 · Pricing</p>
           <h1 className="display mt-5 max-w-[14ch] text-[2.8rem] leading-[0.95] sm:text-[4.5rem]">
