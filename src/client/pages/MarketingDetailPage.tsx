@@ -346,6 +346,10 @@ export function MarketingDetailPage() {
   }, [section]);
   if (!page) return <Navigate to="/" replace />;
   const Icon = page.icon;
+  const editorialImage =
+    section === 'getting-started'
+      ? '/editorial/atlas-growth-journey.jpg'
+      : '/editorial/atlas-operations-network.jpg';
 
   return (
     <div className="min-h-full bg-paper">
@@ -385,17 +389,32 @@ export function MarketingDetailPage() {
           <PricingContent account={account} />
         ) : (
           <>
-            <div className="border-l-2 border-ink pl-5 sm:pl-7">
-              <p className="edge">
-                {page.index} · {page.label}
-              </p>
-              <Icon className="mt-8 text-[28px] text-ink-3" />
-              <h1 className="display mt-5 max-w-[16ch] text-[2.7rem] leading-[0.98] sm:text-[4.2rem]">
-                {page.title}
-              </h1>
-              <p className="mt-7 max-w-[58ch] text-[16px] leading-relaxed text-ink-2">
-                {page.intro}
-              </p>
+            <div className="grid items-stretch border border-edge bg-sheet lg:grid-cols-[0.9fr_1.1fr]">
+              <div className="border-l-2 border-ink px-5 py-8 sm:px-7 sm:py-10">
+                <p className="edge">
+                  {page.index} · {page.label}
+                </p>
+                <Icon className="mt-8 text-[28px] text-ink-3" />
+                <h1 className="display mt-5 max-w-[16ch] text-[2.7rem] leading-[0.98] sm:text-[4.2rem]">
+                  {page.title}
+                </h1>
+                <p className="mt-7 max-w-[58ch] text-[16px] leading-relaxed text-ink-2">
+                  {page.intro}
+                </p>
+              </div>
+              <figure className="relative min-h-[300px] overflow-hidden border-t border-edge lg:min-h-0 lg:border-l lg:border-t-0">
+                <img
+                  src={editorialImage}
+                  alt={
+                    section === 'getting-started'
+                      ? 'A blue route climbs through growing paper business districts toward a compass'
+                      : 'An operational paper network linking work, teams, and destinations'
+                  }
+                  width="1536"
+                  height="1024"
+                  className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 hover:scale-[1.025]"
+                />
+              </figure>
             </div>
             <section className="mt-14 border-t border-edge">
               {page.points.map(([title, body], index) => (
@@ -466,9 +485,16 @@ function PricingContent({ account }: { account: AccountSessionDto | null }) {
 
   return (
     <>
-      <section className="relative overflow-hidden border border-edge bg-sheet px-6 py-10 sm:px-10 sm:py-14">
-        <div className="pointer-events-none absolute -right-16 -top-20 h-64 w-64 rounded-full border-[28px] border-mark/15" />
-        <div className="relative max-w-[720px]">
+      <section className="relative min-h-[500px] overflow-hidden border border-edge bg-sheet px-6 py-10 sm:px-10 sm:py-14">
+        <img
+          src="/editorial/atlas-growth-journey.jpg"
+          alt="A blue route rises across paper terraces toward a polished compass"
+          width="1536"
+          height="1024"
+          className="absolute inset-0 h-full w-full object-cover object-center"
+        />
+        <div className="absolute inset-y-0 left-0 w-full bg-paper/95 sm:w-[64%] lg:w-[57%]" />
+        <div className="relative max-w-[650px]">
           <p className="edge text-mark">05 · Pricing</p>
           <h1 className="display mt-5 max-w-[14ch] text-[2.8rem] leading-[0.95] sm:text-[4.5rem]">
             Plans that grow with the way you work.

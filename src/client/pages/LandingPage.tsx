@@ -77,45 +77,60 @@ export function LandingPage() {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, ease: DRAFT_EASE }}
-            className="py-20 sm:py-28"
+            className="grid items-center gap-10 py-14 sm:py-20 lg:grid-cols-[0.88fr_1.12fr] lg:gap-6 lg:py-24"
           >
-            <p className="edge mb-6">The operating system for small business</p>
-            <h1 className="display max-w-[15ch] text-[2.6rem] leading-[0.96] sm:text-[4.4rem]">
-              Build the operating system for your business.
-            </h1>
-            <div className="mt-9 flex max-w-2xl items-start gap-4">
-              <span aria-hidden className="mt-[10px] flex shrink-0 items-center">
-                <span className="h-[6px] w-[6px] bg-ink" />
-                <span className="h-px w-10 bg-edgeStrong" />
-              </span>
-              <p className="text-[16px] leading-relaxed text-ink-2">
-                Atlas holds the people, knowledge, tasks, and processes that make your company run.
-                See the moving parts clearly, then explore the parts that matter to you.
-              </p>
-            </div>
-            <div className="mt-11 flex flex-wrap items-center gap-3">
-              <Link
-                to={primaryHref}
-                className="group inline-flex h-11 items-center gap-2.5 rounded-sm bg-ink px-5 text-[14px] font-medium text-white transition-colors hover:bg-ink-2"
-              >
-                {hasAccessiblePanel
-                  ? 'Open your panel'
-                  : account?.subscriptionActive
-                    ? 'Set up your panel'
-                    : signedIn
-                      ? 'Choose a plan'
-                      : 'Create your account'}
-                <ArrowRight className="text-[14px] transition-transform group-hover:translate-x-1" />
-              </Link>
-              {!signedIn && (
+            <div className="relative z-10">
+              <p className="edge mb-6">The operating system for small business</p>
+              <h1 className="display max-w-[15ch] text-[2.6rem] leading-[0.96] sm:text-[4.4rem]">
+                Build the operating system for your business.
+              </h1>
+              <div className="mt-9 flex max-w-2xl items-start gap-4">
+                <span aria-hidden className="mt-[10px] flex shrink-0 items-center">
+                  <span className="h-[6px] w-[6px] bg-ink" />
+                  <span className="h-px w-10 bg-edgeStrong" />
+                </span>
+                <p className="text-[16px] leading-relaxed text-ink-2">
+                  Atlas holds the people, knowledge, tasks, and processes that make your company
+                  run. See the moving parts clearly, then explore the parts that matter to you.
+                </p>
+              </div>
+              <div className="mt-11 flex flex-wrap items-center gap-3">
                 <Link
-                  to="/join"
-                  className="inline-flex h-11 items-center rounded-sm border border-edge bg-sheet px-5 text-[14px] font-medium text-ink hover:border-edgeStrong hover:bg-paper"
+                  to={primaryHref}
+                  className="group inline-flex h-11 items-center gap-2.5 rounded-sm bg-ink px-5 text-[14px] font-medium text-white transition-colors hover:bg-ink-2"
                 >
-                  I have an invitation code
+                  {hasAccessiblePanel
+                    ? 'Open your panel'
+                    : account?.subscriptionActive
+                      ? 'Set up your panel'
+                      : signedIn
+                        ? 'Choose a plan'
+                        : 'Create your account'}
+                  <ArrowRight className="text-[14px] transition-transform group-hover:translate-x-1" />
                 </Link>
-              )}
+                {!signedIn && (
+                  <Link
+                    to="/join"
+                    className="inline-flex h-11 items-center rounded-sm border border-edge bg-sheet px-5 text-[14px] font-medium text-ink hover:border-edgeStrong hover:bg-paper"
+                  >
+                    I have an invitation code
+                  </Link>
+                )}
+              </div>
             </div>
+            <figure className="relative min-h-[360px] overflow-hidden border border-edge bg-sheet shadow-[14px_14px_0_var(--color-ink)] sm:min-h-[460px] lg:-mr-10">
+              <img
+                src="/editorial/atlas-home-hero.jpg"
+                alt="A sculptural paper map connecting business districts with blue routes and compasses"
+                width="1536"
+                height="1024"
+                fetchPriority="high"
+                className="absolute inset-0 h-full w-full object-cover object-center transition-transform duration-700 hover:scale-[1.025]"
+              />
+              <figcaption className="absolute bottom-0 left-0 border-r border-t border-white/35 bg-ink/90 px-4 py-3 font-mono text-[10px] uppercase tracking-[0.12em] text-white/75 backdrop-blur-md">
+                The whole operation · one map
+              </figcaption>
+            </figure>
           </motion.div>
         </section>
 
